@@ -3,7 +3,7 @@
 use App\Services\XmlPipelineRunner;
 
 it('runs pipeline on a valid xml and returns parsed json', function () {
-    $xmlFiles = glob(base_path('../raw/*.xml'));
+    $xmlFiles = glob(config('services.pipeline.path') . '/raw/*.xml');
     if (empty($xmlFiles)) {
         $this->markTestSkipped('No sample XML available in raw/');
     }

@@ -9,7 +9,7 @@ use App\Services\WeeklyAggregatesIngestor;
 use App\Services\XmlPipelineRunner;
 
 it('processes an xml via the job and updates the import row', function () {
-    $xmls = glob(base_path('../raw/*.xml'));
+    $xmls = glob(config('services.pipeline.path') . '/raw/*.xml');
     if (empty($xmls)) {
         $this->markTestSkipped('No sample XML available');
     }

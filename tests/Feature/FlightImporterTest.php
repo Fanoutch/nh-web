@@ -5,7 +5,7 @@ use App\Services\FlightImporter;
 use App\Services\XmlPipelineRunner;
 
 it('imports a flight and its technical events from pipeline output', function () {
-    $xmlFiles = glob(base_path('../raw/*.xml'));
+    $xmlFiles = glob(config('services.pipeline.path') . '/raw/*.xml');
     if (empty($xmlFiles)) {
         $this->markTestSkipped('No sample XML available');
     }
@@ -40,7 +40,7 @@ it('imports a flight and its technical events from pipeline output', function ()
 });
 
 it('imports a non-vol flight with is_non_vol=true', function () {
-    $xmlFiles = glob(base_path('../raw/*.xml'));
+    $xmlFiles = glob(config('services.pipeline.path') . '/raw/*.xml');
     if (empty($xmlFiles)) {
         $this->markTestSkipped('No sample XML available');
     }

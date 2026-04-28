@@ -7,8 +7,9 @@ use App\Services\WeeklyAggregatesIngestor;
 it('ingests yearly panne and fh csvs into weekly_aggregates', function () {
     $machine = Machine::create(['hc_id' => 'NH08']);
 
-    $pannesCsv = base_path('../data/reports/yearly/NH08/NH08_2026.csv');
-    $fhCsv = base_path('../data/FHreport/yearly/NH08/NH08_2026.csv');
+    $pipelinePath = config('services.pipeline.path');
+    $pannesCsv = $pipelinePath . '/data/reports/yearly/NH08/NH08_2026.csv';
+    $fhCsv = $pipelinePath . '/data/FHreport/yearly/NH08/NH08_2026.csv';
 
     if (!file_exists($pannesCsv) || !file_exists($fhCsv)) {
         $this->markTestSkipped('Yearly CSVs missing for NH08');
