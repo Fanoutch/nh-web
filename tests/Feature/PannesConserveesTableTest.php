@@ -1,0 +1,67 @@
+<?php
+
+use App\Livewire\PannesConserveesTable;
+use App\Models\Flight;
+use App\Models\Machine;
+use App\Models\MissingPanne;
+use App\Models\TechnicalEvent;
+use App\Models\User;
+use Livewire\Livewire;
+
+function createFlightWithPanne(User $user): array {
+    $m = Machine::create(['hc_id' => 'NH08']);
+    $flight = Flight::create([
+        'machine_id' => $m->id, 'dsn' => '1243', 'num' => '612',
+        'start_datetime' => now(), 'end_datetime' => now(),
+        'flight_type' => 'FLIGHT',
+    ]);
+    $te = TechnicalEvent::create([
+        'flight_id' => $flight->id,
+        'technical_event_id' => 'FIBIT001',
+        'raise_datetime' => now(),
+        'status' => 'conservee',
+        'iso_week' => '2026-W05',
+        'details' => ['FailureCode' => '46830', 'TechnicalEventDescription' => 'Test panne'],
+    ]);
+    return [$flight, $te];
+}
+
+it('changes validation status when clicked', function () {
+    $user = User::factory()->create();
+    [$flight, $te] = createFlightWithPanne($user);
+
+    Livewire::actingAs($user)
+        ->test(PannesConserveesTable::class, ['flight' => $flight])
+        ->call('setValidation', $te->id, 'validated');
+
+    expect($te->refresh()->validation_status)->toBe('validated');
+    expect($te->validated_by)->toBe($user->id);
+});
+
+it('submits a missing panne via modal', function () {
+    $user = User::factory()->create();
+    [$flight] = createFlightWithPanne($user);
+
+    Livewire::actingAs($user)
+        ->test(PannesConserveesTable::class, ['flight' => $flight])
+        ->set('newFailureCode', '12-345')
+        ->set('newDescription', 'Test desc')
+        ->call('submitMissingPanne')
+        ->assertSet('showMissingModal', false);
+
+    expect(MissingPanne::count())->toBe(1);
+    expect(MissingPanne::first()->failure_code)->toBe('12-345');
+});
+
+it('validates required failure code when signalling missing panne', function () {
+    $user = User::factory()->create();
+    [$flight] = createFlightWithPanne($user);
+
+    Livewire::actingAs($user)
+        ->test(PannesConserveesTable::class, ['flight' => $flight])
+        ->set('newFailureCode', '')
+        ->call('submitMissingPanne')
+        ->assertHasErrors(['newFailureCode' => 'required']);
+
+    expect(MissingPanne::count())->toBe(0);
+});
