@@ -14,6 +14,7 @@ Reference complete des commandes Laravel, serveur et deploiement.
 8. [Deploiement nouveau serveur (prod)](#8-deploiement-nouveau-serveur-prod)
 9. [Mises a jour en prod](#9-mises-a-jour-en-prod)
 10. [Troubleshooting](#10-troubleshooting)
+11. [Dependances et separation des repos](#11-dependances-et-separation-des-repos)
 
 ---
 
@@ -702,3 +703,118 @@ Reference des variables principales du `.env`.
 | `QUEUE_CONNECTION` | `database` | `database` | Driver de queue |
 | `SESSION_DRIVER` | `database` | `database` | Stockage des sessions |
 | `CACHE_STORE` | `database` | `database` ou `redis` | Stockage du cache |
+
+---
+
+## 11. Dependances et separation des repos
+
+### Architecture des 2 repos
+
+Le projet est decoupe en 2 repos Git distincts qui doivent vivre **sur la meme machine** :
+
+```
+nh-web/         → Laravel (ce repo)
+nh-pipeline/    → Python (repo separe : https://github.com/Fanoutch/nh-pipeline)
+```
+
+Le pont entre les deux est la variable `PIPELINE_PATH` dans `nh-web/.env`, qui pointe vers le chemin absolu du repo `nh-pipeline`. Laravel appelle la pipeline via `Symfony\Process` lors de chaque upload XML.
+
+### Variable PIPELINE_PATH
+
+Dans `nh-web/.env` :
+
+```env
+# Chemin absolu vers le repo nh-pipeline (Python)
+PIPELINE_PATH=/root/camille2/nh-pipeline      # dev local
+# PIPELINE_PATH=/var/www/nh-pipeline          # prod
+```
+
+Si la variable est vide ou absente, fallback sur `base_path('..')` (compatibilite ascendante avec l'ancien layout monolithique).
+
+### Vendor / node_modules : a quoi ca sert et quand re-installer
+
+| Dossier | Taille | Contenu | Sur GitHub ? |
+|---------|--------|---------|---------------|
+| `vendor/` | ~94 Mo | Dependances PHP/Composer (Laravel, Livewire, Pest, etc.) | NON (gitignore) |
+| `node_modules/` | ~85 Mo | Dependances JS/npm (Tailwind, Vite, Alpine.js) | NON (gitignore) |
+| `public/build/` | ~144 Ko | Assets compiles (CSS + JS) | NON (gitignore) |
+
+Ces dossiers sont **regenerables** depuis `composer.json` et `package.json` — c'est pour ca qu'ils ne sont jamais sur git. On push uniquement les **manifests** + leurs **lockfiles** pour garantir des versions identiques partout.
+
+### Quand faut-il regenerer ces dossiers ?
+
+**Cas 1 : nouveau clone du repo (autre machine, deploiement, autre dev)**
+
+```bash
+git clone https://github.com/Fanoutch/nh-web.git
+cd nh-web
+
+composer install --no-dev --optimize-autoloader   # regenere vendor/
+npm ci                                             # regenere node_modules/ depuis package-lock.json
+npm run build                                      # regenere public/build/
+
+cp .env.example .env                               # creer la config locale
+php artisan key:generate                           # generer APP_KEY
+
+# Editer .env : DB_*, PIPELINE_PATH, APP_URL, APP_ENV
+nano .env
+
+php artisan migrate --force                        # creer les tables
+php artisan storage:link                           # lier public/storage -> storage/app/public
+```
+
+**Cas 2 : composer.json ou package.json modifie**
+
+```bash
+composer install                                   # si nouveau package ajoute
+# ou
+composer update                                    # mettre a jour vers les dernieres versions compatibles
+npm install
+npm run build                                      # recompiler les assets
+```
+
+**Cas 3 : developpement quotidien (pas de modif des manifests)**
+
+Rien a faire. `vendor/` et `node_modules/` sont deja la, l'app fonctionne directement.
+
+### Pousser sur GitHub depuis un nouveau clone
+
+```bash
+cd nh-web
+git remote -v                                      # voir le remote configure
+git remote add origin https://github.com/Fanoutch/nh-web.git   # si absent
+git push -u origin main                            # premier push
+git push                                           # pushs suivants
+```
+
+### Cloner sur le serveur de prod (workflow type)
+
+```bash
+# Sur le serveur cible
+mkdir -p /var/www && cd /var/www
+git clone https://github.com/Fanoutch/nh-web.git
+git clone https://github.com/Fanoutch/nh-pipeline.git
+
+# Setup Laravel
+cd nh-web
+composer install --no-dev --optimize-autoloader
+npm ci && npm run build
+cp .env.example .env
+php artisan key:generate
+# Editer .env : PIPELINE_PATH=/var/www/nh-pipeline, DB_*, APP_URL, APP_ENV=production
+php artisan migrate --force
+php artisan storage:link
+php artisan config:cache && php artisan route:cache && php artisan view:cache
+
+# Setup pipeline Python
+cd ../nh-pipeline
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+deactivate
+
+# Permissions
+chown -R www-data:www-data /var/www/nh-web /var/www/nh-pipeline
+chmod -R 775 /var/www/nh-web/storage /var/www/nh-web/bootstrap/cache
+```
+
+Voir aussi section **8. Deploiement nouveau serveur (prod)** pour Nginx + systemd + Let's Encrypt.
