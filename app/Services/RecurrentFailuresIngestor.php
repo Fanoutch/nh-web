@@ -21,11 +21,11 @@ class RecurrentFailuresIngestor
 
         $active = $json['active'] ?? [];
         $volsHistory = $json['vols_history'] ?? [];
-        $machine = Machine::firstOrCreate(['hc_id' => $hcId]);
 
-        $activeIds = array_map(fn ($e) => $e['id'], $active);
+        return DB::transaction(function () use ($hcId, $active, $volsHistory) {
+            $machine = Machine::firstOrCreate(['hc_id' => $hcId]);
+            $activeIds = array_map(fn ($e) => $e['id'], $active);
 
-        return DB::transaction(function () use ($machine, $active, $activeIds, $volsHistory) {
             $removed = $machine->recurrentFailures()
                 ->where('status', 'active')
                 ->when(!empty($activeIds), fn ($q) => $q->whereNotIn('technical_event_id', $activeIds))

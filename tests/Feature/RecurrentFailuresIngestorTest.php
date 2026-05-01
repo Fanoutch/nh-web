@@ -16,6 +16,18 @@ beforeEach(function () {
     }
 });
 
+afterEach(function () {
+    $base = storage_path('app/data/reports/occurrentes');
+    if (!is_dir($base)) return;
+    foreach (glob($base . '/NH9*') as $dir) {
+        if (is_dir($dir)) {
+            $file = $dir . '/occurrentes.json';
+            if (file_exists($file)) @unlink($file);
+            @rmdir($dir);
+        }
+    }
+});
+
 function writeOccurrentesFixture(string $hcId, array $active, array $volsHistory = []): string
 {
     $dir = storage_path("app/data/reports/occurrentes/{$hcId}");
@@ -146,4 +158,18 @@ it('updates score and description on re-ingest', function () {
     expect($rf->te_description)->toBe('desc v2');
     // toujours 1 seule ligne (pas de duplication)
     expect($machine->recurrentFailures()->where('technical_event_id', 'TE_A')->count())->toBe(1);
+});
+
+it('removes all active rows when JSON active array is empty', function () {
+    writeOccurrentesFixture('NH99', [['id' => 'TE_A'], ['id' => 'TE_B']]);
+    $this->ingestor->ingest('NH99');
+
+    $machine = Machine::where('hc_id', 'NH99')->first();
+    expect($machine->recurrentFailures()->where('status', 'active')->count())->toBe(2);
+
+    writeOccurrentesFixture('NH99', []);
+    $result = $this->ingestor->ingest('NH99');
+
+    expect($result)->toBe(['synced' => 0, 'removed' => 2]);
+    expect($machine->recurrentFailures()->where('status', 'active')->count())->toBe(0);
 });
