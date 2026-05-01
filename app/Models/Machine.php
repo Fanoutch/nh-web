@@ -21,4 +21,9 @@ class Machine extends Model
     {
         return $this->hasMany(WeeklyAggregate::class);
     }
+
+    public function recurrentFailures(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(RecurrentFailure::class);
+    }
 }
