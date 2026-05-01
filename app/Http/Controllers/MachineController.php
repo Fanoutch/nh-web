@@ -13,8 +13,14 @@ class MachineController extends Controller
             'flights as vols_count' => fn ($q) => $q->where('is_non_vol', false),
             'flights as non_vols_count' => fn ($q) => $q->where('is_non_vol', true)->where('flagged_as_error', false),
             'flights as erreurs_count' => fn ($q) => $q->where('flagged_as_error', true),
+            'recurrentFailures as active_count' => fn ($q) => $q->where('status', 'active'),
         ])
-        ->with(['flights' => fn ($q) => $q->latest('start_datetime')->limit(1)])
+        ->with([
+            'recurrentFailures' => fn ($q) => $q->where('status', 'active')->orderByDesc('score'),
+            'flights' => fn ($q) => $q->latest('start_datetime')
+                ->with(['technicalEvents' => fn ($q2) => $q2->where('status', 'conservee')->orderByDesc('nombre_occurrences')])
+                ->limit(1),
+        ])
         ->orderBy('hc_id')
         ->get();
 
