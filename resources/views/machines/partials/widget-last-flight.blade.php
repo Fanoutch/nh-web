@@ -52,13 +52,12 @@
                     class="text-xs text-blue-600 hover:text-blue-700 font-medium mt-2 self-start">
                 voir plus ({{ $rest }})
             </button>
+            @include('machines.partials.modal-last-flight', [
+                'machine' => $machine,
+                'flightDate' => $flightDate,
+                'pannes' => $pannes,
+                'modalId' => $modalId,
+            ])
         @endif
-
-        @include('machines.partials.modal-last-flight', [
-            'machine' => $machine,
-            'flightDate' => $flightDate,
-            'pannes' => $pannes,
-            'modalId' => $modalId,
-        ])
     @endif
 </div>

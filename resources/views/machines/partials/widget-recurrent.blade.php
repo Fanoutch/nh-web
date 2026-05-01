@@ -33,8 +33,7 @@
                     class="text-xs text-blue-600 hover:text-blue-700 font-medium mt-2 self-start">
                 voir plus ({{ $rest }})
             </button>
+            @include('machines.partials.modal-recurrent', ['machine' => $machine, 'actives' => $actives, 'modalId' => $modalId])
         @endif
-
-        @include('machines.partials.modal-recurrent', ['machine' => $machine, 'actives' => $actives, 'modalId' => $modalId])
     @endif
 </div>

@@ -56,7 +56,7 @@
                         </div>
                     </div>
 
-                    {{-- Widgets : col-span-7 (placeholders ; remplis aux tasks 9-10) --}}
+                    {{-- Widgets : col-span-7 --}}
                     <div class="col-span-7 grid grid-cols-2 gap-3">
                         @include('machines.partials.widget-recurrent', ['machine' => $m])
                         @include('machines.partials.widget-last-flight', ['machine' => $m])
