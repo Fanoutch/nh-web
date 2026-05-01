@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Flight;
 use App\Models\Import;
 use App\Services\FlightImporter;
+use App\Services\RecurrentFailuresIngestor;
 use App\Services\WeeklyAggregatesIngestor;
 use App\Services\XmlPipelineRunner;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -23,6 +24,7 @@ class ProcessXmlJob implements ShouldQueue
         XmlPipelineRunner $runner,
         FlightImporter $importer,
         WeeklyAggregatesIngestor $aggIngestor,
+        RecurrentFailuresIngestor $recurrentIngestor,
     ): void {
         $import = Import::findOrFail($this->importId);
         $import->update(['status' => 'processing']);
@@ -31,13 +33,13 @@ class ProcessXmlJob implements ShouldQueue
         $result = $runner->run($this->xmlPath, $outputBase);
 
         match ($result['status']) {
-            'ok'        => $this->handleOk($import, $result, $importer, $aggIngestor),
+            'ok'        => $this->handleOk($import, $result, $importer, $aggIngestor, $recurrentIngestor),
             'no_engine' => $this->handleNonVol($import, $result, $importer),
             default     => $this->handleError($import, $result),
         };
     }
 
-    private function handleOk(Import $import, array $result, FlightImporter $importer, WeeklyAggregatesIngestor $aggIngestor): void
+    private function handleOk(Import $import, array $result, FlightImporter $importer, WeeklyAggregatesIngestor $aggIngestor, RecurrentFailuresIngestor $recurrentIngestor): void
     {
         try {
             $existed = Flight::whereHas('machine', fn ($q) => $q->where('hc_id', $result['hc_id']))
@@ -53,6 +55,7 @@ class ProcessXmlJob implements ShouldQueue
             $pannesCsv = $pipelinePath . '/data/reports/yearly/' . $hcId . '/' . $hcId . '_' . $year . '.csv';
             $fhCsv = $pipelinePath . '/data/FHreport/yearly/' . $hcId . '/' . $hcId . '_' . $year . '.csv';
             $aggIngestor->ingest($flight->machine, $year, $pannesCsv, $fhCsv);
+            $recurrentIngestor->ingest($result['hc_id']);
 
             $import->update([
                 'status' => $existed ? 'already_processed' : 'ok',
