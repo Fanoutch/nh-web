@@ -17,9 +17,9 @@ class MachineController extends Controller
         ])
         ->with([
             'recurrentFailures' => fn ($q) => $q->where('status', 'active')->orderByDesc('score'),
-            'flights' => fn ($q) => $q->latest('start_datetime')
-                ->with(['technicalEvents' => fn ($q2) => $q2->where('status', 'conservee')->orderByDesc('nombre_occurrences')])
-                ->limit(1),
+            'latestFlight' => fn ($q) => $q->with([
+                'technicalEvents' => fn ($q2) => $q2->where('status', 'conservee')->orderByDesc('nombre_occurrences'),
+            ]),
         ])
         ->orderBy('hc_id')
         ->get();
