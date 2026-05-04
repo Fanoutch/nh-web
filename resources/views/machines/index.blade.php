@@ -18,9 +18,10 @@
     @else
         <div class="bg-white rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
             @foreach ($machines as $m)
-                <a href="{{ route('machines.show', $m->hc_id) }}"
-                   class="group grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 transition">
-                    <div class="col-span-3 flex items-center gap-3">
+                <div class="grid grid-cols-12 gap-4 px-6 py-4 items-start hover:bg-slate-50 transition">
+                    {{-- HcId : col-span-2 --}}
+                    <a href="{{ route('machines.show', $m->hc_id) }}"
+                       class="col-span-2 flex items-center gap-3 group">
                         <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-blue-600">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
@@ -30,44 +31,37 @@
                             <p class="text-base font-bold text-slate-900 group-hover:text-blue-600 transition">{{ $m->hc_id }}</p>
                             <p class="text-xs text-slate-500">{{ $m->vols_count + $m->non_vols_count + $m->erreurs_count }} enregistrement(s)</p>
                         </div>
-                    </div>
-                    <div class="col-span-2 flex flex-col items-center">
-                        <p class="text-xl font-bold text-slate-900 tabular-nums leading-none">{{ $m->vols_count }}</p>
-                        <p class="text-[10px] uppercase tracking-wide text-slate-500 font-medium mt-1">Vols</p>
-                    </div>
-                    <div class="col-span-2 flex flex-col items-center">
-                        <p class="text-xl font-bold text-slate-900 tabular-nums leading-none">{{ $m->non_vols_count }}</p>
-                        <p class="text-[10px] uppercase tracking-wide text-slate-500 font-medium mt-1">Non-vols</p>
-                    </div>
-                    <div class="col-span-2 flex flex-col items-center">
-                        <p @class([
-                            'text-xl font-bold tabular-nums leading-none',
-                            'text-red-600' => $m->erreurs_count > 0,
-                            'text-slate-900' => $m->erreurs_count === 0,
-                        ])>{{ $m->erreurs_count }}</p>
-                        <p class="text-[10px] uppercase tracking-wide text-slate-500 font-medium mt-1">Erreurs</p>
-                    </div>
-                    <div class="col-span-3 flex items-center justify-end gap-2 text-sm text-slate-500">
-                        <div class="flex items-center gap-1.5">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-4 h-4">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                            </svg>
-                            <div class="flex flex-col leading-tight">
-                                <span class="text-[10px] uppercase tracking-wide text-slate-400 font-medium">Dernier vol</span>
-                                <span class="text-sm text-slate-700">
-                                    @if ($m->flights->first())
-                                        {{ $m->flights->first()->start_datetime->format('d/m/Y') }}
-                                    @else
-                                        —
-                                    @endif
-                                </span>
-                            </div>
-                        </div>
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition ml-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition ml-1">
                             <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
                         </svg>
+                    </a>
+
+                    {{-- Compteurs : col-span-3 --}}
+                    <div class="col-span-3 grid grid-cols-3 gap-2">
+                        <div class="flex flex-col items-center">
+                            <p class="text-xl font-bold text-slate-900 tabular-nums leading-none">{{ $m->vols_count }}</p>
+                            <p class="text-[10px] uppercase tracking-wide text-slate-500 font-medium mt-1">Vols</p>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <p class="text-xl font-bold text-slate-900 tabular-nums leading-none">{{ $m->non_vols_count }}</p>
+                            <p class="text-[10px] uppercase tracking-wide text-slate-500 font-medium mt-1">Non-vols</p>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <p @class([
+                                'text-xl font-bold tabular-nums leading-none',
+                                'text-red-600' => $m->erreurs_count > 0,
+                                'text-slate-900' => $m->erreurs_count === 0,
+                            ])>{{ $m->erreurs_count }}</p>
+                            <p class="text-[10px] uppercase tracking-wide text-slate-500 font-medium mt-1">Erreurs</p>
+                        </div>
                     </div>
-                </a>
+
+                    {{-- Widgets : col-span-7 --}}
+                    <div class="col-span-7 grid grid-cols-2 gap-3">
+                        @include('machines.partials.widget-recurrent', ['machine' => $m])
+                        @include('machines.partials.widget-last-flight', ['machine' => $m])
+                    </div>
+                </div>
             @endforeach
         </div>
     @endif
