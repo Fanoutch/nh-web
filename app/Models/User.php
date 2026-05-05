@@ -23,6 +23,7 @@ class User extends Authenticatable
         'email',
         'password',
         'is_admin',
+        'is_super_admin',
     ];
 
     /**
@@ -46,6 +47,20 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'is_super_admin' => 'boolean',
         ];
+    }
+
+    /**
+     * Un super admin compte aussi comme admin (acces aux pages admin).
+     */
+    public function isAdmin(): bool
+    {
+        return $this->is_admin || $this->is_super_admin;
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return (bool) $this->is_super_admin;
     }
 }

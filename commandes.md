@@ -107,6 +107,31 @@ $u->save();
 
 // Retirer le statut admin
 \App\Models\User::where('email', 'x@y.com')->update(['is_admin' => false]);
+
+// Creer un super admin (utile pour bootstrap : apres ca, gestion via /admin/users)
+\App\Models\User::create([
+    'name' => 'Super Admin',
+    'email' => 'super@nh.local',
+    'password' => 'mdpfort',
+    'is_admin' => true,
+    'is_super_admin' => true,
+]);
+
+// Lister tous les super admins
+\App\Models\User::where('is_super_admin', true)->get();
+
+// Promouvoir un admin existant en super admin
+$u = \App\Models\User::where('email', 'admin@nh.local')->first();
+$u->is_super_admin = true;
+$u->is_admin = true;  // un super admin est aussi admin
+$u->save();
+
+// Voir tous les comptes avec leur niveau
+\App\Models\User::all()->map(fn($u) => [
+    'email' => $u->email,
+    'is_admin' => $u->is_admin,
+    'is_super_admin' => $u->is_super_admin,
+]);
 ```
 
 #### Jobs et queue
@@ -550,20 +575,33 @@ systemctl start nh-queue.service
 systemctl status nh-queue.service
 ```
 
-### 8.11 Creer le premier compte admin
+### 8.11 Creer le premier super admin (bootstrap)
+
+A la premiere mise en prod, la table `users` est vide. Il faut creer le super admin
+initial via tinker. Apres ca, toutes les autres creations (admins, super admins,
+techniciens) se font via l'UI `/admin/users` et `/register`.
 
 ```bash
-cd /var/www/nh_project/web
+cd /var/www/nh-web
 sudo -u www-data php artisan tinker
->>> \App\Models\User::create([
-...     'name' => 'Admin',
-...     'email' => 'admin@tondomaine.com',
-...     'password' => \Hash::make('mot_de_passe_fort'),
-... ]);
->>> exit
 ```
 
-Ou via la page `/register` directement.
+Dans tinker :
+```php
+\App\Models\User::create([
+    'name' => 'Super Admin',
+    'email' => 'super@tondomaine.com',
+    'password' => 'MdpFortDeProd!',
+    'is_admin' => true,
+    'is_super_admin' => true,
+]);
+exit
+```
+
+Ensuite :
+- Connecte-toi via `/login` avec ce compte
+- Va sur `/admin/users` pour creer/promouvoir d'autres comptes
+- Les techniciens normaux passent par `/register` (ou tu les crees depuis tinker)
 
 ### 8.12 Verifier
 

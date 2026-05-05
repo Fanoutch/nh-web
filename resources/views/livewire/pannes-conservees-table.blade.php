@@ -80,7 +80,7 @@
                                 @endif
                             </div>
 
-                            @if (auth()->user()?->is_admin && $p->validated_by)
+                            @if (auth()->user()?->isAdmin() && $p->validated_by)
                                 <div class="mt-1 text-xs text-gray-500">
                                     par {{ $p->validator?->name ?? 'inconnu' }}
                                     · {{ $p->validated_at?->format('d/m/Y H:i') }}

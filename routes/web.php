@@ -41,4 +41,10 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
+// Routes admin (auth + middleware admin)
+Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::view('/users', 'admin.users')->name('users');
+    Route::view('/audit-log', 'admin.audit-log')->name('audit-log');
+});
+
 require __DIR__.'/auth.php';

@@ -33,6 +33,22 @@
     $initials = collect(explode(' ', $user?->name ?? 'U'))
         ->map(fn ($s) => mb_substr($s, 0, 1))
         ->take(2)->implode('');
+
+    // Liens admin (visibles uniquement si admin ou super admin)
+    $adminLinks = $user?->isAdmin() ? [
+        [
+            'route' => 'admin.users',
+            'label' => 'Utilisateurs',
+            'prefixes' => ['admin.users'],
+            'icon' => '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="5" r="2.5" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 13c0-2.5 2.2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+        ],
+        [
+            'route' => 'admin.audit-log',
+            'label' => 'Audit log',
+            'prefixes' => ['admin.audit-log'],
+            'icon' => '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="2" y="2" width="11" height="11" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h5M5 8.5h5M5 11h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+        ],
+    ] : [];
 @endphp
 
 <aside class="w-[200px] shrink-0 bg-sidebar-bg border-r border-sidebar-border flex flex-col">
@@ -69,6 +85,24 @@
                 @endif
             </a>
         @endforeach
+
+        @if (count($adminLinks) > 0)
+            <div class="mt-4 mb-1 px-3.5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted-on-dark">
+                Admin
+            </div>
+            @foreach ($adminLinks as $link)
+                @php $isActive = collect($link['prefixes'])->contains(fn ($p) => str_starts_with($active, $p)); @endphp
+                <a href="{{ route($link['route']) }}"
+                   @class([
+                       'flex items-center gap-2.5 px-3.5 py-2.5 rounded-md text-[13px] font-medium transition',
+                       'bg-sidebar-panel text-accent' => $isActive,
+                       'text-ink-muted-on-dark hover:bg-sidebar-panel hover:text-ink-on-dark' => !$isActive,
+                   ])>
+                    {!! $link['icon'] !!}
+                    <span class="flex-1">{{ $link['label'] }}</span>
+                </a>
+            @endforeach
+        @endif
     </nav>
 
     {{-- User dropdown --}}
