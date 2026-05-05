@@ -1,3 +1,17 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+    body {
+        @apply font-sans antialiased bg-app-bg text-ink-primary;
+    }
+
+    /* Scrollbars custom (light theme) */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #e4e8f0; }
+    ::-webkit-scrollbar-thumb { background: #c4cad8; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #a8b0c4; }
+
+    [x-cloak] { display: none !important; }
+}
