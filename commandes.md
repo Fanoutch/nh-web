@@ -61,6 +61,74 @@ nano /root/camille2/nh_project/web/.env
 php artisan config:clear
 ```
 
+### Tinker — Shell PHP interactif
+
+`php artisan tinker` ouvre un REPL PHP avec acces complet a l'app Laravel (modeles, facades, BDD, jobs). Utile pour debug, admin ponctuelle, tester du code sans ecrire de script.
+
+```bash
+cd /root/camille2/nh-web
+php artisan tinker
+# Pour quitter : exit
+```
+
+#### Inspecter la BDD
+
+```php
+// Lister les colonnes d'une table
+\Schema::getColumnListing('users');
+\Schema::getColumnListing('technical_events');
+
+// Verifier qu'une colonne existe
+\Schema::hasColumn('users', 'is_admin');
+
+// Compter / requeter
+\App\Models\User::count();
+\App\Models\Flight::latest()->first();
+\App\Models\TechnicalEvent::where('validation_status', 'validated')->count();
+```
+
+#### Gestion des utilisateurs
+
+```php
+// Creer un user
+\App\Models\User::create([
+    'name' => 'Admin',
+    'email' => 'admin@x.com',
+    'password' => 'mot_de_passe',  // hashe automatiquement
+]);
+
+// Promouvoir un user en admin (apres migration is_admin)
+$u = \App\Models\User::where('email', 'contact@aivolutionedge.com')->first();
+$u->is_admin = true;
+$u->save();
+
+// Lister tous les admins
+\App\Models\User::where('is_admin', true)->get();
+
+// Retirer le statut admin
+\App\Models\User::where('email', 'x@y.com')->update(['is_admin' => false]);
+```
+
+#### Jobs et queue
+
+```php
+// Dispatcher un job manuellement
+\App\Jobs\ProcessXmlJob::dispatch('/chemin/fichier.xml');
+
+// Compter les jobs en attente
+\DB::table('jobs')->count();
+
+// Compter les jobs en echec
+\DB::table('failed_jobs')->count();
+```
+
+#### Astuces
+
+- Auto-completion : commence a taper et appuie sur Tab
+- Historique : fleche haut pour rappeler une commande precedente
+- Les erreurs ne crashent pas tinker — tu peux retenter
+- Mode one-shot sans shell : `php artisan tinker --execute="echo \App\Models\User::count();"`
+
 ---
 
 ## 2. Base de donnees
