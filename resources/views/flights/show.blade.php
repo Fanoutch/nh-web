@@ -1,78 +1,79 @@
 <x-app-layout>
-    <nav class="flex items-center gap-2 text-sm text-slate-500 mb-4">
-        <a href="{{ route('machines.index') }}" class="hover:text-slate-700">Machines</a>
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-3 h-3">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-        </svg>
-        <a href="{{ route('machines.show', $flight->machine->hc_id) }}" class="hover:text-slate-700">{{ $flight->machine->hc_id }}</a>
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-3 h-3">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-        </svg>
-        <span class="text-slate-700">Vol n°{{ $flight->num }}</span>
-    </nav>
+    {{-- Breadcrumb --}}
+    <div class="mb-2">
+        <a href="{{ route('machines.show', $flight->machine->hc_id) }}"
+           class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded border border-app-border text-ink-secondary bg-transparent text-xs font-medium hover:bg-app-card hover:text-ink-primary hover:border-neutral-border transition">
+            ← {{ $flight->machine->hc_id }}
+        </a>
+    </div>
 
+    {{-- Header --}}
     <div class="flex items-start justify-between mb-6">
         <div>
-            <h1 class="text-3xl font-bold text-slate-900">Vol n°{{ $flight->num }}</h1>
-            <p class="text-sm text-slate-500 mt-1">{{ $flight->machine->hc_id }} · DSN {{ $flight->dsn }}</p>
+            <x-section-label class="mb-1">Vol · {{ $flight->start_datetime->format('d/m/Y') }}</x-section-label>
+            <h1 class="text-[20px] font-semibold text-ink-primary">
+                {{ $flight->dsn }} <span class="font-mono text-accent">#{{ $flight->num }}</span>
+            </h1>
         </div>
         <a href="{{ route('flights.xml', $flight) }}"
-           class="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm hover:bg-slate-50 transition">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-4 h-4">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+           class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded border border-app-border text-ink-secondary bg-transparent text-xs font-medium hover:bg-app-card hover:text-ink-primary hover:border-neutral-border transition">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <path d="M6.5 1v8M3.5 6.5l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                <path d="M1 10v1.5a.5.5 0 00.5.5h10a.5.5 0 00.5-.5V10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
             </svg>
-            Telecharger XML
+            Télécharger XML épuré
         </a>
     </div>
 
-    <div class="bg-white border border-slate-200 rounded-xl p-6 mb-6 grid md:grid-cols-4 gap-6">
-        <div>
-            <p class="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1">Type</p>
-            <span class="inline-block text-[11px] px-2 py-0.5 rounded uppercase font-medium bg-blue-100 text-blue-700">{{ $flight->flight_type }}</span>
-        </div>
-        <div>
-            <p class="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1">Duree (FH)</p>
-            <p class="text-lg font-bold text-slate-900 tabular-nums">{{ number_format($flight->flight_hours, 2) }} h</p>
-        </div>
-        <div>
-            <p class="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1">Debut</p>
-            <p class="text-sm text-slate-800 tabular-nums">{{ $flight->start_datetime->format('d/m/Y H:i:s') }}</p>
-        </div>
-        <div>
-            <p class="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1">Fin</p>
-            <p class="text-sm text-slate-800 tabular-nums">{{ $flight->end_datetime->format('d/m/Y H:i:s') }}</p>
-        </div>
-        <div class="md:col-span-4">
-            <p class="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1">Carburant consomme</p>
-            <p class="text-sm text-slate-800">{{ $flight->consumed_fuel ?? '—' }}</p>
-        </div>
-    </div>
-
-    <h2 class="text-lg font-semibold text-slate-900 mb-3">Pannes du vol</h2>
-    <div class="grid md:grid-cols-2 gap-4">
-        <a href="{{ route('flights.pannes-conservees', $flight) }}"
-           class="group block bg-white rounded-xl border border-slate-200 p-6 hover:border-blue-300 hover:shadow-lg transition">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Pannes conservees</p>
-                    <p class="text-4xl font-bold text-blue-600 mt-1 tabular-nums">{{ $counts['conservees'] }}</p>
-                </div>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-6 h-6 text-slate-300 group-hover:text-blue-500 transition">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                </svg>
+    {{-- Meta strip --}}
+    <x-card class="px-5 py-4 mb-5">
+        <div class="flex gap-8 flex-wrap">
+            <div>
+                <x-section-label class="mb-1">Appareil</x-section-label>
+                <div class="font-mono text-sm text-accent">{{ $flight->machine->hc_id }}</div>
             </div>
+            <div>
+                <x-section-label class="mb-1">Date</x-section-label>
+                <div class="font-mono text-sm text-ink-primary">{{ $flight->start_datetime->format('d/m/Y') }}</div>
+            </div>
+            <div>
+                <x-section-label class="mb-1">Durée</x-section-label>
+                <div class="font-mono text-sm text-ink-primary">{{ number_format($flight->flight_hours, 1) }}h</div>
+            </div>
+            <div>
+                <x-section-label class="mb-1">Carburant</x-section-label>
+                <div class="font-mono text-sm text-ink-primary">{{ $flight->consumed_fuel ?? '—' }}{{ $flight->consumed_fuel ? ' kg' : '' }}</div>
+            </div>
+            <div>
+                <x-section-label class="mb-1">Type</x-section-label>
+                <div class="text-sm text-ink-primary">Normal</div>
+            </div>
+        </div>
+    </x-card>
+
+    {{-- 2 cards Pannes --}}
+    <div class="grid grid-cols-2 gap-4">
+        <a href="{{ route('flights.pannes-conservees', $flight) }}"
+           class="block bg-app-card border border-app-border rounded-lg p-5 hover:border-accent transition group">
+            <div class="flex items-center justify-between mb-2">
+                <div class="font-semibold text-sm text-ink-primary">Pannes conservées</div>
+                <span class="font-mono text-[22px] font-medium text-accent">{{ $counts['conservees'] }}</span>
+            </div>
+            <div class="text-xs text-ink-muted leading-relaxed">
+                Pannes retenues par la pipeline dans la fenêtre de 48h. Validation technicien requise.
+            </div>
+            <div class="mt-3 text-xs text-accent group-hover:text-accent-pressed">Ouvrir le tableau →</div>
         </a>
         <a href="{{ route('flights.pannes-isolees', $flight) }}"
-           class="group block bg-white rounded-xl border border-slate-200 p-6 hover:border-amber-300 hover:shadow-lg transition">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Pannes isolees</p>
-                    <p class="text-4xl font-bold text-amber-600 mt-1 tabular-nums">{{ $counts['isolees'] }}</p>
-                </div>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-6 h-6 text-slate-300 group-hover:text-amber-500 transition">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                </svg>
+           class="block bg-app-card border border-app-border rounded-lg p-5 hover:border-ink-secondary transition group">
+            <div class="flex items-center justify-between mb-2">
+                <div class="font-semibold text-sm text-ink-primary">Pannes isolées</div>
+                <span class="font-mono text-[22px] font-medium text-ink-secondary">{{ $counts['isolees'] }}</span>
             </div>
+            <div class="text-xs text-ink-muted leading-relaxed">
+                Pannes filtrées (date hors fenêtre 48h). Information uniquement.
+            </div>
+            <div class="mt-3 text-xs text-ink-secondary">Ouvrir le tableau →</div>
         </a>
     </div>
 </x-app-layout>
