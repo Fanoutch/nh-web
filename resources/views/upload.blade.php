@@ -1,7 +1,7 @@
 <x-app-layout>
     <div class="mb-6">
-        <h1 class="text-3xl font-bold text-slate-900">Upload XML</h1>
-        <p class="text-sm text-slate-500 mt-1">Importez des fichiers HUMS (.xml)</p>
+        <x-section-label class="mb-1">Pipeline</x-section-label>
+        <h1 class="text-[22px] font-semibold text-ink-primary">Upload XML</h1>
     </div>
     <livewire:xml-uploader />
 </x-app-layout>
