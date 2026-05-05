@@ -32,6 +32,13 @@ class MachineController extends Controller
         $machine = Machine::where('hc_id', $hcId)->firstOrFail();
         $tab = $request->get('tab', 'vols');
 
+        $counts = [
+            'vols'     => $machine->flights()->where('is_non_vol', false)->count(),
+            'non-vols' => $machine->flights()->where('is_non_vol', true)->where('flagged_as_error', false)->count(),
+            'erreurs'  => $machine->flights()->where('flagged_as_error', true)->count(),
+        ];
+        $totalCount = array_sum($counts);
+
         $query = $machine->flights()->orderByDesc('start_datetime');
         $query->when($tab === 'vols', fn ($q) => $q->where('is_non_vol', false));
         $query->when($tab === 'non-vols', fn ($q) => $q->where('is_non_vol', true)->where('flagged_as_error', false));
@@ -41,6 +48,6 @@ class MachineController extends Controller
             'technicalEvents as conservees_count' => fn ($q) => $q->where('status', 'conservee'),
         ])->paginate(25);
 
-        return view('machines.show', compact('machine', 'tab', 'flights'));
+        return view('machines.show', compact('machine', 'tab', 'counts', 'totalCount', 'flights'));
     }
 }
