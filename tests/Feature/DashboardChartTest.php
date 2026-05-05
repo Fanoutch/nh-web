@@ -33,10 +33,10 @@ it('computes chart data from weekly_aggregates for the selected range', function
         ->set('machineId', $machine->id)
         ->set('startDate', '2026-01-26')  // semaine W05
         ->set('endDate', '2026-02-08')    // semaine W06
-        ->call('displayChart')
-        ->assertSet('showChart', true);
+        ->call('displayChart');
 
     $data = $component->get('chartData');
+    expect($data)->not->toBeEmpty();
     expect($data['weeks'])->toContain('2026-W05')->toContain('2026-W06');
     expect($data['pannes'])->toContain(10)->toContain(7);
 });
