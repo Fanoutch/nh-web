@@ -1,67 +1,81 @@
 <x-app-layout>
-    <div class="mb-6">
-        <h1 class="text-3xl font-bold text-slate-900">Machines</h1>
-        <p class="text-sm text-slate-500 mt-1">{{ $machines->count() }} helicoptere(s)</p>
-    </div>
-
-    @if ($machines->isEmpty())
-        <div class="bg-white rounded-xl border border-slate-200 p-12 text-center">
-            <p class="text-slate-500 mb-4">Aucune machine en base.</p>
+    {{-- Header --}}
+    <div class="flex items-end justify-between mb-6">
+        <div>
+            <x-section-label class="mb-1">Flotte</x-section-label>
+            <h1 class="text-[22px] font-semibold text-ink-primary">Machines</h1>
+        </div>
+        <div class="flex items-center gap-3">
+            <span class="text-xs font-mono text-ink-muted">{{ $machines->count() }} hélicoptère(s)</span>
             <a href="{{ route('upload.index') }}"
-               class="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 7.5m0 0L7.5 12M12 7.5v9" />
+               class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-accent text-ink-primary text-xs font-medium hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 transition">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M6 1v7M3 4l3-3 3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                    <path d="M1 9v1.5a.5.5 0 00.5.5h9a.5.5 0 00.5-.5V9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                 </svg>
-                Uploader un XML
+                Uploader XML
             </a>
         </div>
-    @else
-        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
-            @foreach ($machines as $m)
-                <div class="grid grid-cols-12 gap-4 px-6 py-4 items-start hover:bg-slate-50 transition">
-                    {{-- HcId : col-span-2 --}}
-                    <a href="{{ route('machines.show', $m->hc_id) }}"
-                       class="col-span-2 flex items-center gap-3 group">
-                        <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-blue-600">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
-                            </svg>
-                        </div>
-                        <div>
-                            <p class="text-base font-bold text-slate-900 group-hover:text-blue-600 transition">{{ $m->hc_id }}</p>
-                            <p class="text-xs text-slate-500">{{ $m->vols_count + $m->non_vols_count + $m->erreurs_count }} enregistrement(s)</p>
-                        </div>
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition ml-1">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                        </svg>
-                    </a>
+    </div>
 
-                    {{-- Compteurs : col-span-3 --}}
-                    <div class="col-span-3 grid grid-cols-3 gap-2">
-                        <div class="flex flex-col items-center">
-                            <p class="text-xl font-bold text-slate-900 tabular-nums leading-none">{{ $m->vols_count }}</p>
-                            <p class="text-[10px] uppercase tracking-wide text-slate-500 font-medium mt-1">Vols</p>
+    {{-- Empty state --}}
+    @if ($machines->isEmpty())
+        <x-card class="p-12 text-center">
+            <p class="text-ink-muted mb-4">Aucune machine en base.</p>
+            <a href="{{ route('upload.index') }}"
+               class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-accent text-ink-primary text-xs font-medium hover:bg-accent-hover transition">
+                + Uploader un XML
+            </a>
+        </x-card>
+    @else
+        {{-- Cards machines --}}
+        <div class="flex flex-col gap-3">
+            @foreach ($machines as $m)
+                @php
+                    $erreursVariant = $m->erreurs_count > 0 ? 'danger' : 'secondary';
+                    $isNominal = $m->erreurs_count === 0 && $m->active_count === 0;
+                @endphp
+                <x-card>
+                    {{-- Header --}}
+                    <div class="px-5 py-3.5 border-b border-app-border-soft flex items-center gap-5">
+                        {{-- HcId block --}}
+                        <a href="{{ route('machines.show', $m->hc_id) }}"
+                           class="w-[200px] shrink-0 group">
+                            <div class="font-mono text-base font-medium text-accent group-hover:text-accent-pressed transition-colors">
+                                {{ $m->hc_id }}
+                            </div>
+                            <div class="text-[11px] text-ink-muted mt-0.5">
+                                {{ $m->vols_count + $m->non_vols_count + $m->erreurs_count }} enregistrement(s)
+                            </div>
+                        </a>
+
+                        {{-- Compteurs avec dividers verticaux --}}
+                        <div class="flex items-center gap-4">
+                            <x-counter-pill :value="$m->vols_count" label="Vols" />
+                            <div class="w-px h-8 bg-app-border-soft"></div>
+                            <x-counter-pill :value="$m->non_vols_count" label="Non-Vols" variant="secondary" />
+                            <div class="w-px h-8 bg-app-border-soft"></div>
+                            <x-counter-pill :value="$m->erreurs_count" label="Erreurs" :variant="$erreursVariant" />
                         </div>
-                        <div class="flex flex-col items-center">
-                            <p class="text-xl font-bold text-slate-900 tabular-nums leading-none">{{ $m->non_vols_count }}</p>
-                            <p class="text-[10px] uppercase tracking-wide text-slate-500 font-medium mt-1">Non-vols</p>
-                        </div>
-                        <div class="flex flex-col items-center">
-                            <p @class([
-                                'text-xl font-bold tabular-nums leading-none',
-                                'text-red-600' => $m->erreurs_count > 0,
-                                'text-slate-900' => $m->erreurs_count === 0,
-                            ])>{{ $m->erreurs_count }}</p>
-                            <p class="text-[10px] uppercase tracking-wide text-slate-500 font-medium mt-1">Erreurs</p>
-                        </div>
+
+                        <div class="flex-1"></div>
+
+                        @if ($isNominal)
+                            <x-badge variant="ok">Nominal</x-badge>
+                        @endif
+
+                        <a href="{{ route('machines.show', $m->hc_id) }}"
+                           class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded border border-app-border text-ink-secondary bg-transparent text-xs font-medium hover:bg-app-card hover:text-ink-primary hover:border-neutral-border transition">
+                            Voir détail →
+                        </a>
                     </div>
 
-                    {{-- Widgets : col-span-7 --}}
-                    <div class="col-span-7 grid grid-cols-2 gap-3">
+                    {{-- Widgets row --}}
+                    <div class="grid grid-cols-2 divide-x divide-app-border-soft">
                         @include('machines.partials.widget-recurrent', ['machine' => $m])
                         @include('machines.partials.widget-last-flight', ['machine' => $m])
                     </div>
-                </div>
+                </x-card>
             @endforeach
         </div>
     @endif
