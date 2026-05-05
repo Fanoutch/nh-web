@@ -32,4 +32,13 @@ class Machine extends Model
     {
         return $this->hasOne(Flight::class)->latestOfMany('start_datetime');
     }
+
+    public function scopeActive($query, int $threshold = 3, int $days = 30)
+    {
+        return $query->whereHas('flights', function ($q) use ($days) {
+            $q->where('is_non_vol', false)
+              ->where('flagged_as_error', false)
+              ->where('start_datetime', '>=', now()->subDays($days));
+        }, '>=', $threshold);
+    }
 }
