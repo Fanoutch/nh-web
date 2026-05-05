@@ -1,81 +1,106 @@
 @php
     $active = request()->route()?->getName() ?? '';
+
     $links = [
         [
-            'route' => 'machines.index', 'label' => 'Machines',
+            'route' => 'machines.index',
+            'label' => 'Machines',
             'prefixes' => ['machines.', 'flights.'],
-            'icon' => '<path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />',
+            'icon' => '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="3" width="5" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="1" width="5" height="11" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M6 8h3" stroke="currentColor" stroke-width="1.3"/></svg>',
         ],
         [
-            'route' => 'upload.index', 'label' => 'Upload XML',
+            'route' => 'upload.index',
+            'label' => 'Upload',
             'prefixes' => ['upload.'],
-            'icon' => '<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 7.5m0 0L7.5 12M12 7.5v9" />',
+            'icon' => '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1.5V10M4.5 4.5l3-3 3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M2 11v2a.5.5 0 00.5.5h10a.5.5 0 00.5-.5v-2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
         ],
         [
-            'route' => 'imports.index', 'label' => 'Imports',
+            'route' => 'imports.index',
+            'label' => 'Imports',
             'prefixes' => ['imports.'],
-            'icon' => '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />',
+            'icon' => '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M7.5 4v4l2.5 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
         ],
         [
-            'route' => 'dashboards.index', 'label' => 'Dashboards',
+            'route' => 'dashboards.index',
+            'label' => 'Dashboards',
             'prefixes' => ['dashboards.'],
-            'icon' => '<path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />',
+            'icon' => '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1.5" y="8" width="3" height="5.5" rx="0.5" stroke="currentColor" stroke-width="1.3"/><rect x="6" y="5" width="3" height="8.5" rx="0.5" stroke="currentColor" stroke-width="1.3"/><rect x="10.5" y="2" width="3" height="11.5" rx="0.5" stroke="currentColor" stroke-width="1.3"/></svg>',
         ],
     ];
+
+    $processingCount = \App\Models\Import::where('status', 'processing')->count();
+    $user = auth()->user();
+    $initials = collect(explode(' ', $user?->name ?? 'U'))
+        ->map(fn ($s) => mb_substr($s, 0, 1))
+        ->take(2)->implode('');
 @endphp
 
-<aside class="w-60 bg-slate-900 text-slate-200 min-h-screen flex flex-col border-r border-slate-800">
-    {{-- Logo / titre --}}
-    <div class="p-5 border-b border-slate-800 flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="white" class="w-5 h-5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+<aside class="w-[200px] shrink-0 bg-sidebar-bg border-r border-sidebar-border flex flex-col">
+    {{-- Logo --}}
+    <div class="px-4 py-5 border-b border-sidebar-border flex items-center gap-2.5">
+        <div class="w-7 h-7 bg-accent rounded flex items-center justify-center shrink-0">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 2L14 5v3l-2 1-4-2-4 2-2-1V5L8 2z" fill="#0e1117"/>
+                <path d="M4 9v4l4 1 4-1V9" stroke="#0e1117" stroke-width="1.2" fill="none"/>
             </svg>
         </div>
-        <h2 class="text-base font-semibold text-white">NH Project</h2>
+        <div>
+            <div class="font-semibold text-[13px] text-ink-on-dark leading-none">NH Project</div>
+            <div class="text-[10px] text-ink-muted-on-dark mt-0.5">Fleet Maintenance</div>
+        </div>
     </div>
 
-    {{-- Navigation --}}
-    <nav class="flex-1 p-3 space-y-1">
+    {{-- Nav --}}
+    <nav class="flex-1 p-2 flex flex-col gap-0.5">
         @foreach ($links as $link)
-            @php
-                $isActive = collect($link['prefixes'])->contains(fn ($p) => str_starts_with($active, $p));
-            @endphp
+            @php $isActive = collect($link['prefixes'])->contains(fn ($p) => str_starts_with($active, $p)); @endphp
             <a href="{{ route($link['route']) }}"
                @class([
-                   'group flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition',
-                   'bg-blue-600 text-white shadow-md' => $isActive,
-                   'text-slate-300 hover:bg-slate-800 hover:text-white' => !$isActive,
+                   'flex items-center gap-2.5 px-3.5 py-2.5 rounded-md text-[13px] font-medium transition',
+                   'bg-sidebar-panel text-accent' => $isActive,
+                   'text-ink-muted-on-dark hover:bg-sidebar-panel hover:text-ink-on-dark' => !$isActive,
                ])>
-                <span class="flex items-center gap-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-5 h-5">
-                        {!! $link['icon'] !!}
-                    </svg>
-                    <span class="font-medium">{{ $link['label'] }}</span>
-                </span>
-                @if ($isActive)
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                    </svg>
+                {!! $link['icon'] !!}
+                <span class="flex-1">{{ $link['label'] }}</span>
+                @if ($link['route'] === 'imports.index' && $processingCount > 0)
+                    <span class="font-mono text-[10px] font-semibold bg-accent-soft-strong text-accent px-1.5 py-0.5 rounded">
+                        {{ $processingCount }}
+                    </span>
                 @endif
             </a>
         @endforeach
     </nav>
 
-    {{-- User + logout --}}
-    @auth
-        <div class="border-t border-slate-800 p-3 space-y-1">
-            <p class="text-xs text-slate-400 truncate px-3 py-1">{{ auth()->user()->email }}</p>
+    {{-- User dropdown --}}
+    <div class="border-t border-sidebar-border p-2 relative" x-data="{ open: false }" @click.outside="open = false">
+        <button type="button" @click="open = !open"
+                class="w-full flex items-center gap-2 px-2.5 py-2 rounded-md hover:bg-sidebar-panel transition text-left">
+            <div class="w-[26px] h-[26px] bg-sidebar-panel-border rounded-full flex items-center justify-center text-[11px] font-semibold text-accent shrink-0">
+                {{ strtoupper($initials) }}
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="text-[12px] font-medium text-ink-on-dark truncate">{{ $user?->name ?? '—' }}</div>
+                <div class="text-[10px] text-ink-muted-on-dark truncate">{{ $user?->email }}</div>
+            </div>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" class="text-ink-muted-on-dark">
+                <path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+        </button>
+
+        <div x-show="open" x-cloak x-transition
+             class="absolute bottom-[64px] left-2 right-2 bg-sidebar-panel border border-sidebar-panel-border rounded-md overflow-hidden shadow-xl z-50">
+            <a href="{{ route('profile.edit') }}"
+               class="block px-3 py-2 text-[12px] text-ink-on-dark hover:bg-sidebar-panel-border transition">
+                Profil
+            </a>
+            <hr class="border-sidebar-panel-border">
             <form method="POST" action="{{ route('logout') }}">
                 @csrf
                 <button type="submit"
-                        class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-5 h-5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" />
-                    </svg>
-                    Deconnexion
+                        class="w-full text-left px-3 py-2 text-[12px] text-danger hover:bg-sidebar-panel-border transition">
+                    Déconnexion
                 </button>
             </form>
         </div>
-    @endauth
+    </div>
 </aside>
