@@ -1,25 +1,40 @@
 <x-modal name="{{ $modalId }}" maxWidth="2xl">
-    <div class="p-6">
-        <h2 class="text-lg font-semibold text-slate-900 mb-4">
-            Pannes occurrentes actives — {{ $machine->hc_id }}
-        </h2>
-        <div class="space-y-3 max-h-[60vh] overflow-y-auto">
-            @foreach ($actives as $rf)
-                <div class="border border-slate-200 rounded-lg p-3">
-                    <div class="flex items-start justify-between gap-3">
-                        <p class="text-sm text-slate-900 font-medium">{{ $rf->te_description ?? $rf->technical_event_id }}</p>
-                        <span class="text-[11px] px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-medium tabular-nums">
-                            {{ $rf->score }}/3
-                        </span>
-                    </div>
-                    <p class="text-xs text-slate-500 mt-1">
-                        {{ $rf->description }} · {{ $rf->system_description }} · {{ $rf->type_description }}
-                    </p>
+    {{-- Header --}}
+    <div class="px-5 py-4 border-b border-app-border flex items-start justify-between">
+        <div>
+            <x-section-label class="mb-0.5">{{ $machine->hc_id }}</x-section-label>
+            <h2 class="text-[15px] font-semibold text-ink-primary">Pannes occurrentes actives</h2>
+        </div>
+        <button x-on:click="$dispatch('close')"
+                class="text-ink-muted hover:text-ink-primary text-lg leading-none transition-colors">×</button>
+    </div>
+
+    {{-- Body --}}
+    <div class="p-5 flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
+        @foreach ($actives as $rf)
+            @php
+                $borderColor = $rf->score >= 3 ? 'border-l-danger' : 'border-l-accent';
+                $badgeVariant = $rf->score >= 3 ? 'error' : 'amber';
+            @endphp
+            <div class="px-3.5 py-3 bg-app-bg rounded-md border-l-[3px] {{ $borderColor }}">
+                <div class="flex items-center justify-between mb-1.5">
+                    <x-badge :variant="$badgeVariant">Score {{ $rf->score }}/3</x-badge>
+                    <span class="font-mono text-[10px] text-ink-muted">
+                        {{ $rf->system_description ?? '—' }} · {{ $rf->type_description ?? '—' }}
+                    </span>
                 </div>
-            @endforeach
-        </div>
-        <div class="mt-5 flex justify-end">
-            <x-secondary-button x-on:click="$dispatch('close')">Fermer</x-secondary-button>
-        </div>
+                <div class="text-[13px] font-medium text-ink-primary">
+                    {{ $rf->te_description ?? $rf->technical_event_id }}
+                </div>
+                @if ($rf->description)
+                    <div class="text-[11px] text-ink-muted mt-1">{{ $rf->description }}</div>
+                @endif
+            </div>
+        @endforeach
+    </div>
+
+    {{-- Footer --}}
+    <div class="px-5 py-3 border-t border-app-border-soft flex justify-end">
+        <x-secondary-button x-on:click="$dispatch('close')">Fermer</x-secondary-button>
     </div>
 </x-modal>
