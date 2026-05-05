@@ -1,185 +1,174 @@
-<div class="space-y-6">
-    <div class="flex justify-between items-center gap-3">
+<div class="space-y-4">
+    {{-- Top bar : search + count badges --}}
+    <div class="flex items-center justify-between gap-3">
         <input type="text" wire:model.live.debounce.300ms="search"
-               placeholder="Rechercher (ID, description, code, systeme...)"
-               class="border rounded px-3 py-2 text-sm w-96" />
-        <button wire:click="openMissingModal"
-                class="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 text-sm">
-            Signaler une panne manquante
-        </button>
+               placeholder="Rechercher (description, code, système…)"
+               class="w-96 bg-app-elevated border border-app-border text-ink-primary rounded-md px-3 py-2 text-sm placeholder:text-ink-muted focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition" />
+        <div class="flex items-center gap-2">
+            @php
+                $allPannes = $flight->technicalEvents()->where('status', 'conservee')->get();
+                $countPending   = $allPannes->where('validation_status', 'pending')->count();
+                $countValidated = $allPannes->where('validation_status', 'validated')->count();
+                $countRejected  = $allPannes->where('validation_status', 'rejected')->count();
+            @endphp
+            <x-badge variant="pending">{{ $countPending }} pending</x-badge>
+            <x-badge variant="ok">{{ $countValidated }} validées</x-badge>
+            <x-badge variant="error">{{ $countRejected }} rejetées</x-badge>
+        </div>
     </div>
 
-    <div class="bg-white shadow rounded overflow-x-auto">
-        <table class="w-full text-sm">
-            <thead class="bg-gray-50 text-left text-gray-600">
-                <tr>
-                    <th class="p-3">Description</th>
-                    <th class="p-3">Failure Code</th>
-                    <th class="p-3">Failure Start Time</th>
-                    <th class="p-3">Occ.</th>
-                    <th class="p-3">Validation</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse ($pannes as $p)
-                    <tr class="border-t hover:bg-gray-50" wire:key="te-{{ $p->id }}">
-                        <td class="p-3 max-w-md">
-                            <button wire:click="openDetail({{ $p->id }})"
-                                    class="text-blue-600 hover:underline text-left">
-                                {{ data_get($p->details, 'TechnicalEventDescription') ?? data_get($p->details, 'TEDescription') ?? $p->technical_event_id }}
-                            </button>
-                        </td>
-                        <td class="p-3 font-mono">{{ data_get($p->details, 'FailureCode') ?? '—' }}</td>
-                        <td class="p-3">{{ $p->raise_datetime->format('d/m/Y H:i:s') }}</td>
-                        <td class="p-3">{{ $p->nombre_occurrences }}</td>
-                        <td class="p-3">
-                            @php
-                                $isValid = $p->validation_status === 'validated';
-                                $isReject = $p->validation_status === 'rejected';
-                                // Clic sur un etat actif -> retour a pending
-                                $actionValid  = $isValid  ? 'pending' : 'validated';
-                                $actionReject = $isReject ? 'pending' : 'rejected';
-                            @endphp
-                            <div class="flex items-center gap-2">
-                                <button wire:click="setValidation({{ $p->id }}, '{{ $actionValid }}')"
-                                        title="{{ $isValid ? 'Retirer la validation' : 'Valider cette panne' }}"
-                                        @class([
-                                            'w-7 h-7 rounded-full flex items-center justify-center transition',
-                                            'bg-green-500 text-white shadow-sm' => $isValid,
-                                            'bg-gray-100 text-gray-400 hover:bg-green-100 hover:text-green-600' => !$isValid,
-                                        ])>
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                    </svg>
-                                </button>
-                                <button wire:click="setValidation({{ $p->id }}, '{{ $actionReject }}')"
-                                        title="{{ $isReject ? 'Retirer le rejet' : 'Rejeter cette panne' }}"
-                                        @class([
-                                            'w-7 h-7 rounded-full flex items-center justify-center transition',
-                                            'bg-red-500 text-white shadow-sm' => $isReject,
-                                            'bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-600' => !$isReject,
-                                        ])>
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                                @if ($isValid)
-                                    <span class="ml-auto flex items-center gap-1 text-green-600 text-xs font-medium">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
-                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                                        </svg>
-                                        Validée
-                                    </span>
-                                @elseif ($isReject)
-                                    <span class="ml-auto flex items-center gap-1 text-red-600 text-xs font-medium">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
-                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                                        </svg>
-                                        Rejetée
-                                    </span>
-                                @endif
-                            </div>
+    {{-- Card list pannes --}}
+    <div class="space-y-2">
+        @forelse ($pannes as $p)
+            @php
+                $status = $p->validation_status;
+                $statusBadgeVariant = match ($status) {
+                    'validated' => 'ok',
+                    'rejected'  => 'error',
+                    default     => 'pending',
+                };
+                $statusLabel = match ($status) {
+                    'validated' => 'Validée',
+                    'rejected'  => 'Rejetée',
+                    default     => 'Pending',
+                };
+                $teDesc = data_get($p->details, 'TechnicalEventDescription') ?? data_get($p->details, 'TEDescription') ?? $p->technical_event_id;
+                $sysDesc = data_get($p->details, 'SystemDescription') ?? '—';
+                $typeDesc = data_get($p->details, 'TypeDescription') ?? '—';
+                $failureCode = data_get($p->details, 'FailureCode') ?? '—';
+                $isValid = $status === 'validated';
+                $isReject = $status === 'rejected';
+                $actionValid  = $isValid  ? 'pending' : 'validated';
+                $actionReject = $isReject ? 'pending' : 'rejected';
+            @endphp
+            <x-panne-row :status="$status" wire:key="te-{{ $p->id }}">
+                <div class="flex items-center gap-2 mb-1.5">
+                    <x-badge :variant="$statusBadgeVariant">{{ $statusLabel }}</x-badge>
+                    <span class="font-mono text-[10px] text-ink-muted">
+                        {{ $sysDesc }} · Fault Code {{ $failureCode }} · ×{{ $p->nombre_occurrences }} occurrence{{ $p->nombre_occurrences > 1 ? 's' : '' }}
+                    </span>
+                </div>
+                <button wire:click="openDetail({{ $p->id }})"
+                        class="text-[13px] font-medium text-ink-primary hover:text-accent-pressed text-left transition-colors">
+                    {{ $teDesc }}
+                </button>
+                <div class="text-[11px] text-ink-muted mt-1">
+                    Système : {{ $sysDesc }} | Type : {{ $typeDesc }}
+                </div>
 
-                            @if (auth()->user()?->isAdmin() && $p->validated_by)
-                                <div class="mt-1 text-xs text-gray-500">
-                                    par {{ $p->validator?->name ?? 'inconnu' }}
-                                    · {{ $p->validated_at?->format('d/m/Y H:i') }}
-                                </div>
-                            @endif
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="5" class="p-6 text-center text-gray-500">
-                            Aucune panne conservee pour ce vol.
-                        </td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
+                <x-slot:actions>
+                    <div class="flex gap-1.5">
+                        @if ($isValid)
+                            <x-ok-button wire:click="setValidation({{ $p->id }}, '{{ $actionValid }}')">✓ Validée</x-ok-button>
+                        @else
+                            <x-secondary-button wire:click="setValidation({{ $p->id }}, '{{ $actionValid }}')">✓ Valider</x-secondary-button>
+                        @endif
+                        @if ($isReject)
+                            <x-danger-button type="button" wire:click="setValidation({{ $p->id }}, '{{ $actionReject }}')">✕ Rejetée</x-danger-button>
+                        @else
+                            <x-secondary-button wire:click="setValidation({{ $p->id }}, '{{ $actionReject }}')">✕ Rejeter</x-secondary-button>
+                        @endif
+                    </div>
+                    @if (auth()->user()?->isAdmin() && $p->validated_by)
+                        <div class="text-[10px] text-ink-muted text-right leading-snug">
+                            par {{ $p->validator?->name ?? 'inconnu' }}<br>
+                            {{ $p->validated_at?->format('d/m/Y H:i') }}
+                        </div>
+                    @endif
+                </x-slot:actions>
+            </x-panne-row>
+        @empty
+            <x-card class="p-12 text-center text-ink-muted text-sm">
+                Aucune panne conservée pour ce vol.
+            </x-card>
+        @endforelse
     </div>
 
-    {{-- Panneau lateral detail --}}
+    {{-- Form panne manquante (collapsible Alpine) --}}
+    <x-card class="p-5" x-data="{ open: false }">
+        <div class="flex items-center justify-between">
+            <div class="font-semibold text-sm text-ink-primary">Signaler une panne manquante</div>
+            <button @click="open = !open" type="button"
+                    class="text-xs text-accent hover:text-accent-pressed font-medium transition-colors">
+                <span x-show="!open">+ Ouvrir le formulaire</span>
+                <span x-show="open" x-cloak>− Fermer</span>
+            </button>
+        </div>
+        <div x-show="open" x-cloak class="mt-4 space-y-3">
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted mb-1.5">Failure Code *</label>
+                <input type="text" wire:model="newFailureCode" placeholder="ex: 46-830"
+                       class="w-full bg-app-elevated border border-app-border text-ink-primary rounded-md px-3 py-2 text-sm placeholder:text-ink-muted focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition" />
+                @error('newFailureCode')
+                    <p class="text-[11px] text-danger mt-1">{{ $message }}</p>
+                @enderror
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted mb-1.5">
+                    Description <span class="text-ink-muted lowercase font-normal normal-case">(facultatif)</span>
+                </label>
+                <textarea wire:model="newDescription" rows="3" placeholder="Description de la panne…"
+                          class="w-full bg-app-elevated border border-app-border text-ink-primary rounded-md px-3 py-2 text-sm placeholder:text-ink-muted focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition resize-y"></textarea>
+            </div>
+            <div class="flex justify-end gap-2">
+                <x-secondary-button @click="open = false">Annuler</x-secondary-button>
+                <x-primary-button wire:click="submitMissingPanne">Signaler la panne</x-primary-button>
+            </div>
+        </div>
+    </x-card>
+
+    {{-- Side detail panel --}}
     @if ($selected)
         <div wire:click.self="closeDetail"
-             class="fixed inset-0 bg-black/40 z-40"
-             x-on:keydown.escape.window="$wire.closeDetail()"></div>
-        <aside class="fixed top-0 right-0 bottom-0 w-96 bg-white shadow-xl z-50 p-6 overflow-y-auto border-l">
-            <div class="flex justify-between items-start mb-4">
-                <h3 class="font-semibold">Detail panne</h3>
-                <button wire:click="closeDetail" class="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+             class="fixed inset-0 bg-ink-primary/50 backdrop-blur-sm z-40"
+             x-data x-on:keydown.escape.window="$wire.closeDetail()"></div>
+        <aside class="fixed top-0 right-0 bottom-0 w-[400px] bg-app-card border-l border-app-border shadow-2xl z-50 p-6 overflow-y-auto">
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <x-section-label class="mb-0.5">Détail panne</x-section-label>
+                    <div class="text-sm font-medium text-ink-primary">{{ data_get($selected->details, 'TechnicalEventDescription') ?? $selected->technical_event_id }}</div>
+                </div>
+                <button wire:click="closeDetail" class="text-ink-muted hover:text-ink-primary text-lg leading-none transition-colors">×</button>
             </div>
-            <dl class="space-y-2 text-sm">
+            <dl class="space-y-2.5 text-sm">
                 @foreach ($selected->details as $k => $v)
                     <div>
-                        <dt class="text-gray-500 text-xs">{{ $k }}</dt>
-                        <dd class="break-words">{{ is_scalar($v) ? $v : json_encode($v, JSON_UNESCAPED_UNICODE) }}</dd>
+                        <dt class="text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-muted">{{ $k }}</dt>
+                        <dd class="text-ink-primary text-[13px] break-words mt-0.5">{{ is_scalar($v) ? $v : json_encode($v, JSON_UNESCAPED_UNICODE) }}</dd>
                     </div>
                 @endforeach
             </dl>
         </aside>
     @endif
 
-    {{-- Modale panne manquante --}}
-    @if ($showMissingModal)
-        <div wire:click.self="$set('showMissingModal', false)"
-             class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div class="bg-white rounded shadow-lg p-6 w-[28rem]">
-                <h3 class="font-semibold mb-4">Signaler une panne manquante</h3>
-
-                <label class="block text-sm mb-1 font-medium">Failure Code *</label>
-                <input type="text" wire:model="newFailureCode"
-                       placeholder="ex: 46-830"
-                       class="border rounded w-full px-3 py-2 mb-3" />
-                @error('newFailureCode')
-                    <p class="text-red-500 text-xs mb-2 -mt-2">{{ $message }}</p>
-                @enderror
-
-                <label class="block text-sm mb-1 font-medium">Description <span class="text-gray-400 font-normal">(facultatif)</span></label>
-                <textarea wire:model="newDescription" rows="3"
-                          placeholder="Description de la panne..."
-                          class="border rounded w-full px-3 py-2 mb-4"></textarea>
-
-                <div class="flex justify-end gap-2">
-                    <button wire:click="$set('showMissingModal', false)"
-                            class="px-3 py-1 bg-gray-200 rounded text-sm hover:bg-gray-300">
-                        Annuler
-                    </button>
-                    <button wire:click="submitMissingPanne"
-                            class="px-4 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
-                        Signaler
-                    </button>
-                </div>
-            </div>
-        </div>
-    @endif
-
-    {{-- Liste pannes manquantes --}}
+    {{-- Liste pannes manquantes signalées --}}
     @if ($missingPannes->isNotEmpty())
-        <div class="bg-white shadow rounded p-4">
-            <h3 class="font-semibold mb-3">Pannes manquantes signalees ({{ $missingPannes->count() }})</h3>
-            <ul class="divide-y text-sm">
+        <x-card class="p-5">
+            <x-section-label class="mb-3">Pannes manquantes signalées ({{ $missingPannes->count() }})</x-section-label>
+            <ul class="divide-y divide-app-border-soft">
                 @foreach ($missingPannes as $m)
-                    <li class="py-3 flex justify-between gap-3" wire:key="missing-{{ $m->id }}">
-                        <div class="flex-1">
-                            <span class="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{{ $m->failure_code }}</span>
-                            @if ($m->description)
-                                <span class="text-gray-700 ml-2">{{ $m->description }}</span>
-                            @endif
-                            <p class="text-xs text-gray-400 mt-1">
-                                Signalee par {{ $m->reporter->email ?? 'inconnu' }}
+                    <li class="py-3 flex items-start justify-between gap-3" wire:key="missing-{{ $m->id }}">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-xs bg-accent-soft-strong text-warn px-2 py-0.5 rounded">{{ $m->failure_code }}</span>
+                                @if ($m->description)
+                                    <span class="text-[13px] text-ink-primary">{{ $m->description }}</span>
+                                @endif
+                            </div>
+                            <p class="text-[11px] text-ink-muted mt-1">
+                                Signalée par {{ $m->reporter->email ?? 'inconnu' }}
                                 · {{ $m->reported_at->format('d/m/Y H:i') }}
                             </p>
                         </div>
                         @if ($m->reported_by === auth()->id())
                             <button wire:click="deleteMissing({{ $m->id }})"
-                                    class="text-red-500 text-xs hover:text-red-700 self-start">
+                                    class="text-[11px] text-danger hover:underline transition-colors self-start">
                                 Supprimer
                             </button>
                         @endif
                     </li>
                 @endforeach
             </ul>
-        </div>
+        </x-card>
     @endif
 </div>
