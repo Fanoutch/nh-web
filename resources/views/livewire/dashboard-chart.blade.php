@@ -50,15 +50,15 @@
 
     @if ($isFiltered)
         {{-- Vue filtrée : chart pannes + FH par semaine pour 1 machine --}}
-        <x-card class="p-5"
-                wire:ignore.self
-                x-data="dashboardChart(@js($chartData))"
-                x-init="render($wire.chartData)"
-                x-on:chart-data-updated.window="render($event.detail.data || $event.detail[0].data)">
+        <div class="p-5 bg-app-card border border-app-border rounded-lg"
+             wire:ignore.self
+             x-data="dashboardChart()"
+             x-init="render($wire.chartData)"
+             x-on:chart-data-updated.window="render($event.detail.data || $event.detail[0].data)">
             <div class="text-sm font-semibold text-ink-primary mb-1">{{ $chartTitle }}</div>
             <div class="text-[11px] text-ink-muted mb-3">Pannes et heures de vol par semaine ISO</div>
             <div wire:ignore id="dashboard-chart-container" style="min-height: 380px;"></div>
-        </x-card>
+        </div>
     @else
         {{-- Vue défaut : chart mensuel multi-machines + widget validation --}}
         <x-card class="p-5 mb-4">
@@ -128,7 +128,7 @@
     @once
         <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
         <script>
-            window.dashboardChart = function (initial) {
+            window.dashboardChart = function () {
                 return {
                     chart: null,
                     render(data) {
