@@ -69,10 +69,7 @@ class ProcessXmlJob implements ShouldQueue
                 ],
             ]);
         } catch (\Throwable $e) {
-            $import->update([
-                'status' => 'error',
-                'result' => ['message' => $e->getMessage()],
-            ]);
+            $this->logPipelineError($import, $e->getMessage());
         }
     }
 
@@ -90,18 +87,31 @@ class ProcessXmlJob implements ShouldQueue
                 ],
             ]);
         } catch (\Throwable $e) {
-            $import->update([
-                'status' => 'error',
-                'result' => ['message' => $e->getMessage()],
-            ]);
+            $this->logPipelineError($import, $e->getMessage());
         }
     }
 
     private function handleError(Import $import, array $result): void
     {
+        $this->logPipelineError($import, $result['message'] ?? 'Unknown pipeline error');
+    }
+
+    private function logPipelineError(Import $import, string $message): void
+    {
         $import->update([
             'status' => 'error',
-            'result' => ['message' => $result['message'] ?? 'Unknown pipeline error'],
+            'result' => ['message' => $message],
         ]);
+
+        activity('pipeline')
+            ->event('error')
+            ->performedOn($import)
+            ->withProperties([
+                'attributes' => [
+                    'filename' => $import->filename,
+                    'message' => $message,
+                ],
+            ])
+            ->log("Pipeline error: {$message}");
     }
 }

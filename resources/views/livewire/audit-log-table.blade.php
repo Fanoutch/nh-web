@@ -41,7 +41,7 @@
                             $eventVariant = match ($a->event) {
                                 'created' => 'ok',
                                 'updated' => 'amber',
-                                'deleted' => 'error',
+                                'deleted', 'error' => 'error',
                                 default => 'pending',
                             };
                         @endphp
