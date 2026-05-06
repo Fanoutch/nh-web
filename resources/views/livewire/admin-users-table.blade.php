@@ -1,129 +1,138 @@
 <div class="space-y-4">
     {{-- Flash messages --}}
     @if (session('success'))
-        <div class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded text-sm">
+        <div class="px-4 py-3 bg-ok-soft border border-ok-border text-ok rounded text-sm">
             {{ session('success') }}
         </div>
     @endif
     @if (session('error'))
-        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
+        <div class="px-4 py-3 bg-danger-soft border border-danger-border text-danger rounded text-sm">
             {{ session('error') }}
         </div>
     @endif
 
-    {{-- Recherche + info role --}}
+    {{-- Search + role info --}}
     <div class="flex justify-between items-center gap-3">
         <input type="text" wire:model.live.debounce.300ms="search"
                placeholder="Rechercher (nom, email)"
-               class="border rounded px-3 py-2 text-sm w-96" />
+               class="w-96 bg-app-elevated border border-app-border text-ink-primary rounded-md px-3 py-2 text-sm placeholder:text-ink-muted focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition" />
 
         <div class="flex items-center gap-3 text-xs">
             @if ($currentIsSuperAdmin)
-                <span class="bg-purple-50 text-purple-700 border border-purple-200 px-2 py-1 rounded font-medium">
-                    Vous etes super admin
+                <span class="inline-flex items-center gap-1 bg-[#ede9fe] text-[#6d28d9] border border-[#c4b5fd] px-2 py-1 rounded font-mono font-medium">
+                    Vous êtes super admin
                 </span>
             @else
-                <span class="bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                    Vous etes admin (lecture seule sur cette page)
+                <span class="inline-flex items-center gap-1 bg-neutral-soft text-neutral border border-neutral-border px-2 py-1 rounded font-mono">
+                    Vous êtes admin (lecture seule)
                 </span>
             @endif
-            <span class="text-gray-500">
+            <span class="text-ink-muted">
                 {{ $users->total() }} utilisateur{{ $users->total() > 1 ? 's' : '' }}
             </span>
         </div>
     </div>
 
-    <div class="bg-white shadow rounded overflow-x-auto">
-        <table class="w-full text-sm">
-            <thead class="bg-gray-50 text-left text-gray-600">
-                <tr>
-                    <th class="p-3 w-12">ID</th>
-                    <th class="p-3">Nom</th>
-                    <th class="p-3">Email</th>
-                    <th class="p-3 w-40">Statut</th>
-                    <th class="p-3 w-72">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse ($users as $u)
-                    <tr class="border-t hover:bg-gray-50" wire:key="user-{{ $u->id }}">
-                        <td class="p-3 text-gray-400 font-mono text-xs">{{ $u->id }}</td>
-                        <td class="p-3 font-medium">{{ $u->name }}</td>
-                        <td class="p-3 text-gray-600">{{ $u->email }}</td>
-                        <td class="p-3">
-                            @if ($u->is_super_admin)
-                                <span class="inline-flex items-center gap-1 bg-purple-50 text-purple-700 border border-purple-200 text-xs px-2 py-1 rounded font-medium">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
-                                        <path fill-rule="evenodd" d="M9.243 3.03a1 1 0 01.728 1.213l-1 4a1 1 0 11-1.94-.486l1-4a1 1 0 011.213-.728zm5.06 0a1 1 0 011.213.728l1 4a1 1 0 11-1.94.486l-1-4a1 1 0 01.728-1.213zM2.793 5.793a1 1 0 011.414 0l2 2a1 1 0 01-1.414 1.414l-2-2a1 1 0 010-1.414zm14.414 0a1 1 0 010 1.414l-2 2a1 1 0 11-1.414-1.414l2-2a1 1 0 011.414 0zM2 11a1 1 0 011-1h.5a1 1 0 110 2H3a1 1 0 01-1-1zm14 0a1 1 0 011-1h.5a1 1 0 110 2H17a1 1 0 01-1-1z" clip-rule="evenodd" />
-                                    </svg>
-                                    Super Admin
-                                </span>
-                            @elseif ($u->is_admin)
-                                <span class="inline-flex items-center gap-1 bg-yellow-50 text-yellow-700 border border-yellow-200 text-xs px-2 py-1 rounded font-medium">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
-                                        <path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 17.347 7.373 20.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.007Z" clip-rule="evenodd" />
-                                    </svg>
-                                    Admin
-                                </span>
-                            @else
-                                <span class="text-gray-500 text-xs">Utilisateur</span>
-                            @endif
-                        </td>
-                        <td class="p-3">
-                            @if ($u->id === auth()->id())
-                                <span class="text-xs text-gray-400 italic">vous-meme</span>
-                            @elseif (!$currentIsSuperAdmin)
-                                <span class="text-xs text-gray-400 italic">—</span>
-                            @else
-                                <div class="flex gap-2 flex-wrap">
-                                    {{-- Toggle super admin (sauf pour user normal qui n'est pas encore admin) --}}
-                                    @if ($u->is_super_admin)
-                                        <button
-                                            wire:click="toggleSuperAdmin({{ $u->id }})"
-                                            wire:confirm="Retirer le statut super admin de {{ $u->name }} ?"
-                                            class="px-3 py-1 rounded text-xs font-medium transition bg-red-50 text-red-700 hover:bg-red-100 border border-red-200">
-                                            Retirer super admin
-                                        </button>
-                                    @else
-                                        <button
-                                            wire:click="toggleSuperAdmin({{ $u->id }})"
-                                            wire:confirm="Promouvoir {{ $u->name }} super admin ?"
-                                            class="px-3 py-1 rounded text-xs font-medium transition bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200">
-                                            Promouvoir super admin
-                                        </button>
-                                    @endif
-
-                                    {{-- Toggle admin (pas dispo si deja super admin) --}}
-                                    @if (!$u->is_super_admin)
-                                        <button
-                                            wire:click="toggleAdmin({{ $u->id }})"
-                                            wire:confirm="{{ $u->is_admin ? 'Retirer le statut admin de ' . $u->name . ' ?' : 'Rendre ' . $u->name . ' admin ?' }}"
-                                            @class([
-                                                'px-3 py-1 rounded text-xs font-medium transition',
-                                                'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200' => $u->is_admin,
-                                                'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200' => !$u->is_admin,
-                                            ])>
-                                            {{ $u->is_admin ? 'Retirer admin' : 'Promouvoir admin' }}
-                                        </button>
-                                    @endif
-                                </div>
-                            @endif
-                        </td>
+    <x-card class="overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-[13px]">
+                <thead>
+                    <tr class="border-b border-app-border">
+                        <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted w-12">ID</th>
+                        <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Nom</th>
+                        <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Email</th>
+                        <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted w-40">Statut</th>
+                        <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted w-72">Actions</th>
                     </tr>
-                @empty
-                    <tr>
-                        <td colspan="5" class="p-6 text-center text-gray-500">
-                            Aucun utilisateur trouve.
-                        </td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
+                </thead>
+                <tbody>
+                    @forelse ($users as $u)
+                        <tr class="border-b border-app-border-soft hover:bg-app-bg transition-colors" wire:key="user-{{ $u->id }}">
+                            <td class="px-4 py-2.5 font-mono text-xs text-ink-muted">{{ $u->id }}</td>
+                            <td class="px-4 py-2.5 font-medium text-ink-primary">{{ $u->name }}</td>
+                            <td class="px-4 py-2.5 text-ink-secondary">{{ $u->email }}</td>
+                            <td class="px-4 py-2.5">
+                                @if ($u->is_super_admin)
+                                    <span class="inline-flex items-center gap-1 bg-[#ede9fe] text-[#6d28d9] border border-[#c4b5fd] text-[11px] px-2 py-0.5 rounded font-mono font-medium">
+                                        Super Admin
+                                    </span>
+                                @elseif ($u->is_admin)
+                                    <span class="inline-flex items-center gap-1 bg-accent-soft-strong text-warn text-[11px] px-2 py-0.5 rounded font-mono font-medium">
+                                        Admin
+                                    </span>
+                                @else
+                                    <span class="text-ink-muted text-xs">Utilisateur</span>
+                                @endif
+                            </td>
+                            <td class="px-4 py-2.5">
+                                @if ($u->id === auth()->id())
+                                    <span class="text-xs text-ink-muted italic">vous-même</span>
+                                @elseif (!$currentIsSuperAdmin)
+                                    <span class="text-xs text-ink-muted italic">—</span>
+                                @else
+                                    <div class="flex gap-1.5 flex-wrap">
+                                        @if ($u->is_super_admin)
+                                            <button wire:click="toggleSuperAdmin({{ $u->id }})"
+                                                    wire:confirm="Retirer le statut super admin de {{ $u->name }} ?"
+                                                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-danger-soft border border-danger-border text-danger text-[11px] font-medium hover:bg-danger-border transition">
+                                                Retirer super admin
+                                            </button>
+                                        @else
+                                            <button wire:click="toggleSuperAdmin({{ $u->id }})"
+                                                    wire:confirm="Promouvoir {{ $u->name }} super admin ?"
+                                                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-[#ede9fe] border border-[#c4b5fd] text-[#6d28d9] text-[11px] font-medium hover:bg-[#ddd6fe] transition">
+                                                Promouvoir super admin
+                                            </button>
+                                        @endif
 
-    @if ($users->hasPages())
-        <div>
-            {{ $users->links() }}
+                                        @if (!$u->is_super_admin)
+                                            @if ($u->is_admin)
+                                                <button wire:click="toggleAdmin({{ $u->id }})"
+                                                        wire:confirm="Retirer le statut admin de {{ $u->name }} ?"
+                                                        class="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-danger-soft border border-danger-border text-danger text-[11px] font-medium hover:bg-danger-border transition">
+                                                    Retirer admin
+                                                </button>
+                                            @else
+                                                <button wire:click="toggleAdmin({{ $u->id }})"
+                                                        wire:confirm="Rendre {{ $u->name }} admin ?"
+                                                        class="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-ok-soft border border-ok-border text-ok text-[11px] font-medium hover:bg-ok-border transition">
+                                                    Promouvoir admin
+                                                </button>
+                                            @endif
+                                        @endif
+                                    </div>
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="5" class="px-4 py-12 text-center text-ink-muted text-sm">
+                                Aucun utilisateur trouvé.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
-    @endif
+
+        @if ($users->hasPages())
+            <div class="px-4 py-3 border-t border-app-border-soft flex items-center justify-between text-xs text-ink-muted">
+                <span>Affichage {{ $users->firstItem() }}–{{ $users->lastItem() }} de {{ $users->total() }}</span>
+                <div class="flex gap-1.5">
+                    @if ($users->onFirstPage())
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded border border-app-border text-ink-muted text-xs font-medium opacity-50 cursor-not-allowed">← Préc.</span>
+                    @else
+                        <button wire:click="previousPage"
+                                class="inline-flex items-center gap-1.5 px-3 py-1 rounded border border-app-border text-ink-secondary bg-transparent text-xs font-medium hover:bg-app-card hover:text-ink-primary hover:border-neutral-border transition">← Préc.</button>
+                    @endif
+                    @if ($users->hasMorePages())
+                        <button wire:click="nextPage"
+                                class="inline-flex items-center gap-1.5 px-3 py-1 rounded border border-app-border text-ink-secondary bg-transparent text-xs font-medium hover:bg-app-card hover:text-ink-primary hover:border-neutral-border transition">Suiv. →</button>
+                    @else
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded border border-app-border text-ink-muted text-xs font-medium opacity-50 cursor-not-allowed">Suiv. →</span>
+                    @endif
+                </div>
+            </div>
+        @endif
+    </x-card>
 </div>
