@@ -54,12 +54,8 @@
 <aside class="w-[200px] shrink-0 bg-sidebar-bg border-r border-sidebar-border flex flex-col">
     {{-- Logo --}}
     <div class="px-4 py-5 border-b border-sidebar-border flex items-center gap-2.5">
-        <div class="w-7 h-7 bg-accent rounded flex items-center justify-center shrink-0">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2L14 5v3l-2 1-4-2-4 2-2-1V5L8 2z" fill="#0e1117"/>
-                <path d="M4 9v4l4 1 4-1V9" stroke="#0e1117" stroke-width="1.2" fill="none"/>
-            </svg>
-        </div>
+        <img src="{{ asset('images/logo-flottille-31f.png') }}" alt="Flottille 31F"
+             class="h-9 w-auto shrink-0" />
         <div>
             <div class="font-semibold text-[13px] text-ink-on-dark leading-none">NH Project</div>
             <div class="text-[10px] text-ink-muted-on-dark mt-0.5">Fleet Maintenance</div>

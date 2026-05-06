@@ -22,3 +22,8 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Outils dev / artefacts (Playwright, screenshots manuels, sources design)
+/.playwright-mcp/
+/logo/
+/*.png
