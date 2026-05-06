@@ -15,12 +15,17 @@
         <div class="flex items-center gap-2.5">
             <x-counter-pill :value="$counts['vols']" label="Vols" boxed />
             <x-counter-pill :value="$counts['non-vols']" label="Non-Vols" variant="secondary" boxed />
-            <x-counter-pill :value="$counts['erreurs']" label="Erreurs" :variant="$counts['erreurs'] > 0 ? 'danger' : 'secondary'" boxed />
+            @if (auth()->user()?->isSuperAdmin())
+                <x-counter-pill :value="$counts['erreurs']" label="Erreurs" :variant="$counts['erreurs'] > 0 ? 'danger' : 'secondary'" boxed />
+            @endif
         </div>
     </div>
 
     @php
-        $labels = ['vols' => 'Vols', 'non-vols' => 'Non-Vols', 'erreurs' => 'Erreurs'];
+        $labels = ['vols' => 'Vols', 'non-vols' => 'Non-Vols'];
+        if (auth()->user()?->isSuperAdmin()) {
+            $labels['erreurs'] = 'Erreurs';
+        }
     @endphp
 
     {{-- Tabs --}}

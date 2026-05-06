@@ -28,8 +28,9 @@
         @error('endDate')<span class="text-xs text-danger">{{ $message }}</span>@enderror
     </div>
 
-    {{-- KPI cards (toujours visibles) --}}
-    <div class="grid grid-cols-4 gap-3 mb-5">
+    {{-- KPI cards --}}
+    @php $isSuperAdmin = auth()->user()?->isSuperAdmin(); @endphp
+    <div @class(['grid gap-3 mb-5', 'grid-cols-4' => $isSuperAdmin, 'grid-cols-3' => !$isSuperAdmin])>
         <x-card class="px-5 py-4">
             <x-section-label class="mb-1.5">Total vols</x-section-label>
             <div class="font-mono text-[28px] font-medium text-ink-primary tabular-nums">{{ $kpis['total_vols'] }}</div>
@@ -42,10 +43,12 @@
             <x-section-label class="mb-1.5">Taux validation</x-section-label>
             <div class="font-mono text-[28px] font-medium text-ok tabular-nums">{{ $kpis['taux_validation'] }}%</div>
         </x-card>
-        <x-card class="px-5 py-4">
-            <x-section-label class="mb-1.5">Erreurs pipeline</x-section-label>
-            <div class="font-mono text-[28px] font-medium text-danger tabular-nums">{{ $kpis['erreurs_pipeline'] }}</div>
-        </x-card>
+        @if ($isSuperAdmin)
+            <x-card class="px-5 py-4">
+                <x-section-label class="mb-1.5">Erreurs pipeline</x-section-label>
+                <div class="font-mono text-[28px] font-medium text-danger tabular-nums">{{ $kpis['erreurs_pipeline'] }}</div>
+            </x-card>
+        @endif
     </div>
 
     @if ($isFiltered)

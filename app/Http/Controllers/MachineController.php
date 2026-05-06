@@ -32,6 +32,11 @@ class MachineController extends Controller
         $machine = Machine::where('hc_id', $hcId)->firstOrFail();
         $tab = $request->get('tab', 'vols');
 
+        // Tab "erreurs" est réservé aux super admins
+        if ($tab === 'erreurs' && !$request->user()?->isSuperAdmin()) {
+            $tab = 'vols';
+        }
+
         $counts = [
             'vols'     => $machine->flights()->where('is_non_vol', false)->count(),
             'non-vols' => $machine->flights()->where('is_non_vol', true)->where('flagged_as_error', false)->count(),

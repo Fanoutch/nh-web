@@ -54,8 +54,10 @@
                             <x-counter-pill :value="$m->vols_count" label="Vols" />
                             <div class="w-px h-8 bg-app-border-soft"></div>
                             <x-counter-pill :value="$m->non_vols_count" label="Non-Vols" variant="secondary" />
-                            <div class="w-px h-8 bg-app-border-soft"></div>
-                            <x-counter-pill :value="$m->erreurs_count" label="Erreurs" :variant="$erreursVariant" />
+                            @if (auth()->user()?->isSuperAdmin())
+                                <div class="w-px h-8 bg-app-border-soft"></div>
+                                <x-counter-pill :value="$m->erreurs_count" label="Erreurs" :variant="$erreursVariant" />
+                            @endif
                         </div>
 
                         <div class="flex-1"></div>
