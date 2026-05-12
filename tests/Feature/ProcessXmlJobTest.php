@@ -28,7 +28,7 @@ it('processes an xml via the job and updates the import row', function () {
     (new ProcessXmlJob($import->id, $staging))->handle(
         app(XmlPipelineRunner::class),
         app(FlightImporter::class),
-        app(WeeklyAggregatesIngestor::class),
+        app(WeeklyAggregatesRefresher::class),
         app(RecurrentFailuresIngestor::class),
     );
 
@@ -52,7 +52,7 @@ it('marks import as error when pipeline fails', function () {
     (new ProcessXmlJob($import->id, '/nonexistent/file.xml'))->handle(
         app(XmlPipelineRunner::class),
         app(FlightImporter::class),
-        app(WeeklyAggregatesIngestor::class),
+        app(WeeklyAggregatesRefresher::class),
         app(RecurrentFailuresIngestor::class),
     );
 
