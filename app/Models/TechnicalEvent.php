@@ -16,11 +16,13 @@ class TechnicalEvent extends Model
         'flight_id', 'technical_event_id', 'raise_datetime',
         'status', 'iso_week', 'nombre_occurrences', 'details',
         'validation_status', 'validated_by', 'validated_at',
+        'pn_validation_status', 'pn_validated_by', 'pn_validated_at',
     ];
 
     protected $casts = [
         'raise_datetime' => 'datetime',
         'validated_at' => 'datetime',
+        'pn_validated_at' => 'datetime',
         'details' => 'array',
         'nombre_occurrences' => 'int',
     ];
@@ -28,7 +30,7 @@ class TechnicalEvent extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['validation_status', 'validated_by'])
+            ->logOnly(['validation_status', 'validated_by', 'pn_validation_status', 'pn_validated_by'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
             ->useLogName('validation');
@@ -42,5 +44,10 @@ class TechnicalEvent extends Model
     public function validator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'validated_by');
+    }
+
+    public function pnValidator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'pn_validated_by');
     }
 }
