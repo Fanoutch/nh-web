@@ -6,7 +6,7 @@ use App\Models\Import;
 use App\Models\User;
 use App\Services\FlightImporter;
 use App\Services\RecurrentFailuresIngestor;
-use App\Services\WeeklyAggregatesIngestor;
+use App\Services\WeeklyAggregatesRefresher;
 use App\Services\XmlPipelineRunner;
 
 it('processes an xml via the job and updates the import row', function () {

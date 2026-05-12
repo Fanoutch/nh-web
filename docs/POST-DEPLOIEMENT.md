@@ -99,7 +99,7 @@ QUEUE_CONNECTION=database
 SESSION_DRIVER=database
 
 # Chemin vers le repo nh-pipeline cloné
-SERVICES_PIPELINE_PATH=/var/www/nh-pipeline
+PIPELINE_PATH=/var/www/nh-pipeline
 ```
 
 ---
@@ -109,9 +109,10 @@ SERVICES_PIPELINE_PATH=/var/www/nh-pipeline
 ```bash
 cd /var/www/nh-web
 php artisan migrate --force
+php artisan storage:link
 ```
 
-Cela recrée toutes les tables : `users`, `machines`, `flights`, `technical_events`, `imports`, `weekly_aggregates`, `recurrent_failures`, `missing_pannes`, `activity_log`, `sessions`, `cache`, `jobs`, etc.
+Cela recrée toutes les tables : `users`, `machines`, `flights`, `technical_events`, `imports`, `weekly_aggregates`, `recurrent_failures`, `missing_pannes`, `activity_log`, `sessions`, `cache`, `jobs`, etc. Le `storage:link` recrée le lien symbolique `public/storage → storage/app/public` (gitignored, doit être recréé à chaque clone).
 
 **La base est maintenant vide.** Aucune donnée métier — les premiers vols seront injectés via `/upload` après mise en service.
 

@@ -11,18 +11,25 @@ les pannes detectees par la pipeline Python [`nh-pipeline`](../nh-pipeline).
 - Detail d'un vol avec pannes conservees / isolees
 - Validation des pannes par technicien (validee / rejetee)
 - Signalement de pannes manquantes
-- Dashboards interactifs (ApexCharts double Y-axis : pannes / heures de vol par semaine ISO)
+- **Pannes occurrentes** : detection auto des pannes recurrentes par machine (alimentees par le pipeline)
+- Dashboards interactifs (ApexCharts) : vue mensuelle multi-machines + vue filtree par machine (pannes / heures de vol par semaine ISO)
 - Re-classement non-vol → vol (gestion des erreurs de detection)
-- Auth Laravel Breeze (multi-utilisateur ready)
+- **Systeme de roles** : user / admin / super admin
+- **Gestion des comptes** via `/admin/users` (creation, promotion, suppression — admin/super admin)
+- **Audit log** `/admin/audit-log` (super admin) : tracage des modifications metier + erreurs pipeline (Spatie ActivityLog)
+- Page profil `/profile` : modif infos, mot de passe, suppression de compte
+- Auth Laravel Breeze (login / register / password reset)
 
 ## Stack
 
 - Laravel 12.56 / PHP 8.3+
 - Livewire 3 (rendering server-side avec AJAX)
-- Tailwind CSS + Alpine.js
+- Tailwind CSS + Alpine.js + DM Sans / DM Mono (via fonts.bunny.net)
 - PostgreSQL (compatible Supabase)
-- Pest 3 (tests)
-- ApexCharts (CDN)
+- Spatie ActivityLog (audit)
+- Pest 3 (tests, 59 cas)
+- ApexCharts (CDN, dashboards)
+- Laravel Breeze (auth)
 
 ## Architecture
 
@@ -102,7 +109,7 @@ npm run dev                  # dans un troisieme terminal (HMR)
 
 ### Prod
 
-Voir `commandes.md` (Nginx + systemd + Let's Encrypt).
+Voir **`docs/POST-DEPLOIEMENT.md`** (deroule complet : prerequis, vhost nginx, supervisord, bootstrap super admin, smoke test).
 
 ## Tests
 
@@ -110,11 +117,12 @@ Voir `commandes.md` (Nginx + systemd + Let's Encrypt).
 ./vendor/bin/pest
 ```
 
-49 tests couvrent les Services (XmlPipelineRunner, FlightImporter, WeeklyAggregatesIngestor),
-les Jobs (ProcessXmlJob), les composants Livewire (XmlUploader, ImportsTracker,
-PannesConserveesTable) et les routes auth.
+59 tests couvrent les Services (XmlPipelineRunner, FlightImporter, WeeklyAggregatesIngestor, RecurrentFailuresIngestor),
+les Jobs (ProcessXmlJob), les composants Livewire (XmlUploader, ImportsTracker, PannesConserveesTable, DashboardChart),
+les modeles (RecurrentFailure) et les routes auth + profile.
 
 ## Documentation
 
-- `commandes.md` — toutes les commandes utiles (dev, deploiement, debug)
+- **`docs/POST-DEPLOIEMENT.md`** — guide de deploiement sur un nouveau serveur (canonique)
+- `commandes.md` — commandes utiles (dev, tinker, debug, recreation BDD, audit log, reset)
 - `docs/ARCHITECTURE.md` — vue d'ensemble du systeme (web + pipeline + DB + queue)

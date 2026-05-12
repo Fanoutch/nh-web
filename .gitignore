@@ -27,3 +27,7 @@ Thumbs.db
 /.playwright-mcp/
 /logo/
 /*.png
+
+# Notes locales (pas pour git, reste sur ce PC)
+/update.md
+/docs/superpowers/

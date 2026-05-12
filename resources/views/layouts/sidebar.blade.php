@@ -56,10 +56,7 @@
     <div class="px-4 py-5 border-b border-sidebar-border flex items-center gap-2.5">
         <img src="{{ asset('images/logo-flottille-31f.png') }}" alt="Flottille 31F"
              class="h-9 w-auto shrink-0" />
-        <div>
-            <div class="font-semibold text-[13px] text-ink-on-dark leading-none">NH Project</div>
-            <div class="text-[10px] text-ink-muted-on-dark mt-0.5">Fleet Maintenance</div>
-        </div>
+        <div class="font-semibold text-[13px] text-ink-on-dark leading-none">NH90-cAIman</div>
     </div>
 
     {{-- Nav --}}

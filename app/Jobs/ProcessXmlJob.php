@@ -6,8 +6,9 @@ use App\Models\Flight;
 use App\Models\Import;
 use App\Services\FlightImporter;
 use App\Services\RecurrentFailuresIngestor;
-use App\Services\WeeklyAggregatesIngestor;
+use App\Services\WeeklyAggregatesRefresher;
 use App\Services\XmlPipelineRunner;
+use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -23,7 +24,7 @@ class ProcessXmlJob implements ShouldQueue
     public function handle(
         XmlPipelineRunner $runner,
         FlightImporter $importer,
-        WeeklyAggregatesIngestor $aggIngestor,
+        WeeklyAggregatesRefresher $aggRefresher,
         RecurrentFailuresIngestor $recurrentIngestor,
     ): void {
         $import = Import::findOrFail($this->importId);
@@ -33,13 +34,13 @@ class ProcessXmlJob implements ShouldQueue
         $result = $runner->run($this->xmlPath, $outputBase);
 
         match ($result['status']) {
-            'ok'        => $this->handleOk($import, $result, $importer, $aggIngestor, $recurrentIngestor),
+            'ok'        => $this->handleOk($import, $result, $importer, $aggRefresher, $recurrentIngestor, $outputBase),
             'no_engine' => $this->handleNonVol($import, $result, $importer),
             default     => $this->handleError($import, $result),
         };
     }
 
-    private function handleOk(Import $import, array $result, FlightImporter $importer, WeeklyAggregatesIngestor $aggIngestor, RecurrentFailuresIngestor $recurrentIngestor): void
+    private function handleOk(Import $import, array $result, FlightImporter $importer, WeeklyAggregatesRefresher $aggRefresher, RecurrentFailuresIngestor $recurrentIngestor, string $outputBase): void
     {
         try {
             $existed = Flight::whereHas('machine', fn ($q) => $q->where('hc_id', $result['hc_id']))
@@ -49,12 +50,16 @@ class ProcessXmlJob implements ShouldQueue
 
             $flight = $importer->import($result);
 
-            $year = (int) ($result['annee'] ?? date('Y'));
-            $hcId = $result['hc_id'];
-            $pipelinePath = config('services.pipeline.path');
-            $pannesCsv = $pipelinePath . '/data/reports/yearly/' . $hcId . '/' . $hcId . '_' . $year . '.csv';
-            $fhCsv = $pipelinePath . '/data/FHreport/yearly/' . $hcId . '/' . $hcId . '_' . $year . '.csv';
-            $aggIngestor->ingest($flight->machine, $year, $pannesCsv, $fhCsv);
+            // Refresh weekly_aggregates from DB for every iso_week touched
+            // by this flight: the flight's own iso_week (FH side) + every
+            // distinct iso_week of its conservee pannes.
+            $flightIsoWeek = Carbon::parse($flight->end_datetime)->isoFormat('GGGG-[W]WW');
+            $panneIsoWeeks = $flight->technicalEvents()
+                ->where('status', 'conservee')
+                ->pluck('iso_week')
+                ->all();
+            $aggRefresher->refresh($flight->machine, array_merge([$flightIsoWeek], $panneIsoWeeks));
+
             $recurrentIngestor->ingest($result['hc_id']);
 
             $import->update([
