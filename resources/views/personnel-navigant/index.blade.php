@@ -1,11 +1,6 @@
 <x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl text-ink-primary leading-tight">
-            Personnel Navigant
-        </h2>
-    </x-slot>
-
     <div class="py-6 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <h1 class="text-[22px] font-semibold text-ink-primary mb-1">Personnel Navigant</h1>
         <p class="text-[13px] text-ink-muted mb-5">
             Sélectionne une machine pour accéder à ses vols et valider les pannes occurrentes.
         </p>
