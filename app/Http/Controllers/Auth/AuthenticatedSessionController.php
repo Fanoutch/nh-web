@@ -25,10 +25,14 @@ class AuthenticatedSessionController extends Controller
     public function store(LoginRequest $request): RedirectResponse
     {
         $request->authenticate();
-
         $request->session()->regenerate();
 
-        return redirect()->intended(route('machines.index', absolute: false));
+        $user = $request->user();
+        $defaultTarget = $user->is_personnel_navigant
+            ? route('personnel-navigant.index', absolute: false)
+            : route('machines.index', absolute: false);
+
+        return redirect()->intended($defaultTarget);
     }
 
     /**
