@@ -1,7 +1,7 @@
 @php
     $active = request()->route()?->getName() ?? '';
 
-    $links = [
+    $baseLinks = [
         [
             'route' => 'machines.index',
             'label' => 'Machines',
@@ -30,6 +30,16 @@
 
     $processingCount = \App\Models\Import::where('status', 'processing')->count();
     $user = auth()->user();
+
+    $pnLink = ($user?->isPersonnelNavigant() || $user?->isAdmin()) ? [[
+        'route' => 'personnel-navigant.index',
+        'label' => 'Personnel Navigant',
+        'prefixes' => ['personnel-navigant.'],
+        'icon' => '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1.5L1.5 4.5l6 3 6-3-6-3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M1.5 10.5l6 3 6-3M1.5 7.5l6 3 6-3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>',
+    ]] : [];
+
+    $links = array_merge($baseLinks, $pnLink);
+
     $initials = collect(explode(' ', $user?->name ?? 'U'))
         ->map(fn ($s) => mb_substr($s, 0, 1))
         ->take(2)->implode('');
