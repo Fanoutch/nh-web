@@ -73,6 +73,7 @@ class ProcessXmlJob implements ShouldQueue
                     'flight_hours' => (float) $flight->flight_hours,
                 ],
             ]);
+            $this->deleteTransitFiles($result, $outputBase);
         } catch (\Throwable $e) {
             $this->logPipelineError($import, $e->getMessage());
         }
@@ -118,5 +119,34 @@ class ProcessXmlJob implements ShouldQueue
                 ],
             ])
             ->log("Pipeline error: {$message}");
+    }
+
+    /**
+     * Supprime les fichiers JSON/CSV de transit pipeline qui ne servent plus
+     * une fois la donnee ingere en DB. Garde xml_epure.xml (download) et
+     * occurrentes.json (etat persistant Phase Recurrent, requis par la
+     * prochaine ingestion tant que Phase 2 n'a pas migre l'etat en DB).
+     */
+    private function deleteTransitFiles(array $result, string $outputBase): void
+    {
+        $outputDir = $result['output_dir'] ?? null;
+        $hcId = $result['hc_id'] ?? null;
+        $year = (int) ($result['annee'] ?? date('Y'));
+
+        $toDelete = [];
+        if ($outputDir) {
+            $toDelete[] = $outputDir . '/pannes_conservees.json';
+            $toDelete[] = $outputDir . '/pannes_isolees.json';
+        }
+        if ($hcId) {
+            $toDelete[] = $outputBase . "/reports/yearly/{$hcId}/{$hcId}_{$year}.csv";
+            $toDelete[] = $outputBase . "/FHreport/yearly/{$hcId}/{$hcId}_{$year}.csv";
+        }
+
+        foreach ($toDelete as $path) {
+            if (is_file($path)) {
+                @unlink($path);
+            }
+        }
     }
 }

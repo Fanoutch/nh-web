@@ -41,6 +41,52 @@ it('processes an xml via the job and updates the import row', function () {
     }
 });
 
+it('deletes pannes_*.json and yearly CSVs after successful ingestion', function () {
+    $xmls = glob(config('services.pipeline.path') . '/data/raw/*.xml');
+    if (empty($xmls)) {
+        $xmls = glob(config('services.pipeline.path') . '/raw/*.xml');
+    }
+    if (empty($xmls)) {
+        $this->markTestSkipped('No sample XML available');
+    }
+
+    $user = \App\Models\User::factory()->create();
+    $staging = storage_path('app/staging_test_' . uniqid() . '.xml');
+    copy($xmls[0], $staging);
+
+    $import = \App\Models\Import::create([
+        'user_id' => $user->id,
+        'filename' => basename($staging),
+        'status' => 'pending',
+    ]);
+
+    (new \App\Jobs\ProcessXmlJob($import->id, $staging))->handle(
+        app(\App\Services\XmlPipelineRunner::class),
+        app(\App\Services\FlightImporter::class),
+        app(\App\Services\WeeklyAggregatesRefresher::class),
+        app(\App\Services\RecurrentFailuresIngestor::class),
+    );
+
+    $import->refresh();
+    if (!in_array($import->status, ['ok', 'already_processed'], true)) {
+        $this->markTestSkipped('Pipeline did not produce a normal flight for this sample XML');
+    }
+
+    $flight = \App\Models\Flight::find($import->flight_id);
+    $outputDir = dirname($flight->xml_path);
+
+    expect(file_exists($outputDir . '/pannes_conservees.json'))->toBeFalse();
+    expect(file_exists($outputDir . '/pannes_isolees.json'))->toBeFalse();
+
+    $year = (int) $flight->end_datetime->format('Y');
+    $hcId = $flight->machine->hc_id;
+    $base = storage_path('app/data');
+    expect(file_exists($base . "/reports/yearly/{$hcId}/{$hcId}_{$year}.csv"))->toBeFalse();
+    expect(file_exists($base . "/FHreport/yearly/{$hcId}/{$hcId}_{$year}.csv"))->toBeFalse();
+
+    expect(file_exists($flight->xml_path))->toBeTrue();  // xml_epure must survive
+});
+
 it('marks import as error when pipeline fails', function () {
     $user = User::factory()->create();
     $import = Import::create([
