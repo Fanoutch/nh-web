@@ -111,8 +111,15 @@ class FlightImporter
     private function parseDate(?string $raw): ?Carbon
     {
         if (!$raw) return null;
+        // Try French format DD/MM/YYYY first (pipeline's pannes_*.json native format).
+        // Otherwise Carbon::parse mis-interprets ambiguous dates like "08/01/2026"
+        // (8 Jan) as MM/DD/YYYY -> Aug 1, scrambling iso_week for every conservee
+        // panne with day <= 12.
+        try {
+            $dt = Carbon::createFromFormat('d/m/Y H:i:s', $raw);
+            if ($dt !== false) return $dt;
+        } catch (\Throwable) {}
         try { return Carbon::parse($raw); } catch (\Throwable) {}
-        try { return Carbon::createFromFormat('d/m/Y H:i:s', $raw); } catch (\Throwable) {}
         return null;
     }
 }
