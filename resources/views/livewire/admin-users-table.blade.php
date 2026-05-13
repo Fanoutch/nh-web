@@ -33,6 +33,16 @@
         </div>
     </div>
 
+    <div class="flex items-center gap-2 text-[12px]">
+        <span class="text-ink-muted">Filtre :</span>
+        @foreach (['all' => 'Tous', 'technicien' => 'Techniciens', 'pn' => 'Personnel Navigant', 'admin' => 'Admins'] as $key => $label)
+            <button wire:click="$set('roleFilter', '{{ $key }}')"
+                    class="px-2.5 py-1 rounded border {{ $roleFilter === $key ? 'bg-accent text-white border-accent' : 'bg-app-elevated border-app-border text-ink-secondary hover:border-accent' }} transition">
+                {{ $label }}
+            </button>
+        @endforeach
+    </div>
+
     <x-card class="overflow-hidden">
         <div class="overflow-x-auto">
             <table class="w-full text-[13px]">
@@ -52,17 +62,26 @@
                             <td class="px-4 py-2.5 font-medium text-ink-primary">{{ $u->name }}</td>
                             <td class="px-4 py-2.5 text-ink-secondary">{{ $u->email }}</td>
                             <td class="px-4 py-2.5">
-                                @if ($u->is_super_admin)
-                                    <span class="inline-flex items-center gap-1 bg-[#ede9fe] text-[#6d28d9] border border-[#c4b5fd] text-[11px] px-2 py-0.5 rounded font-mono font-medium">
-                                        Super Admin
-                                    </span>
-                                @elseif ($u->is_admin)
-                                    <span class="inline-flex items-center gap-1 bg-accent-soft-strong text-warn text-[11px] px-2 py-0.5 rounded font-mono font-medium">
-                                        Admin
-                                    </span>
-                                @else
-                                    <span class="text-ink-muted text-xs">Utilisateur</span>
-                                @endif
+                                <div class="flex flex-wrap gap-1">
+                                    @if ($u->is_super_admin)
+                                        <span class="inline-flex items-center gap-1 bg-[#ede9fe] text-[#6d28d9] border border-[#c4b5fd] text-[11px] px-2 py-0.5 rounded font-mono font-medium">
+                                            Super Admin
+                                        </span>
+                                    @elseif ($u->is_admin)
+                                        <span class="inline-flex items-center gap-1 bg-accent-soft-strong text-warn text-[11px] px-2 py-0.5 rounded font-mono font-medium">
+                                            Admin
+                                        </span>
+                                    @endif
+                                    @if ($u->is_personnel_navigant)
+                                        <span class="inline-flex items-center gap-1 bg-ok-soft text-ok border border-ok-border text-[11px] px-2 py-0.5 rounded font-mono font-medium">
+                                            Personnel Navigant
+                                        </span>
+                                    @elseif (! $u->is_admin && ! $u->is_super_admin)
+                                        <span class="inline-flex items-center gap-1 bg-neutral-soft text-neutral border border-neutral-border text-[11px] px-2 py-0.5 rounded font-mono">
+                                            Technicien
+                                        </span>
+                                    @endif
+                                </div>
                             </td>
                             <td class="px-4 py-2.5">
                                 @if ($u->id === auth()->id())
@@ -100,6 +119,12 @@
                                                 </button>
                                             @endif
                                         @endif
+
+                                        <button wire:click="togglePersonnelNavigant({{ $u->id }})"
+                                                wire:confirm="{{ $u->is_personnel_navigant ? 'Retirer le statut Personnel Navigant de '.$u->name.' ?' : 'Marquer '.$u->name.' comme Personnel Navigant ?' }}"
+                                                class="inline-flex items-center gap-1.5 px-3 py-1 rounded {{ $u->is_personnel_navigant ? 'bg-danger-soft border-danger-border text-danger hover:bg-danger-border' : 'bg-ok-soft border-ok-border text-ok hover:bg-ok-border' }} border text-[11px] font-medium transition">
+                                            {{ $u->is_personnel_navigant ? 'Retirer PN' : 'Marquer PN' }}
+                                        </button>
                                     </div>
                                 @endif
                             </td>
