@@ -3,6 +3,7 @@
 use App\Http\Controllers\FlightController;
 use App\Http\Controllers\MachineController;
 use App\Http\Controllers\NonVolController;
+use App\Http\Controllers\PersonnelNavigantController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -40,6 +41,16 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
+
+// Routes Personnel Navigant (auth + middleware personnel-navigant)
+Route::middleware(['auth', 'personnel-navigant'])
+    ->prefix('personnel-navigant')
+    ->name('personnel-navigant.')
+    ->group(function () {
+        Route::get('/', [PersonnelNavigantController::class, 'index'])->name('index');
+        Route::get('/{hcId}', [PersonnelNavigantController::class, 'show'])->name('show');
+        Route::get('/flight/{flight}/pannes', [PersonnelNavigantController::class, 'pannes'])->name('pannes');
+    });
 
 // Routes admin (auth + middleware admin)
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
