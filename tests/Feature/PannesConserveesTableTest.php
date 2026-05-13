@@ -65,3 +65,37 @@ it('validates required failure code when signalling missing panne', function () 
 
     expect(MissingPanne::count())->toBe(0);
 });
+
+it('displays a PN-confirmed badge with validator name when set', function () {
+    $user = User::factory()->create();
+    $pn   = User::factory()->create(['name' => 'Jean Pilote', 'is_personnel_navigant' => true]);
+    [$flight, $te] = createFlightWithPanne($user);
+
+    $te->update([
+        'pn_validation_status' => 'confirmed',
+        'pn_validated_by' => $pn->id,
+        'pn_validated_at' => now(),
+    ]);
+
+    \Livewire\Livewire::actingAs($user)
+        ->test(\App\Livewire\PannesConserveesTable::class, ['flight' => $flight])
+        ->assertSee('Confirmé en vol')
+        ->assertSee('Jean Pilote');
+});
+
+it('displays a PN-rejected badge when set', function () {
+    $user = User::factory()->create();
+    $pn   = User::factory()->create(['name' => 'Marie Pilote', 'is_personnel_navigant' => true]);
+    [$flight, $te] = createFlightWithPanne($user);
+
+    $te->update([
+        'pn_validation_status' => 'rejected',
+        'pn_validated_by' => $pn->id,
+        'pn_validated_at' => now(),
+    ]);
+
+    \Livewire\Livewire::actingAs($user)
+        ->test(\App\Livewire\PannesConserveesTable::class, ['flight' => $flight])
+        ->assertSee('Rejeté en vol')
+        ->assertSee('Marie Pilote');
+});

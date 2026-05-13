@@ -71,7 +71,7 @@ class PannesConserveesTable extends Component
     {
         $query = $this->flight->technicalEvents()
             ->where('status', 'conservee')
-            ->with('validator')
+            ->with(['validator', 'pnValidator'])
             ->orderBy('raise_datetime');
 
         if ($this->search !== '') {

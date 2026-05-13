@@ -42,8 +42,17 @@
                 $actionReject = $isReject ? 'pending' : 'rejected';
             @endphp
             <x-panne-row :status="$status" wire:key="te-{{ $p->id }}">
-                <div class="flex items-center gap-2 mb-1.5">
+                <div class="flex items-center gap-2 mb-1.5 flex-wrap">
                     <x-badge :variant="$statusBadgeVariant">{{ $statusLabel }}</x-badge>
+                    @if ($p->pn_validation_status === 'confirmed')
+                        <span class="inline-flex items-center gap-1 bg-ok-soft text-ok border border-ok-border text-[10px] px-2 py-0.5 rounded font-mono">
+                            Confirmé en vol par {{ $p->pnValidator?->name }}
+                        </span>
+                    @elseif ($p->pn_validation_status === 'rejected')
+                        <span class="inline-flex items-center gap-1 bg-danger-soft text-danger border border-danger-border text-[10px] px-2 py-0.5 rounded font-mono">
+                            Rejeté en vol par {{ $p->pnValidator?->name }}
+                        </span>
+                    @endif
                     <span class="font-mono text-[10px] text-ink-muted">
                         {{ $sysDesc }} · Fault Code {{ $failureCode }} · ×{{ $p->nombre_occurrences }} occurrence{{ $p->nombre_occurrences > 1 ? 's' : '' }}
                     </span>
