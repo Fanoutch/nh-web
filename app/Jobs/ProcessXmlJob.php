@@ -5,7 +5,7 @@ namespace App\Jobs;
 use App\Models\Flight;
 use App\Models\Import;
 use App\Services\FlightImporter;
-use App\Services\RecurrentFailuresIngestor;
+use App\Services\RecurrentFailuresRefresher;
 use App\Services\WeeklyAggregatesRefresher;
 use App\Services\XmlPipelineRunner;
 use Carbon\Carbon;
@@ -25,7 +25,7 @@ class ProcessXmlJob implements ShouldQueue
         XmlPipelineRunner $runner,
         FlightImporter $importer,
         WeeklyAggregatesRefresher $aggRefresher,
-        RecurrentFailuresIngestor $recurrentIngestor,
+        RecurrentFailuresRefresher $recurrentRefresher,
     ): void {
         $import = Import::findOrFail($this->importId);
         $import->update(['status' => 'processing']);
@@ -34,13 +34,13 @@ class ProcessXmlJob implements ShouldQueue
         $result = $runner->run($this->xmlPath, $outputBase);
 
         match ($result['status']) {
-            'ok'        => $this->handleOk($import, $result, $importer, $aggRefresher, $recurrentIngestor, $outputBase),
+            'ok'        => $this->handleOk($import, $result, $importer, $aggRefresher, $recurrentRefresher, $outputBase),
             'no_engine' => $this->handleNonVol($import, $result, $importer),
             default     => $this->handleError($import, $result),
         };
     }
 
-    private function handleOk(Import $import, array $result, FlightImporter $importer, WeeklyAggregatesRefresher $aggRefresher, RecurrentFailuresIngestor $recurrentIngestor, string $outputBase): void
+    private function handleOk(Import $import, array $result, FlightImporter $importer, WeeklyAggregatesRefresher $aggRefresher, RecurrentFailuresRefresher $recurrentRefresher, string $outputBase): void
     {
         try {
             $existed = Flight::whereHas('machine', fn ($q) => $q->where('hc_id', $result['hc_id']))
@@ -60,7 +60,7 @@ class ProcessXmlJob implements ShouldQueue
                 ->all();
             $aggRefresher->refresh($flight->machine, array_merge([$flightIsoWeek], $panneIsoWeeks));
 
-            $recurrentIngestor->ingest($result['hc_id']);
+            $recurrentRefresher->refresh($flight->machine);
 
             $import->update([
                 'status' => $existed ? 'already_processed' : 'ok',

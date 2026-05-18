@@ -5,7 +5,7 @@ use App\Models\Flight;
 use App\Models\Import;
 use App\Models\User;
 use App\Services\FlightImporter;
-use App\Services\RecurrentFailuresIngestor;
+use App\Services\RecurrentFailuresRefresher;
 use App\Services\WeeklyAggregatesRefresher;
 use App\Services\XmlPipelineRunner;
 
@@ -29,7 +29,7 @@ it('processes an xml via the job and updates the import row', function () {
         app(XmlPipelineRunner::class),
         app(FlightImporter::class),
         app(WeeklyAggregatesRefresher::class),
-        app(RecurrentFailuresIngestor::class),
+        app(RecurrentFailuresRefresher::class),
     );
 
     $import->refresh();
@@ -64,7 +64,7 @@ it('deletes pannes_*.json and yearly CSVs after successful ingestion', function 
         app(\App\Services\XmlPipelineRunner::class),
         app(\App\Services\FlightImporter::class),
         app(\App\Services\WeeklyAggregatesRefresher::class),
-        app(\App\Services\RecurrentFailuresIngestor::class),
+        app(\App\Services\RecurrentFailuresRefresher::class),
     );
 
     $import->refresh();
@@ -99,7 +99,7 @@ it('marks import as error when pipeline fails', function () {
         app(XmlPipelineRunner::class),
         app(FlightImporter::class),
         app(WeeklyAggregatesRefresher::class),
-        app(RecurrentFailuresIngestor::class),
+        app(RecurrentFailuresRefresher::class),
     );
 
     $import->refresh();
