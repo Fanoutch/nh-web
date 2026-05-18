@@ -123,9 +123,10 @@ class ProcessXmlJob implements ShouldQueue
 
     /**
      * Supprime les fichiers JSON/CSV de transit pipeline qui ne servent plus
-     * une fois la donnee ingere en DB. Garde xml_epure.xml (download) et
-     * occurrentes.json (etat persistant Phase Recurrent, requis par la
-     * prochaine ingestion tant que Phase 2 n'a pas migre l'etat en DB).
+     * une fois la donnee ingere en DB. Garde xml_epure.xml (download).
+     * Note: occurrentes.json est encore ecrit par la pipeline Python jusqu'a
+     * P2-Task 3 mais n'est plus lu cote web (RecurrentFailuresRefresher
+     * derive l'etat depuis la DB).
      */
     private function deleteTransitFiles(array $result, string $outputBase): void
     {
