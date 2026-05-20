@@ -18,6 +18,10 @@ class FlightImporter
         return DB::transaction(function () use ($pipelineResult) {
             $machine = Machine::firstOrCreate(['hc_id' => $pipelineResult['hc_id']]);
 
+            $outputDir = $pipelineResult['output_dir'] ?? '';
+            $xmlEpurePath = $outputDir . '/xml_epure.xml';
+            $xmlBlob = is_file($xmlEpurePath) ? file_get_contents($xmlEpurePath) : null;
+
             $flight = Flight::updateOrCreate(
                 [
                     'machine_id' => $machine->id,
@@ -31,12 +35,12 @@ class FlightImporter
                     'flight_hours'   => $pipelineResult['flight_hours'] ?? 0,
                     'consumed_fuel'  => $pipelineResult['consumed_fuel'] ?? null,
                     'is_non_vol'     => strtoupper($pipelineResult['flight_type'] ?? 'FLIGHT') !== 'FLIGHT',
-                    'xml_path'       => ($pipelineResult['output_dir'] ?? '') . '/xml_epure.xml',
+                    'xml_path'       => $xmlEpurePath,
+                    'xml_blob'       => $xmlBlob,
                     'processed_at'   => now(),
                 ],
             );
 
-            $outputDir = $pipelineResult['output_dir'] ?? '';
             $conservees = $this->readJson($outputDir . '/pannes_conservees.json');
             if (is_array($conservees['pannes_conservees'] ?? null)) {
                 $this->syncPannes($flight, $conservees['pannes_conservees'], 'conservee');
@@ -59,6 +63,10 @@ class FlightImporter
             $machine = Machine::firstOrCreate(['hc_id' => $pipelineResult['hc_id']]);
 
             $now = now();
+            $outputDir = $pipelineResult['output_dir'] ?? null;
+            $rawXml = $outputDir ? (glob($outputDir . '/*.xml')[0] ?? null) : null;
+            $xmlBlob = $rawXml && is_file($rawXml) ? file_get_contents($rawXml) : null;
+
             return Flight::updateOrCreate(
                 [
                     'machine_id' => $machine->id,
@@ -73,7 +81,8 @@ class FlightImporter
                     'consumed_fuel'  => $pipelineResult['consumed_fuel'] ?? null,
                     'is_non_vol'     => true,
                     'flagged_as_error' => false,
-                    'xml_path'       => $pipelineResult['output_dir'] ?? null,
+                    'xml_path'       => $rawXml,
+                    'xml_blob'       => $xmlBlob,
                     'processed_at'   => now(),
                 ],
             );
