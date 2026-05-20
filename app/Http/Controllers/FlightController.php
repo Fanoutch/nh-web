@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Flight;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class FlightController extends Controller
 {
@@ -33,12 +32,26 @@ class FlightController extends Controller
         return view('flights.pannes-isolees', compact('flight', 'pannes'));
     }
 
-    public function downloadXml(Flight $flight): BinaryFileResponse
+    public function downloadXml(Flight $flight)
     {
-        abort_unless($flight->xml_path && file_exists($flight->xml_path), 404);
-        return response()->download(
-            $flight->xml_path,
-            "{$flight->machine->hc_id}_{$flight->num}.xml"
-        );
+        $filename = "{$flight->machine->hc_id}_{$flight->num}.xml";
+
+        // Prefer the in-DB blob (Phase 3+).
+        if ($flight->xml_blob !== null) {
+            $content = is_resource($flight->xml_blob)
+                ? stream_get_contents($flight->xml_blob)
+                : $flight->xml_blob;
+            return response($content, 200, [
+                'Content-Type'        => 'application/xml',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            ]);
+        }
+
+        // Fallback to filesystem (legacy rows imported before Phase 3).
+        if ($flight->xml_path && file_exists($flight->xml_path)) {
+            return response()->download($flight->xml_path, $filename);
+        }
+
+        abort(404);
     }
 }
