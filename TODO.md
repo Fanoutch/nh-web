@@ -26,12 +26,6 @@ Brainstorming entamé le 2026-05-11, à reprendre. Décisions déjà validées :
 - Section 5 : tests
 - Écrire le spec dans `docs/superpowers/specs/2026-05-12-personnel-navigant-design.md`
 
-### 2. Renommer le projet `nh90-caiman` → `Caïman`
+### 2. ~~Renommer le projet `NH90-cAIman` → `cAIman`~~ ✅ fait 2026-05-18
 
-Rebrand global. Endroits probables à modifier :
-- `composer.json` (champ `name`)
-- `package.json` (champ `name`)
-- `README.md`
-- Titres dans les vues / layouts (`<title>`, header, sidebar)
-- Variables `APP_NAME` dans `.env.example`
-- Éventuels usages dans `config/app.php`
+6 fichiers modifiés : `.env`, `.env.example`, `resources/views/auth/login.blade.php`, `resources/views/layouts/sidebar.blade.php`, `resources/views/layouts/guest.blade.php`, `resources/views/layouts/app.blade.php`. `composer.json` laissé en `laravel/laravel` (nom interne du framework, non visible utilisateur). `config/app.php` non modifié — il lit `APP_NAME` du `.env`.

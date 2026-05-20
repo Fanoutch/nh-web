@@ -4,7 +4,7 @@
         <div class="text-center mb-8">
             <img src="{{ asset('images/logo-flottille-31f.png') }}" alt="Flottille 31F"
                  class="mx-auto h-16 w-auto mb-4" />
-            <div class="text-xl font-semibold text-ink-primary">NH90-cAIman</div>
+            <div class="text-xl font-semibold text-ink-primary">cAIman</div>
         </div>
 
         {{-- Status messages --}}
