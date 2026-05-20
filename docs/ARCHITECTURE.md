@@ -1,4 +1,4 @@
-# Architecture du site web NH Project — comprendre comment tout fonctionne
+# Architecture du site web cAIman — comprendre comment tout fonctionne
 
 Ce document explique **le fonctionnement complet de l'application**, du navigateur de l'utilisateur jusqu'a la base de donnees, en passant par la pipeline Python. L'objectif est de te permettre de comprendre precisement **qui fait quoi** et **pourquoi**.
 
@@ -354,55 +354,59 @@ Tout est **dans la BDD** a ce stade. La pipeline Python n'est plus sollicitee.
 
 ## 6. Architecture des dossiers
 
-### Racine du repo
+cAIman est decoupe en **deux repos separes** (clones cote a cote) :
+
+### Repo `nh-pipeline` (Python)
 
 ```
-nh_project/
-├── main.py                  # Point d'entree pipeline Python
-├── src/                     # Modules pipeline Python
-│   ├── cleaning/            #   date_filter.py, engine_filter.py
-│   └── reporting/           #   weekly_report.py, fh_report.py, aggregate_report.py
-├── data/                    # Sorties pipeline : XML epures, JSON pannes, CSV rapports
-├── raw/                     # XML bruts (entrees)
-├── tests/                   # Tests pytest de la pipeline
-├── web/                     # Application Laravel (voir ci-dessous)
-├── docs/                    # Specs, plans, architecture (ce fichier)
-└── CLAUDE.md                # Notes du projet (lu automatiquement par Claude)
+nh-pipeline/
+├── main.py                  # Point d'entree pipeline (1 XML -> JSON payload + xml_epure)
+├── run.py                   # Batch runner (scan d'un dossier)
+├── src/
+│   ├── cleaning/            #   date_filter.py, engine_filter.py (Phase 1 + 2)
+│   └── reporting/           #   modules legacy, non appeles depuis main.py post-Phase 2
+├── config/                  # settings.yaml, rules.yaml
+├── data/                    # clean_xml/, xml_isole/ (sorties par vol — gitignored)
+├── logs/                    # logs batch (gitignored)
+├── requirements.txt         # lxml + pyyaml uniquement
+└── README.md
 ```
 
-### Dossier `web/` (Laravel)
+### Repo `nh-web` (Laravel)
 
 ```
-web/
+nh-web/
 ├── app/
-│   ├── Http/
-│   │   └── Controllers/     # Logique par URL (MachineController, FlightController, ...)
+│   ├── Http/Controllers/    # Logique par URL (MachineController, FlightController, ...)
 │   ├── Jobs/                # ProcessXmlJob (queue worker)
-│   ├── Livewire/            # Composants UI interactifs (XmlUploader, ImportsTracker, ...)
-│   ├── Models/              # Tables BDD -> classes PHP (Machine, Flight, Import, ...)
-│   └── Services/            # XmlPipelineRunner, FlightImporter, WeeklyAggregatesIngestor
+│   ├── Livewire/            # Composants UI (XmlUploader, ImportsTracker, DashboardChart, ...)
+│   ├── Models/              # Tables BDD -> classes PHP (Machine, Flight, TechnicalEvent, ...)
+│   ├── Services/            # XmlPipelineRunner, FlightImporter,
+│   │                        #   WeeklyAggregatesRefresher, RecurrentFailuresRefresher
+│   └── Console/Commands/    # nh:ingest-xml (batch import via Laravel)
 ├── config/                  # Fichiers de config Laravel
-├── database/
-│   └── migrations/          # Modifications du schema BDD
+├── database/migrations/     # Schema BDD versionne
 ├── resources/
 │   ├── css/                 # Tailwind
 │   ├── js/                  # Alpine.js, etc.
-│   └── views/               # Templates Blade
-│       ├── layouts/         # Layout global (sidebar)
-│       ├── machines/        # Pages /machines
-│       ├── flights/         # Pages /flights
-│       └── livewire/        # Templates des composants Livewire
-├── routes/
-│   └── web.php              # Definition des routes
+│   └── views/               # Templates Blade + Livewire
+├── routes/web.php           # Definition des routes HTTP
 ├── storage/
 │   ├── app/
 │   │   ├── staging/         # Fichiers XML uploades temporairement
-│   │   └── data/            # Sorties pipeline (appelee par Laravel)
+│   │   └── data/            # Output transit pipeline (clean_xml/xml_isole)
 │   └── logs/                # Logs Laravel
-├── tests/                   # Tests Pest (feature + unit)
-├── .env                     # Config sensible (DB_PASSWORD, APP_KEY...) — PAS commit
+├── docs/                    # ARCHITECTURE.md (ce fichier), commandes.md, Pre-DEPLOIEMENT.md
+├── tests/                   # Tests Pest (Feature + Unit)
+├── .env                     # Config sensible (DB_*, APP_KEY, PIPELINE_PATH...) — PAS commit
 └── artisan                  # CLI Laravel (php artisan ...)
 ```
+
+### Couplage
+
+- `nh-web/.env` contient `PIPELINE_PATH=/chemin/absolu/vers/nh-pipeline`
+- `XmlPipelineRunner` (PHP) execute `python3 main.py <xml> --output-base storage/app/data --json-output` via `Symfony\Process`
+- Les deux repos doivent etre clones sur la meme machine (le worker PHP appelle Python directement)
 
 ## 7. Comment ca tourne en developpement local
 

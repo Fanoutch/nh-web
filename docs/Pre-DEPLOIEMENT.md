@@ -1,4 +1,4 @@
-# Guide de déploiement — NH Project
+# Guide de déploiement — cAIman
 
 Ce document décrit les étapes pour déployer **nh-web** (Laravel) + **nh-pipeline** (Python) sur un nouveau serveur.
 

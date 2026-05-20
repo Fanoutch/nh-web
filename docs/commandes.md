@@ -295,8 +295,8 @@ php artisan migrate
 ### Sauvegarder / restaurer la BDD
 
 ```bash
-# Backup BDD locale
-pg_dump -h 127.0.0.1 -U nh_user nh_project_dev > backup_$(date +%Y%m%d).sql
+# Backup BDD locale (remplacer <db_user> et <db_name> par les valeurs de ton .env)
+pg_dump -h 127.0.0.1 -U <db_user> <db_name> > backup_$(date +%Y%m%d).sql
 
 # Backup Supabase
 PGPASSWORD="ton_password" pg_dump -h db.xxx.supabase.co -U postgres postgres > backup_supabase.sql
@@ -307,7 +307,7 @@ PGPASSWORD="ton_password" psql -h db.xxx.supabase.co -U postgres postgres < back
 
 ### Recreer la BDD sur un nouveau serveur / nouvelle DB
 
-Scenario : tu as une **nouvelle base Postgres vide** (autre Supabase project, nouveau serveur, autre VPS) et tu veux y recreer toutes les tables du schema NH Project, puis y rebooter le 1er super admin.
+Scenario : tu as une **nouvelle base Postgres vide** (autre Supabase project, nouveau serveur, autre VPS) et tu veux y recreer toutes les tables du schema cAIman, puis y rebooter le 1er super admin.
 
 **Pas de `pg_dump` necessaire** : Laravel sait recreer tout le schema depuis les fichiers `database/migrations/*.php` du repo. Aucune donnee metier n'est migree (vols, pannes, hélicos, imports) — les comptes users sont aussi vides, tu les re-seedes via tinker.
 
@@ -331,7 +331,7 @@ php artisan tinker
 # >>> \Schema::getAllTables();       // peut etre vide ou contenir les tables d'un autre projet
 # exit
 
-# 4. Recreer toutes les tables NH Project
+# 4. Recreer toutes les tables cAIman
 php artisan migrate --force
 
 # 5. Verifier (15 tables environ)
@@ -793,7 +793,7 @@ Reference des variables principales du `.env`.
 
 | Variable | Dev | Prod | Description |
 |----------|-----|------|-------------|
-| `APP_NAME` | "NH Project" | "NH Project" | Nom affiche dans l'UI |
+| `APP_NAME` | "cAIman" | "cAIman" | Nom affiche dans l'UI |
 | `APP_ENV` | `local` | `production` | Mode d'execution |
 | `APP_KEY` | (genere) | (genere) | Cle de chiffrement (artisan key:generate) |
 | `APP_DEBUG` | `true` | `false` | Affichage des erreurs detaillees |
