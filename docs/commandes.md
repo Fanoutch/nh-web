@@ -488,13 +488,7 @@ cd web
 
 ### Tests Python (pytest)
 
-La suite pytest n'est plus packagee dans `nh-pipeline` (runtime prod minimal). Elle est archivee dans `nh_project/tests/` pour relancement ponctuel.
-
-```bash
-cd /chemin/vers/nh_project
-python3 -m pytest tests/ -v
-python3 -m pytest tests/test_main_json_output.py
-```
+`nh-pipeline` ne package plus de suite pytest (runtime production minimal). Les tests d'integration vivent cote nh-web (Pest, voir ci-dessus).
 
 ---
 
@@ -519,7 +513,7 @@ python3 main.py raw/exemple.xml --filtre-mode 24h
 python3 run.py
 ```
 
-> Le script `dashboard.py` (generateur PNG legacy) a ete sorti du runtime apres Phase 2 (le dashboard web ApexCharts lit Postgres directement). Il est archive dans `nh_project/dashboard.py` si tu veux le rejouer ponctuellement.
+> Les dashboards sont desormais rendus par ApexCharts cote nh-web (composant `DashboardChart` Livewire) qui lit directement Postgres. Plus de script Python de generation PNG.
 
 ---
 
