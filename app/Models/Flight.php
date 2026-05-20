@@ -16,7 +16,15 @@ class Flight extends Model
         'start_datetime', 'end_datetime',
         'flight_type', 'flight_hours', 'consumed_fuel',
         'is_non_vol', 'flagged_as_error', 'flagged_at', 'flagged_by',
-        'xml_path', 'processed_at',
+        'xml_path', 'xml_blob', 'processed_at',
+    ];
+
+    /**
+     * xml_blob is binary, never serialize it into a JSON/Livewire response.
+     * Access it explicitly via $flight->xml_blob when needed (e.g. download route).
+     */
+    protected $hidden = [
+        'xml_blob',
     ];
 
     protected $casts = [
