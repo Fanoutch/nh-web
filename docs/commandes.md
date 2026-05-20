@@ -1,8 +1,8 @@
-# Commandes — NH Project
+# Commandes — nh-web + nh-pipeline
 
-Reference complete des commandes Laravel, serveur et deploiement.
+Reference complete des commandes Laravel, serveur et deploiement. Source de verite unique pour les deux repos (`nh-web` Laravel + `nh-pipeline` Python).
 
-> **Pour le deploiement complet sur un nouveau serveur**, voir aussi `docs/POST-DEPLOIEMENT.md` qui detaille les etapes pas a pas (vhost nginx, supervisord, bootstrap super admin, smoke test).
+> **Pour le deploiement complet sur un nouveau serveur**, voir aussi `docs/Pre-DEPLOIEMENT.md` qui detaille les etapes pas a pas (vhost nginx, supervisord, bootstrap super admin, smoke test).
 
 ## Sommaire
 
@@ -488,9 +488,10 @@ cd web
 
 ### Tests Python (pytest)
 
-```bash
-cd /path/to/nh-pipeline
+La suite pytest n'est plus packagee dans `nh-pipeline` (runtime prod minimal). Elle est archivee dans `nh_project/tests/` pour relancement ponctuel.
 
+```bash
+cd /chemin/vers/nh_project
 python3 -m pytest tests/ -v
 python3 -m pytest tests/test_main_json_output.py
 ```
@@ -516,10 +517,9 @@ python3 main.py raw/exemple.xml --filtre-mode 24h
 
 # Batch (lit config/settings.yaml)
 python3 run.py
-
-# Generer les dashboards PNG (legacy, optionnel)
-python3 dashboard.py
 ```
+
+> Le script `dashboard.py` (generateur PNG legacy) a ete sorti du runtime apres Phase 2 (le dashboard web ApexCharts lit Postgres directement). Il est archive dans `nh_project/dashboard.py` si tu veux le rejouer ponctuellement.
 
 ---
 
@@ -556,9 +556,9 @@ sudo systemctl restart nh-laravel
 
 ## 8. Deploiement nouveau serveur (prod)
 
-> **Le deroule complet est dans `docs/POST-DEPLOIEMENT.md`** (architecture 2 repos, prerequis serveur, vhost nginx, supervisord, bootstrap super admin, smoke test, mise a jour applicative).
+> **Le deroule complet est dans `docs/Pre-DEPLOIEMENT.md`** (architecture 2 repos, prerequis serveur, vhost nginx, supervisord, bootstrap super admin, smoke test, mise a jour applicative).
 
-Les commandes ci-dessous sont une **synthese** pour rappel rapide. Pour un premier deploiement, suivre `docs/POST-DEPLOIEMENT.md`.
+Les commandes ci-dessous sont une **synthese** pour rappel rapide. Pour un premier deploiement, suivre `docs/Pre-DEPLOIEMENT.md`.
 
 ### Resume des etapes cles
 
@@ -578,7 +578,7 @@ composer install --no-dev --optimize-autoloader && npm ci && npm run build
 cd /path/to/nh-pipeline
 python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt && deactivate
 
-# 4. Config .env (cf. POST-DEPLOIEMENT.md section 5)
+# 4. Config .env (cf. Pre-DEPLOIEMENT.md section 5)
 cd /path/to/nh-web
 cp .env.example .env
 php artisan key:generate
@@ -597,8 +597,8 @@ chmod -R 775 /path/to/nh-web/storage /path/to/nh-web/bootstrap/cache
 sudo -u www-data php artisan tinker
 # >>> \App\Models\User::create(['name'=>'Admin','email'=>'admin@x.fr','password'=>bcrypt('xxx'),'is_admin'=>true,'is_super_admin'=>true]);
 
-# 8. Vhost nginx + SSL (cf. POST-DEPLOIEMENT.md sections 9-10)
-# 9. Worker supervisord (cf. POST-DEPLOIEMENT.md section 10)
+# 8. Vhost nginx + SSL (cf. Pre-DEPLOIEMENT.md sections 9-10)
+# 9. Worker supervisord (cf. Pre-DEPLOIEMENT.md section 10)
 ```
 
 Visiter `https://tondomaine.com` dans un navigateur, se connecter, uploader un XML.
