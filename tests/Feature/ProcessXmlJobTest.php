@@ -84,7 +84,12 @@ it('deletes pannes_*.json and yearly CSVs after successful ingestion', function 
     expect(file_exists($base . "/reports/yearly/{$hcId}/{$hcId}_{$year}.csv"))->toBeFalse();
     expect(file_exists($base . "/FHreport/yearly/{$hcId}/{$hcId}_{$year}.csv"))->toBeFalse();
 
-    expect(file_exists($flight->xml_path))->toBeTrue();  // xml_epure must survive
+    // Phase 3: xml_epure.xml is now also deleted (its content lives in flights.xml_blob)
+    expect(file_exists($outputDir . '/xml_epure.xml'))->toBeFalse();
+
+    // The flight row should carry the blob in DB
+    $flight->refresh();
+    expect($flight->xml_blob)->not->toBeNull();
 });
 
 it('marks import as error when pipeline fails', function () {

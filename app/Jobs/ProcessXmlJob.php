@@ -122,11 +122,9 @@ class ProcessXmlJob implements ShouldQueue
     }
 
     /**
-     * Supprime les fichiers JSON/CSV de transit pipeline qui ne servent plus
-     * une fois la donnee ingere en DB. Garde xml_epure.xml (download).
-     * Note: occurrentes.json est encore ecrit par la pipeline Python jusqu'a
-     * P2-Task 3 mais n'est plus lu cote web (RecurrentFailuresRefresher
-     * derive l'etat depuis la DB).
+     * Phase 3: all XML content is persisted in flights.xml_blob, so we can
+     * remove the disk copies after ingest. Vol case = xml_epure.xml under
+     * clean_xml/.../. Bff case = the single raw .xml under xml_isole/.../.
      */
     private function deleteTransitFiles(array $result, string $outputBase): void
     {
@@ -138,13 +136,18 @@ class ProcessXmlJob implements ShouldQueue
         if ($outputDir) {
             $toDelete[] = $outputDir . '/pannes_conservees.json';
             $toDelete[] = $outputDir . '/pannes_isolees.json';
+            $toDelete[] = $outputDir . '/xml_epure.xml';
+            // Bff case: the raw XML kept its original filename under output_dir.
+            foreach (glob($outputDir . '/*.xml') ?: [] as $xml) {
+                $toDelete[] = $xml;
+            }
         }
         if ($hcId) {
             $toDelete[] = $outputBase . "/reports/yearly/{$hcId}/{$hcId}_{$year}.csv";
             $toDelete[] = $outputBase . "/FHreport/yearly/{$hcId}/{$hcId}_{$year}.csv";
         }
 
-        foreach ($toDelete as $path) {
+        foreach (array_unique($toDelete) as $path) {
             if (is_file($path)) {
                 @unlink($path);
             }
