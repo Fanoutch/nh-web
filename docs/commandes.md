@@ -134,8 +134,38 @@ $u->save();
     'email' => $u->email,
     'is_admin' => $u->is_admin,
     'is_super_admin' => $u->is_super_admin,
+    'is_personnel_navigant' => $u->is_personnel_navigant,
 ]);
 ```
+
+#### Personnel Navigant (PN)
+
+Le role PN est un troisieme axe independant des flags admin (un PN peut etre simple user ou admin/super admin a la fois). Par defaut tout nouveau compte est cree avec `is_personnel_navigant = false` (= Technicien). Le flag est gere par le super admin via `/admin/users` (bouton "Marquer PN" / "Retirer PN") — la gestion via tinker ci-dessous est utile pour bootstrap ou batch.
+
+```php
+// Marquer un user existant comme Personnel Navigant
+\App\Models\User::where('email', 'pilote@nh.local')->update(['is_personnel_navigant' => true]);
+
+// Retirer le statut PN (le user redevient Technicien)
+\App\Models\User::where('email', 'pilote@nh.local')->update(['is_personnel_navigant' => false]);
+
+// Lister tous les Personnel Navigant
+\App\Models\User::where('is_personnel_navigant', true)->get(['id', 'name', 'email']);
+
+// Lister tous les Techniciens (= non-PN, non-admin)
+\App\Models\User::where('is_personnel_navigant', false)
+    ->where('is_admin', false)
+    ->where('is_super_admin', false)
+    ->get(['id', 'name', 'email']);
+
+// Batch : convertir plusieurs emails en PN d'un coup
+\App\Models\User::whereIn('email', [
+    'pilote1@nh.local',
+    'pilote2@nh.local',
+])->update(['is_personnel_navigant' => true]);
+```
+
+Au login, un PN est redirige vers `/personnel-navigant` (page dediee : grille des machines -> liste des vols -> validation des pannes occurrentes du vol). Un Technicien va sur `/machines` comme avant.
 
 #### Jobs et queue
 
