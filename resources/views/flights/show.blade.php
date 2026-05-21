@@ -10,7 +10,7 @@
     {{-- Header --}}
     <div class="flex items-start justify-between mb-6">
         <div>
-            <x-section-label class="mb-1">Vol · {{ $flight->start_datetime->format('d/m/Y') }}</x-section-label>
+            <x-section-label class="mb-1">Vol · {{ $flight->end_datetime->format('d/m/Y') }}</x-section-label>
             <h1 class="text-[20px] font-semibold text-ink-primary">
                 {{ $flight->dsn }} <span class="font-mono text-accent">#{{ $flight->num }}</span>
             </h1>
@@ -34,7 +34,7 @@
             </div>
             <div>
                 <x-section-label class="mb-1">Date</x-section-label>
-                <div class="font-mono text-sm text-ink-primary">{{ $flight->start_datetime->format('d/m/Y') }}</div>
+                <div class="font-mono text-sm text-ink-primary">{{ $flight->end_datetime->format('d/m/Y') }}</div>
             </div>
             <div>
                 <x-section-label class="mb-1">Durée</x-section-label>

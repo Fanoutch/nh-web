@@ -9,7 +9,7 @@
 
     {{-- Header --}}
     <div class="mb-4">
-        <x-section-label class="mb-1">{{ $flight->machine->hc_id }} · {{ $flight->start_datetime->format('d/m/Y') }}</x-section-label>
+        <x-section-label class="mb-1">{{ $flight->machine->hc_id }} · {{ $flight->end_datetime->format('d/m/Y') }}</x-section-label>
         <h1 class="text-[20px] font-semibold text-ink-primary">
             Pannes isolées <span class="font-mono text-ink-secondary">{{ $pannes->count() }}</span>
         </h1>

@@ -5,7 +5,7 @@
     $top = $pannes->take(3);
     $rest = max(0, $count - 3);
     $modalId = "modal-last-flight-{$machine->hc_id}";
-    $flightDate = $lastFlight?->start_datetime?->format('d/m/Y');
+    $flightDate = $lastFlight?->end_datetime?->format('d/m/Y');
 @endphp
 
 <div class="px-5 py-4 flex flex-col">

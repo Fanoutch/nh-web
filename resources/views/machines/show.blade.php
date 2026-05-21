@@ -76,7 +76,7 @@
                         <tr class="border-b border-app-border-soft hover:bg-app-bg cursor-pointer transition-colors"
                             onclick="window.location='{{ $route }}'">
                             <td class="px-4 py-2.5 font-mono text-xs text-ink-primary">
-                                {{ $flight->start_datetime->format('d/m/Y') }}
+                                {{ $flight->end_datetime->format('d/m/Y') }}
                             </td>
                             <td class="px-4 py-2.5 font-mono text-xs text-ink-secondary">{{ $flight->dsn }}</td>
                             <td class="px-4 py-2.5 font-mono text-xs text-ink-primary">{{ $flight->num }}</td>

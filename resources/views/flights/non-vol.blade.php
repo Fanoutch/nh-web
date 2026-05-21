@@ -9,7 +9,7 @@
 
     {{-- Header --}}
     <div class="mb-6">
-        <x-section-label class="mb-1">Non-Vol · {{ $flight->start_datetime->format('d/m/Y') }}</x-section-label>
+        <x-section-label class="mb-1">Non-Vol · {{ $flight->end_datetime->format('d/m/Y') }}</x-section-label>
         <h1 class="text-[20px] font-semibold text-ink-primary">
             {{ $flight->dsn }} <span class="font-mono text-ink-secondary">#{{ $flight->num }}</span>
         </h1>
@@ -34,7 +34,7 @@
             <dl class="space-y-2 text-sm">
                 <div class="flex justify-between"><dt class="text-ink-muted">Appareil</dt><dd class="font-mono text-accent">{{ $flight->machine->hc_id }}</dd></div>
                 <div class="flex justify-between"><dt class="text-ink-muted">DSN</dt><dd class="font-mono text-ink-secondary">{{ $flight->dsn }}</dd></div>
-                <div class="flex justify-between"><dt class="text-ink-muted">Date</dt><dd class="font-mono text-ink-primary">{{ $flight->start_datetime->format('d/m/Y') }}</dd></div>
+                <div class="flex justify-between"><dt class="text-ink-muted">Date</dt><dd class="font-mono text-ink-primary">{{ $flight->end_datetime->format('d/m/Y') }}</dd></div>
                 <div class="flex justify-between"><dt class="text-ink-muted">Statut</dt><dd><x-badge variant="nonvol">Non-Vol</x-badge></dd></div>
             </dl>
         </x-card>

@@ -9,7 +9,7 @@
 
     {{-- Header --}}
     <div class="mb-5">
-        <x-section-label class="mb-1">{{ $flight->machine->hc_id }} · {{ $flight->start_datetime->format('d/m/Y') }}</x-section-label>
+        <x-section-label class="mb-1">{{ $flight->machine->hc_id }} · {{ $flight->end_datetime->format('d/m/Y') }}</x-section-label>
         <h1 class="text-[20px] font-semibold text-ink-primary">
             Pannes conservées <span class="font-mono text-accent">{{ $flight->technicalEvents()->where('status', 'conservee')->count() }}</span>
         </h1>
