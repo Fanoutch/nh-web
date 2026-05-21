@@ -13,10 +13,10 @@
                 <table class="w-full text-[13px]">
                     <thead>
                         <tr class="border-b border-app-border">
+                            <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Date</th>
                             <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">DSN</th>
-                            <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Numéro</th>
-                            <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Début</th>
-                            <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Fin</th>
+                            <th class="text-right px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Durée</th>
+                            <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Info</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -24,12 +24,12 @@
                             <tr class="border-b border-app-border-soft hover:bg-app-bg transition-colors cursor-pointer"
                                 onclick="window.location='{{ route('personnel-navigant.pannes', $flight) }}'"
                                 wire:key="pn-flight-{{ $flight->id }}">
+                                <td class="px-4 py-2.5 font-mono text-ink-primary">{{ $flight->end_datetime?->format('d/m/Y') }}</td>
                                 <td class="px-4 py-2.5 font-mono text-ink-primary">
                                     <a href="{{ route('personnel-navigant.pannes', $flight) }}" class="hover:text-accent">{{ $flight->dsn }}</a>
                                 </td>
-                                <td class="px-4 py-2.5 font-mono text-ink-secondary">{{ $flight->num }}</td>
-                                <td class="px-4 py-2.5 text-ink-secondary">{{ $flight->start_datetime?->format('Y-m-d H:i') }}</td>
-                                <td class="px-4 py-2.5 text-ink-secondary">{{ $flight->end_datetime?->format('Y-m-d H:i') }}</td>
+                                <td class="px-4 py-2.5 text-right font-mono text-ink-primary">{{ number_format($flight->flight_hours, 1) }}h</td>
+                                <td class="px-4 py-2.5 text-ink-secondary">{{ $flight->remarks ?: '/' }}</td>
                             </tr>
                         @empty
                             <tr>
