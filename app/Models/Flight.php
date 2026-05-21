@@ -14,7 +14,7 @@ class Flight extends Model
     protected $fillable = [
         'machine_id', 'dsn', 'num',
         'start_datetime', 'end_datetime',
-        'flight_type', 'flight_hours', 'consumed_fuel',
+        'flight_type', 'flight_hours', 'consumed_fuel', 'remarks',
         'is_non_vol', 'flagged_as_error', 'flagged_at', 'flagged_by',
         'xml_path', 'xml_blob', 'processed_at',
     ];
