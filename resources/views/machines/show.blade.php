@@ -54,7 +54,7 @@
                         <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Date</th>
                         <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">DSN</th>
                         <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Num</th>
-                        <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Type</th>
+                        <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Info</th>
                         <th class="text-right px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Heures vol</th>
                         <th class="text-right px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Pannes</th>
                         @if ($tab === 'erreurs')
@@ -80,15 +80,7 @@
                             </td>
                             <td class="px-4 py-2.5 font-mono text-xs text-ink-secondary">{{ $flight->dsn }}</td>
                             <td class="px-4 py-2.5 font-mono text-xs text-ink-primary">{{ $flight->num }}</td>
-                            <td class="px-4 py-2.5 text-xs">
-                                @if ($tab === 'erreurs')
-                                    <x-badge variant="error">Erreur</x-badge>
-                                @elseif ($tab === 'non-vols')
-                                    <x-badge variant="nonvol">Non-Vol</x-badge>
-                                @else
-                                    <span class="text-ink-secondary">Normal</span>
-                                @endif
-                            </td>
+                            <td class="px-4 py-2.5 text-xs text-ink-secondary">{{ $flight->remarks ?: '/' }}</td>
                             <td class="px-4 py-2.5 text-right font-mono text-xs">
                                 @if ($tab === 'vols')
                                     {{ number_format($flight->flight_hours, 1) }}h

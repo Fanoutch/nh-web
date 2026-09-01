@@ -45,8 +45,8 @@
                 <div class="font-mono text-sm text-ink-primary">{{ $flight->consumed_fuel ?? '—' }}{{ $flight->consumed_fuel ? ' kg' : '' }}</div>
             </div>
             <div>
-                <x-section-label class="mb-1">Type</x-section-label>
-                <div class="text-sm text-ink-primary">Normal</div>
+                <x-section-label class="mb-1">Info</x-section-label>
+                <div class="text-sm text-ink-primary">{{ $flight->remarks ?: '/' }}</div>
             </div>
         </div>
     </x-card>
