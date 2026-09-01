@@ -36,7 +36,7 @@
             <div class="font-mono text-[28px] font-medium text-ink-primary tabular-nums">{{ $kpis['total_vols'] }}</div>
         </x-card>
         <x-card class="px-5 py-4">
-            <x-section-label class="mb-1.5">Pannes conservées</x-section-label>
+            <x-section-label class="mb-1.5">Pannes conservées (30 j)</x-section-label>
             <div class="font-mono text-[28px] font-medium text-accent tabular-nums">{{ number_format($kpis['total_conservees'], 0, ',', ' ') }}</div>
         </x-card>
         <x-card class="px-5 py-4">

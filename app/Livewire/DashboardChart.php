@@ -83,7 +83,12 @@ class DashboardChart extends Component
 
     public function getKpisProperty(): array
     {
-        $totalConservees = TechnicalEvent::where('status', 'conservee')->count();
+        // Compteur borné aux 30 derniers jours (date de référence = fin du vol) :
+        // le total cumulé toutes-périodes n'est pas pertinent à grande échelle.
+        $since = Carbon::now()->subDays(30);
+        $totalConservees = TechnicalEvent::where('status', 'conservee')
+            ->whereHas('flight', fn ($q) => $q->where('end_datetime', '>=', $since))
+            ->count();
         $validated = TechnicalEvent::where('status', 'conservee')
             ->where('validation_status', 'validated')
             ->count();
