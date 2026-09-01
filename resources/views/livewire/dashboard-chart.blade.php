@@ -129,7 +129,7 @@
     @endif
 
     @once
-        <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+        <script src="{{ asset('vendor/apexcharts.min.js') }}"></script>
         <script>
             window.dashboardChart = function () {
                 return {
