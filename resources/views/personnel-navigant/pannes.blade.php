@@ -7,7 +7,7 @@
             </h1>
         </div>
         <p class="text-[13px] text-ink-muted mb-4">
-            Confirme ou rejette les occurrences de pannes que tu as constatées sur ce vol.
+            Confirmez ou rejetez les occurrences de pannes constatées sur ce vol.
         </p>
 
         @livewire('pannes-occurrentes-table', ['flight' => $flight])
