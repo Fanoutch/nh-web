@@ -16,7 +16,7 @@ class TechnicalEvent extends Model
         'flight_id', 'technical_event_id', 'raise_datetime',
         'status', 'iso_week', 'nombre_occurrences', 'details',
         'validation_status', 'validated_by', 'validated_at',
-        'pn_validation_status', 'pn_validated_by', 'pn_validated_at',
+        'pn_validation_status', 'pn_validated_by', 'pn_validated_at', 'pn_comment',
     ];
 
     protected $casts = [
@@ -30,7 +30,7 @@ class TechnicalEvent extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['validation_status', 'validated_by', 'pn_validation_status', 'pn_validated_by'])
+            ->logOnly(['validation_status', 'validated_by', 'pn_validation_status', 'pn_validated_by', 'pn_comment'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
             ->useLogName('validation');

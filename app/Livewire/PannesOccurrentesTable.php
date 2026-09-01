@@ -10,9 +10,16 @@ class PannesOccurrentesTable extends Component
 {
     public Flight $flight;
 
+    /** Commentaire PN saisi par événement (id => texte), envoyé avec Confirmer/Rejeter. */
+    public array $comments = [];
+
     public function mount(Flight $flight): void
     {
         $this->flight = $flight;
+        $this->comments = $flight->technicalEvents()
+            ->whereNotNull('pn_comment')
+            ->pluck('pn_comment', 'id')
+            ->all();
     }
 
     public function setPnValidation(int $eventId, string $status): void
@@ -25,6 +32,7 @@ class PannesOccurrentesTable extends Component
             'pn_validation_status' => $status,
             'pn_validated_by' => auth()->id(),
             'pn_validated_at' => now(),
+            'pn_comment' => trim($this->comments[$eventId] ?? '') ?: null,
         ]);
     }
 

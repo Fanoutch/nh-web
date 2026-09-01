@@ -53,6 +53,9 @@
                             Rejeté en vol par {{ $p->pnValidator?->name }}
                         </span>
                     @endif
+                    @if ($p->pn_comment)
+                        <span class="text-[11px] text-ink-secondary italic">PN : « {{ $p->pn_comment }} »</span>
+                    @endif
                     <span class="font-mono text-[10px] text-ink-muted">
                         {{ $sysDesc }} · Fault Code {{ $failureCode }} · ×{{ $p->nombre_occurrences }} occurrence{{ $p->nombre_occurrences > 1 ? 's' : '' }}
                     </span>

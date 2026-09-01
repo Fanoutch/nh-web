@@ -35,17 +35,26 @@
                                 @else
                                     <span class="text-ink-muted text-xs italic">En attente</span>
                                 @endif
+                                @if ($p->pn_comment)
+                                    <div class="mt-1 text-[11px] text-ink-secondary italic">« {{ $p->pn_comment }} »</div>
+                                @endif
                             </td>
                             <td class="px-4 py-2.5">
-                                <div class="flex gap-1.5">
-                                    <button wire:click="setPnValidation({{ $p->id }}, 'confirmed')"
-                                            class="px-3 py-1 rounded bg-ok-soft border border-ok-border text-ok text-[11px] font-medium hover:bg-ok-border transition">
-                                        Confirmer
-                                    </button>
-                                    <button wire:click="setPnValidation({{ $p->id }}, 'rejected')"
-                                            class="px-3 py-1 rounded bg-danger-soft border border-danger-border text-danger text-[11px] font-medium hover:bg-danger-border transition">
-                                        Rejeter
-                                    </button>
+                                <div class="flex flex-col gap-1.5">
+                                    <input type="text"
+                                           wire:model="comments.{{ $p->id }}"
+                                           placeholder="Commentaire (optionnel)"
+                                           class="w-full px-2 py-1 rounded border border-app-border bg-transparent text-[11px] text-ink-primary placeholder:text-ink-muted placeholder:italic focus:outline-none focus:border-accent" />
+                                    <div class="flex gap-1.5">
+                                        <button wire:click="setPnValidation({{ $p->id }}, 'confirmed')"
+                                                class="px-3 py-1 rounded bg-ok-soft border border-ok-border text-ok text-[11px] font-medium hover:bg-ok-border transition">
+                                            Confirmer
+                                        </button>
+                                        <button wire:click="setPnValidation({{ $p->id }}, 'rejected')"
+                                                class="px-3 py-1 rounded bg-danger-soft border border-danger-border text-danger text-[11px] font-medium hover:bg-danger-border transition">
+                                            Rejeter
+                                        </button>
+                                    </div>
                                 </div>
                             </td>
                         </tr>
