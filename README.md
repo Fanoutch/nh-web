@@ -15,7 +15,8 @@ les pannes detectees par la pipeline Python [`nh-pipeline`](../nh-pipeline).
 - Dashboards interactifs (ApexCharts) : vue mensuelle multi-machines + vue filtree par machine (pannes / heures de vol par semaine ISO)
 - Re-classement non-vol → vol (gestion des erreurs de detection)
 - **Systeme de roles** : user / admin / super admin
-- **Gestion des comptes** via `/admin/users` (creation, promotion, suppression — admin/super admin)
+- **Gestion des comptes** via `/admin/users` (creation, promotion, suppression, toggle Personnel Navigant — admin/super admin)
+- **Portail Personnel Navigant** (`/personnel-navigant`) : acces dedie equipages (flag `is_personnel_navigant`) — liste des machines, vols simplifies (date / DSN / duree / info) et validation des pannes
 - **Audit log** `/admin/audit-log` (super admin) : tracage des modifications metier + erreurs pipeline (Spatie ActivityLog)
 - Page profil `/profile` : modif infos, mot de passe, suppression de compte
 - Auth Laravel Breeze (login / register / password reset)
@@ -27,7 +28,7 @@ les pannes detectees par la pipeline Python [`nh-pipeline`](../nh-pipeline).
 - Tailwind CSS + Alpine.js + DM Sans / DM Mono (via fonts.bunny.net)
 - PostgreSQL (compatible Supabase)
 - Spatie ActivityLog (audit)
-- Pest 3 (tests, 59 cas)
+- Pest 3 (tests, 102 cas)
 - ApexCharts (CDN, dashboards)
 - Laravel Breeze (auth)
 
@@ -109,7 +110,7 @@ npm run dev                  # dans un troisieme terminal (HMR)
 
 ### Prod
 
-Voir **`docs/POST-DEPLOIEMENT.md`** (deroule complet : prerequis, vhost nginx, supervisord, bootstrap super admin, smoke test).
+Voir **`docs/Pre-DEPLOIEMENT.md`** (deroule complet : prerequis, vhost nginx, supervisord, bootstrap super admin, smoke test).
 
 ## Tests
 
@@ -117,12 +118,12 @@ Voir **`docs/POST-DEPLOIEMENT.md`** (deroule complet : prerequis, vhost nginx, s
 ./vendor/bin/pest
 ```
 
-59 tests couvrent les Services (XmlPipelineRunner, FlightImporter, WeeklyAggregatesIngestor, RecurrentFailuresIngestor),
-les Jobs (ProcessXmlJob), les composants Livewire (XmlUploader, ImportsTracker, PannesConserveesTable, DashboardChart),
-les modeles (RecurrentFailure) et les routes auth + profile.
+102 tests couvrent les Services (XmlPipelineRunner, FlightImporter, WeeklyAggregatesRefresher, RecurrentFailuresRefresher),
+les Jobs (ProcessXmlJob), les composants Livewire (XmlUploader, ImportsTracker, PannesConserveesTable, DashboardChart, AdminUsersTable),
+le Personnel Navigant (login, pages, middleware, validation des pannes), les modeles et les routes auth + profile.
 
 ## Documentation
 
-- **`docs/POST-DEPLOIEMENT.md`** — guide de deploiement sur un nouveau serveur (canonique)
+- **`docs/Pre-DEPLOIEMENT.md`** — guide de deploiement sur un nouveau serveur (canonique)
 - `commandes.md` — commandes utiles (dev, tinker, debug, recreation BDD, audit log, reset)
 - `docs/ARCHITECTURE.md` — vue d'ensemble du systeme (web + pipeline + DB + queue)
