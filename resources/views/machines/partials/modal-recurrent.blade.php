@@ -15,6 +15,7 @@
             @php
                 $borderColor = $rf->score >= 3 ? 'border-l-danger' : 'border-l-accent';
                 $badgeVariant = $rf->score >= 3 ? 'error' : 'amber';
+                $verdict = ($pnVerdicts ?? collect())[$rf->technical_event_id] ?? null;
             @endphp
             <div class="px-3.5 py-3 bg-app-bg rounded-md border-l-[3px] {{ $borderColor }}">
                 <div class="flex items-center justify-between mb-1.5">
@@ -28,6 +29,22 @@
                 </div>
                 @if ($rf->description)
                     <div class="text-[11px] text-ink-muted mt-1">{{ $rf->description }}</div>
+                @endif
+                @if ($verdict)
+                    <div class="mt-1.5 flex items-start gap-1.5 flex-wrap">
+                        @if ($verdict->pn_validation_status === 'confirmed')
+                            <span class="inline-flex items-center gap-1 bg-ok-soft text-ok border border-ok-border text-[10px] px-2 py-0.5 rounded font-mono shrink-0">
+                                ✓ Confirmé en vol par {{ $verdict->pnValidator?->name }}
+                            </span>
+                        @else
+                            <span class="inline-flex items-center gap-1 bg-danger-soft text-danger border border-danger-border text-[10px] px-2 py-0.5 rounded font-mono shrink-0">
+                                ✗ Rejeté en vol par {{ $verdict->pnValidator?->name }}
+                            </span>
+                        @endif
+                        @if ($verdict->pn_comment)
+                            <span class="text-[11px] text-ink-secondary italic">« {{ $verdict->pn_comment }} »</span>
+                        @endif
+                    </div>
                 @endif
             </div>
         @endforeach
