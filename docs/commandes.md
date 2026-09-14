@@ -833,6 +833,9 @@ Reference des variables principales du `.env`.
 | `QUEUE_CONNECTION` | `database` | `database` | Driver de queue |
 | `SESSION_DRIVER` | `database` | `database` | Stockage des sessions |
 | `CACHE_STORE` | `database` | `database` ou `redis` | Stockage du cache |
+| `PIPELINE_PATH` | chemin absolu de `nh-pipeline` | idem | Pipeline XML (Symfony Process) |
+| `EXCEL_PIPELINE_PATH` | chemin absolu de `BMN` | idem | Script `daily_report.py` (Rapport Excel) ; defaut `../../BMN` |
+| `EXCEL_PIPELINE_PYTHON` | `python3` ou chemin du venv | idem | Interpreteur utilise pour le Rapport Excel (Windows : `C:\...\BMN\.venv\Scripts\python.exe`) |
 
 ---
 
@@ -1021,3 +1024,45 @@ Adapter `'#aaaaaa'` a la couleur reelle du fond de ton image source. La valeur `
 ### Note sur le dossier `logo/`
 
 Le dossier `logo/` a la racine du repo est **gitignore** (cf. `.gitignore`) — c'est l'endroit pour ranger les **sources de design** (PSD, SVG, JPG haute resolution, variantes). Seul le PNG final dans `public/images/` est versionne et deploye.
+
+---
+
+## 13. Rapport Excel (CSV -> Excel via le projet BMN)
+
+Page `/rapport-excel` (menu « Rapport Excel ») : l'utilisateur depose le CSV recu par mail,
+un job en queue appelle le script Python du projet **BMN** et l'Excel genere est telechargeable
+dans l'historique de la page.
+
+### Chaine
+
+```
+Livewire ExcelReportUploader  ->  storage/app/staging/<uniqid>_<nom>.csv
+                              ->  table excel_reports (status pending)
+                              ->  GenerateExcelReportJob (queue database)
+                              ->  ExcelPipelineRunner : <python> daily_report.py --csv ... --output-dir storage/app/excel-reports --no-archive --json-output
+                              ->  status ok (+ output_path) ou error (+ message lisible)
+```
+
+Le CSV de staging est supprime apres traitement, succes ou echec. Les Excel generes restent dans
+`storage/app/excel-reports/` (a purger periodiquement si besoin, cf. « Liberer de l'espace disque »).
+
+### Prerequis serveur
+
+1. Le projet BMN est clone sur la meme machine, avec son venv et ses dependances (`pip install -r requirements.txt`).
+2. Le template Excel reel est dans `BMN/template/template.xlsx` et `BMN/config.py` contient le mapping valide
+   (`python check_setup.py` sans `[KO]`).
+3. `.env` :
+   ```
+   EXCEL_PIPELINE_PATH=/chemin/absolu/BMN
+   EXCEL_PIPELINE_PYTHON=/chemin/absolu/BMN/.venv/bin/python
+   ```
+4. `php artisan migrate` (table `excel_reports`) et un worker de queue actif (`php artisan queue:work`).
+
+### Tests
+
+```bash
+EXCEL_PIPELINE_PYTHON=/chemin/BMN/.venv/bin/python vendor/bin/pest tests/Feature/ExcelReport* tests/Feature/GenerateExcelReportJobTest.php
+```
+
+Les tests du job appellent le vrai script Python avec le CSV factice de BMN ; ils sont ignores si
+`EXCEL_PIPELINE_PATH` ne pointe pas sur un dossier contenant `daily_report.py`.

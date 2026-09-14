@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\FlightController;
+use App\Http\Controllers\ExcelReportController;
 use App\Http\Controllers\MachineController;
 use App\Http\Controllers\NonVolController;
 use App\Http\Controllers\PersonnelNavigantController;
@@ -34,6 +35,9 @@ Route::middleware(['auth'])->group(function () {
     // Upload / Imports / Dashboards
     Route::view('/upload', 'upload')->name('upload.index');
     Route::view('/imports', 'imports')->name('imports.index');
+    Route::view('/rapport-excel', 'excel-reports')->name('excel-reports.index');
+    Route::get('/rapport-excel/{report}/telecharger', [ExcelReportController::class, 'download'])
+        ->name('excel-reports.download');
     Route::view('/dashboards', 'dashboards')->name('dashboards.index');
 
     // Profil (existant Breeze)
