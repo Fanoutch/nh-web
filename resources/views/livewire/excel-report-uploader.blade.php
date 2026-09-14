@@ -75,23 +75,12 @@
                             <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">CSV déposé</th>
                             <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Date</th>
                             <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Par</th>
-                            <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Statut</th>
-                            <th class="text-right px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Lignes</th>
                             <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Dispo (Excel)</th>
                             <th class="px-4 py-2.5"></th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse ($reports as $report)
-                            @php
-                                $statusLabel = match ($report->status) {
-                                    'pending' => 'En attente',
-                                    'processing' => 'Génération…',
-                                    'ok' => 'OK',
-                                    'error' => 'Erreur',
-                                    default => $report->status,
-                                };
-                            @endphp
                             <tr wire:key="report-{{ $report->id }}"
                                 @class([
                                     'border-b border-app-border-soft',
@@ -100,16 +89,6 @@
                                 <td class="px-4 py-2.5 font-mono text-xs text-ink-primary truncate max-w-xs">{{ $report->filename }}</td>
                                 <td class="px-4 py-2.5 font-mono text-xs text-ink-secondary">{{ $report->created_at->format('d/m/Y H:i') }}</td>
                                 <td class="px-4 py-2.5 text-xs text-ink-secondary">{{ $report->user?->name ?? '—' }}</td>
-                                <td class="px-4 py-2.5">
-                                    <x-badge :variant="$report->status">{{ $statusLabel }}</x-badge>
-                                </td>
-                                <td class="px-4 py-2.5 text-right font-mono text-xs">
-                                    @if ($report->status === 'ok')
-                                        <span class="text-ink-primary">{{ $report->rows_written }}</span>
-                                    @else
-                                        <span class="text-ink-muted">—</span>
-                                    @endif
-                                </td>
                                 <td class="px-4 py-2.5 text-xs">
                                     @if ($report->isDownloadable())
                                         <a href="{{ route('bmn.download', $report) }}"
@@ -117,7 +96,7 @@
                                     @elseif ($report->status === 'error')
                                         <span class="font-mono text-[11px] text-danger" title="{{ $report->message }}">{{ \Illuminate\Support\Str::limit($report->message ?? 'Erreur', 60) }}</span>
                                     @else
-                                        <span class="text-ink-muted">—</span>
+                                        <span class="font-mono text-[11px] text-warn animate-pulse">Génération en cours…</span>
                                     @endif
                                 </td>
                                 <td class="px-4 py-2.5 text-right">
@@ -130,7 +109,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="px-4 py-12 text-center text-ink-muted text-sm">
+                                <td colspan="5" class="px-4 py-12 text-center text-ink-muted text-sm">
                                     Aucune dispo générée pour le moment.
                                 </td>
                             </tr>
