@@ -35,9 +35,9 @@ Route::middleware(['auth'])->group(function () {
     // Upload / Imports / Dashboards
     Route::view('/upload', 'upload')->name('upload.index');
     Route::view('/imports', 'imports')->name('imports.index');
-    Route::view('/rapport-excel', 'excel-reports')->name('excel-reports.index');
-    Route::get('/rapport-excel/{report}/telecharger', [ExcelReportController::class, 'download'])
-        ->name('excel-reports.download');
+    Route::view('/bmn', 'bmn')->name('bmn.index');
+    Route::get('/bmn/{report}/telecharger', [ExcelReportController::class, 'download'])
+        ->name('bmn.download');
     Route::view('/dashboards', 'dashboards')->name('dashboards.index');
 
     // Profil (existant Breeze)

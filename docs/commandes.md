@@ -834,8 +834,8 @@ Reference des variables principales du `.env`.
 | `SESSION_DRIVER` | `database` | `database` | Stockage des sessions |
 | `CACHE_STORE` | `database` | `database` ou `redis` | Stockage du cache |
 | `PIPELINE_PATH` | chemin absolu de `nh-pipeline` | idem | Pipeline XML (Symfony Process) |
-| `EXCEL_PIPELINE_PATH` | chemin absolu de `BMN` | idem | Script `daily_report.py` (Rapport Excel) ; defaut `../../BMN` |
-| `EXCEL_PIPELINE_PYTHON` | `python3` ou chemin du venv | idem | Interpreteur utilise pour le Rapport Excel (Windows : `C:\...\BMN\.venv\Scripts\python.exe`) |
+| `EXCEL_PIPELINE_PATH` | chemin absolu de `BMN` | idem | Script `daily_report.py` (onglet BMN / dispo) ; defaut `../../BMN` |
+| `EXCEL_PIPELINE_PYTHON` | `python3` ou chemin du venv | idem | Interpreteur utilise pour l'onglet BMN (Windows : `C:\...\BMN\.venv\Scripts\python.exe`) |
 
 ---
 
@@ -1027,11 +1027,10 @@ Le dossier `logo/` a la racine du repo est **gitignore** (cf. `.gitignore`) — 
 
 ---
 
-## 13. Rapport Excel (CSV -> Excel via le projet BMN)
+## 13. Onglet BMN — generation de la dispo (CSV -> Excel via le projet BMN)
 
-Page `/rapport-excel` (menu « Rapport Excel ») : l'utilisateur depose le CSV recu par mail,
-un job en queue appelle le script Python du projet **BMN** et l'Excel genere est telechargeable
-dans l'historique de la page.
+Page `/bmn` (menu « BMN ») : l'utilisateur depose le CSV recu par mail, un job en queue appelle
+le script Python du projet **BMN** et la dispo generee (Excel) est telechargeable dans l'historique de la page.
 
 ### Chaine
 

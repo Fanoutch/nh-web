@@ -9,7 +9,7 @@ class ExcelReportController extends Controller
 {
     public function download(ExcelReport $report): BinaryFileResponse
     {
-        abort_unless($report->isDownloadable(), 404, 'Excel non disponible.');
+        abort_unless($report->isDownloadable(), 404, 'Dispo non disponible.');
 
         return response()->download(
             $report->output_path,

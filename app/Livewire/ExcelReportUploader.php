@@ -9,7 +9,7 @@ use Livewire\Component;
 use Livewire\WithFileUploads;
 
 /**
- * Page « Rapport Excel » : dépôt d'un CSV + historique des générations (tous utilisateurs).
+ * Onglet « BMN » : dépôt du CSV du jour, génération de la dispo (Excel) + historique (tous utilisateurs).
  */
 class ExcelReportUploader extends Component
 {
@@ -69,7 +69,7 @@ class ExcelReportUploader extends Component
         GenerateExcelReportJob::dispatch($report->id, $absolute);
 
         $this->csvFile = null;
-        $this->notice = "« {$originalName} » envoyé : la génération démarre.";
+        $this->notice = "« {$originalName} » envoyé : génération de la dispo en cours.";
     }
 
     public function render()

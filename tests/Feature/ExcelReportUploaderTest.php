@@ -9,17 +9,18 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
-it('redirects guests away from the excel report page', function () {
-    $this->get(route('excel-reports.index'))->assertRedirect(route('login'));
+it('redirects guests away from the bmn page', function () {
+    $this->get(route('bmn.index'))->assertRedirect(route('login'));
 });
 
-it('renders the excel report page for an authenticated user', function () {
+it('renders the bmn page for an authenticated user', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)
-        ->get(route('excel-reports.index'))
+        ->get(route('bmn.index'))
         ->assertOk()
-        ->assertSee('Rapport Excel')
+        ->assertSee('BMN')
+        ->assertSee('Génération de la dispo')
         ->assertSeeLivewire(ExcelReportUploader::class);
 });
 

@@ -15,7 +15,7 @@ it('downloads the generated excel when the report is ok', function () {
 
     try {
         $this->actingAs($user)
-            ->get(route('excel-reports.download', $report))
+            ->get(route('bmn.download', $report))
             ->assertOk()
             ->assertDownload('rapport_du_jour.xlsx');
     } finally {
@@ -31,13 +31,13 @@ it('returns 404 when the report is not ready or the file is missing', function (
         'output_path' => storage_path('app/does_not_exist.xlsx'), 'output_name' => 'x.xlsx',
     ]);
 
-    $this->actingAs($user)->get(route('excel-reports.download', $pending))->assertNotFound();
-    $this->actingAs($user)->get(route('excel-reports.download', $gone))->assertNotFound();
+    $this->actingAs($user)->get(route('bmn.download', $pending))->assertNotFound();
+    $this->actingAs($user)->get(route('bmn.download', $gone))->assertNotFound();
 });
 
 it('requires authentication to download', function () {
     $user = User::factory()->create();
     $report = ExcelReport::create(['user_id' => $user->id, 'filename' => 'r.csv', 'status' => 'ok']);
 
-    $this->get(route('excel-reports.download', $report))->assertRedirect(route('login'));
+    $this->get(route('bmn.download', $report))->assertRedirect(route('login'));
 });

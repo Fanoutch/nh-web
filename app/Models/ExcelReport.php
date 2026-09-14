@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Une génération d'Excel à partir d'un CSV déposé sur la page « Rapport Excel ».
+ * Une dispo générée (Excel) à partir d'un CSV déposé sur l'onglet « BMN ».
  */
 class ExcelReport extends Model
 {

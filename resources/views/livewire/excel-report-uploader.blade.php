@@ -8,7 +8,7 @@
                 <path d="M3 19v1.5A1.5 1.5 0 004.5 22h15a1.5 1.5 0 001.5-1.5V19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="text-ink-muted"/>
             </svg>
         </div>
-        <p class="text-[15px] font-medium text-ink-primary mb-1">Glisser-déposer le CSV du jour</p>
+        <p class="text-[15px] font-medium text-ink-primary mb-1">Glisser-déposer le CSV du jour pour générer la dispo</p>
         <p class="text-sm text-ink-muted mb-4">ou cliquer pour sélectionner — un seul fichier, jusqu'à 20 Mo</p>
         <span class="inline-block bg-accent-soft border border-accent-soft-border text-warn px-3.5 py-1 rounded text-xs font-medium">
             Parcourir…
@@ -37,13 +37,13 @@
     @if ($csvFile)
         <div class="mt-6">
             <div class="flex items-center justify-between mb-3">
-                <div class="text-sm font-semibold text-ink-primary">Fichier prêt à générer</div>
+                <div class="text-sm font-semibold text-ink-primary">CSV prêt : générer la dispo</div>
                 <x-primary-button wire:click="submit" wire:loading.attr="disabled" wire:target="submit">
                     <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
                         <path d="M6.5 1L12 6.5 6.5 12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                         <path d="M1 6.5h11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                     </svg>
-                    Générer l'Excel
+                    Générer la dispo
                 </x-primary-button>
             </div>
             <x-card class="overflow-hidden">
@@ -63,7 +63,7 @@
 
     {{-- Historique --}}
     <div class="mt-10" wire:poll.3s>
-        <x-section-label class="mb-3">Historique des générations</x-section-label>
+        <x-section-label class="mb-3">Dispos générées</x-section-label>
         <x-card class="overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-[12px]">
@@ -74,7 +74,7 @@
                             <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Par</th>
                             <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Statut</th>
                             <th class="text-right px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Lignes</th>
-                            <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Excel</th>
+                            <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Dispo (Excel)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -108,7 +108,7 @@
                                 </td>
                                 <td class="px-4 py-2.5 text-xs">
                                     @if ($report->isDownloadable())
-                                        <a href="{{ route('excel-reports.download', $report) }}"
+                                        <a href="{{ route('bmn.download', $report) }}"
                                            class="font-mono text-[11px] text-accent hover:text-accent-pressed transition-colors">Télécharger ↓</a>
                                     @elseif ($report->status === 'error')
                                         <span class="font-mono text-[11px] text-danger" title="{{ $report->message }}">{{ \Illuminate\Support\Str::limit($report->message ?? 'Erreur', 60) }}</span>
@@ -120,7 +120,7 @@
                         @empty
                             <tr>
                                 <td colspan="6" class="px-4 py-12 text-center text-ink-muted text-sm">
-                                    Aucune génération pour le moment.
+                                    Aucune dispo générée pour le moment.
                                 </td>
                             </tr>
                         @endforelse
