@@ -20,7 +20,7 @@ it('renders the bmn page for an authenticated user', function () {
         ->get(route('bmn.index'))
         ->assertOk()
         ->assertSee('BMN')
-        ->assertSee('Génération de la dispo')
+        ->assertSee('Disponibilités')
         ->assertSeeLivewire(ExcelReportUploader::class);
 });
 
