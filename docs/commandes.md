@@ -834,8 +834,8 @@ Reference des variables principales du `.env`.
 | `SESSION_DRIVER` | `database` | `database` | Stockage des sessions |
 | `CACHE_STORE` | `database` | `database` ou `redis` | Stockage du cache |
 | `PIPELINE_PATH` | chemin absolu de `nh-pipeline` | idem | Pipeline XML (Symfony Process) |
-| `EXCEL_PIPELINE_PATH` | chemin absolu de `BMN` | idem | Script `daily_report.py` (onglet BMN / dispo) ; defaut `../BMN` (projet frere, comme nh-pipeline) |
-| `EXCEL_PIPELINE_PYTHON` | `python3` ou chemin du venv | idem | Interpreteur utilise pour l'onglet BMN (Windows : `C:\...\BMN\.venv\Scripts\python.exe`) |
+| `EXCEL_PIPELINE_PATH` | (vide) | (vide) | Dossier du script `daily_report.py` (onglet BMN / dispo) ; defaut `bmn/` du repo, a renseigner seulement si deplace |
+| `EXCEL_PIPELINE_PYTHON` | chemin absolu de `bmn/.venv/bin/python` | idem | Interpreteur utilise pour l'onglet BMN (Windows : `...\bmn\.venv\Scripts\python.exe`) |
 
 ---
 
@@ -1027,10 +1027,11 @@ Le dossier `logo/` a la racine du repo est **gitignore** (cf. `.gitignore`) — 
 
 ---
 
-## 13. Onglet BMN — generation de la dispo (CSV -> Excel via le projet BMN)
+## 13. Onglet BMN — generation de la dispo (CSV -> Excel via `bmn/`)
 
 Page `/bmn` (menu « BMN ») : l'utilisateur depose le CSV recu par mail, un job en queue appelle
-le script Python du projet **BMN** et la dispo generee (Excel) est telechargeable dans l'historique de la page.
+le script Python `bmn/daily_report.py` (sous-dossier du repo, pas de repo separe) et la dispo
+generee (Excel) est telechargeable dans l'historique de la page.
 
 ### Chaine
 
@@ -1047,22 +1048,23 @@ Le CSV de staging est supprime apres traitement, succes ou echec. Les Excel gene
 
 ### Prerequis serveur
 
-1. Le projet BMN est clone sur la meme machine, a cote de nh-web (`cAIman/BMN`, meme modele que `nh-pipeline`),
-   avec son venv et ses dependances (`pip install -r requirements.txt`).
-2. Le template Excel reel est dans `BMN/template/template.xlsx` et `BMN/config.py` contient le mapping valide
-   (`python check_setup.py` sans `[KO]`).
+1. Venv Python dans `bmn/` : `cd bmn && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`
+   (le `.venv` est ignore par git, a recreer sur chaque machine).
+2. Le template Excel reel est dans `bmn/template/template.xlsx` et `bmn/config.py` contient le mapping valide
+   (`python check_setup.py` sans `[KO]`). Voir `bmn/README.md`.
 3. `.env` :
    ```
-   EXCEL_PIPELINE_PATH=/chemin/absolu/BMN
-   EXCEL_PIPELINE_PYTHON=/chemin/absolu/BMN/.venv/bin/python
+   EXCEL_PIPELINE_PYTHON=/chemin/absolu/nh-web/bmn/.venv/bin/python
    ```
+   (`EXCEL_PIPELINE_PATH` inutile tant que le script reste dans `bmn/`)
 4. `php artisan migrate` (table `excel_reports`) et un worker de queue actif (`php artisan queue:work`).
 
 ### Tests
 
 ```bash
-EXCEL_PIPELINE_PYTHON=/chemin/BMN/.venv/bin/python vendor/bin/pest tests/Feature/ExcelReport* tests/Feature/GenerateExcelReportJobTest.php
+EXCEL_PIPELINE_PYTHON=$PWD/bmn/.venv/bin/python vendor/bin/pest tests/Feature/ExcelReport* tests/Feature/GenerateExcelReportJobTest.php
+cd bmn && .venv/bin/python -m pytest tests -q     # tests Python du script
 ```
 
-Les tests du job appellent le vrai script Python avec le CSV factice de BMN ; ils sont ignores si
+Les tests du job appellent le vrai script Python avec le CSV factice ; ils sont ignores si
 `EXCEL_PIPELINE_PATH` ne pointe pas sur un dossier contenant `daily_report.py`.

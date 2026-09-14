@@ -49,16 +49,9 @@ Browser  ──HTTP──▶  Laravel  ──Job/queue──▶  Python pipeline
                   PostgreSQL  ◀───────ingest─────────┘
 ```
 
-Meme modele pour l'onglet **BMN** : `GenerateExcelReportJob` execute `daily_report.py --json-output`
-du projet frere `BMN` (variable `EXCEL_PIPELINE_PATH`) et stocke la dispo generee dans
-`storage/app/excel-reports/`.
-
-```
-cAIman/
-├── nh-web/         # cette app Laravel
-├── nh-pipeline/    # pipeline XML (Python)
-└── BMN/            # generation de la dispo CSV -> Excel (Python)
-```
+Meme modele pour l'onglet **BMN** : `GenerateExcelReportJob` execute `bmn/daily_report.py --json-output`
+(script Python embarque dans ce repo, dossier `bmn/`, venv local ignore par git) et stocke la dispo
+generee dans `storage/app/excel-reports/`. Voir `bmn/README.md`.
 
 Voir `docs/ARCHITECTURE.md` pour le detail.
 

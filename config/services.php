@@ -39,9 +39,9 @@ return [
         'path' => env('PIPELINE_PATH', base_path('..')),
     ],
 
-    // Script Python BMN (daily_report.py) : génération de l'Excel quotidien à partir d'un CSV.
+    // Script Python bmn/daily_report.py : génération de la dispo (Excel) à partir d'un CSV.
     'excel_pipeline' => [
-        'path' => env('EXCEL_PIPELINE_PATH', base_path('../BMN')),
+        'path' => env('EXCEL_PIPELINE_PATH', base_path('bmn')),
         'python' => env('EXCEL_PIPELINE_PYTHON', 'python3'),
     ],
 
