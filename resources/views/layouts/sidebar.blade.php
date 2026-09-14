@@ -5,14 +5,8 @@
         [
             'route' => 'machines.index',
             'label' => 'Machines',
-            'prefixes' => ['machines.', 'flights.'],
+            'prefixes' => ['machines.', 'flights.', 'upload.'],  // page Upload accessible depuis Machines, plus d'entrée de menu dédiée
             'icon' => '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="3" width="5" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="1" width="5" height="11" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M6 8h3" stroke="currentColor" stroke-width="1.3"/></svg>',
-        ],
-        [
-            'route' => 'upload.index',
-            'label' => 'Upload',
-            'prefixes' => ['upload.'],
-            'icon' => '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1.5V10M4.5 4.5l3-3 3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M2 11v2a.5.5 0 00.5.5h10a.5.5 0 00.5-.5v-2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
         ],
         [
             'route' => 'imports.index',
