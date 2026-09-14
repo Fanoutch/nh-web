@@ -834,7 +834,7 @@ Reference des variables principales du `.env`.
 | `SESSION_DRIVER` | `database` | `database` | Stockage des sessions |
 | `CACHE_STORE` | `database` | `database` ou `redis` | Stockage du cache |
 | `PIPELINE_PATH` | chemin absolu de `nh-pipeline` | idem | Pipeline XML (Symfony Process) |
-| `EXCEL_PIPELINE_PATH` | chemin absolu de `BMN` | idem | Script `daily_report.py` (onglet BMN / dispo) ; defaut `../../BMN` |
+| `EXCEL_PIPELINE_PATH` | chemin absolu de `BMN` | idem | Script `daily_report.py` (onglet BMN / dispo) ; defaut `../BMN` (projet frere, comme nh-pipeline) |
 | `EXCEL_PIPELINE_PYTHON` | `python3` ou chemin du venv | idem | Interpreteur utilise pour l'onglet BMN (Windows : `C:\...\BMN\.venv\Scripts\python.exe`) |
 
 ---
@@ -1047,7 +1047,8 @@ Le CSV de staging est supprime apres traitement, succes ou echec. Les Excel gene
 
 ### Prerequis serveur
 
-1. Le projet BMN est clone sur la meme machine, avec son venv et ses dependances (`pip install -r requirements.txt`).
+1. Le projet BMN est clone sur la meme machine, a cote de nh-web (`cAIman/BMN`, meme modele que `nh-pipeline`),
+   avec son venv et ses dependances (`pip install -r requirements.txt`).
 2. Le template Excel reel est dans `BMN/template/template.xlsx` et `BMN/config.py` contient le mapping valide
    (`python check_setup.py` sans `[KO]`).
 3. `.env` :
