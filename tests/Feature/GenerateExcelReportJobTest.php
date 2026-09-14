@@ -30,7 +30,7 @@ it('generates an excel from a csv via the real python script', function () {
     file_put_contents($staging, fakeBmnCsv());
     $report = ExcelReport::create(['user_id' => $user->id, 'filename' => 'rapport_2026-09-14.csv', 'status' => 'pending']);
 
-    (new GenerateExcelReportJob($report->id, $staging))->handle(app(ExcelPipelineRunner::class));
+    (new GenerateExcelReportJob($report->id, $staging))->handle(app(ExcelPipelineRunner::class), app(\App\Services\ExcelReportPurger::class));
 
     $report->refresh();
     expect($report->status)->toBe('ok', 'message: ' . $report->message)
@@ -52,7 +52,7 @@ it('records a readable error when the csv does not match the mapping', function 
     file_put_contents($staging, "foo;bar\n1;2\n");
     $report = ExcelReport::create(['user_id' => $user->id, 'filename' => 'mauvais.csv', 'status' => 'pending']);
 
-    (new GenerateExcelReportJob($report->id, $staging))->handle(app(ExcelPipelineRunner::class));
+    (new GenerateExcelReportJob($report->id, $staging))->handle(app(ExcelPipelineRunner::class), app(\App\Services\ExcelReportPurger::class));
 
     $report->refresh();
     expect($report->status)->toBe('error')
@@ -68,7 +68,7 @@ it('marks the report as error when the script path is invalid', function () {
     file_put_contents($staging, "a;b\n1;2\n");
     $report = ExcelReport::create(['user_id' => $user->id, 'filename' => 'x.csv', 'status' => 'pending']);
 
-    (new GenerateExcelReportJob($report->id, $staging))->handle(app(ExcelPipelineRunner::class));
+    (new GenerateExcelReportJob($report->id, $staging))->handle(app(ExcelPipelineRunner::class), app(\App\Services\ExcelReportPurger::class));
 
     $report->refresh();
     expect($report->status)->toBe('error')

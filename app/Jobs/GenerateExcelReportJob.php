@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\ExcelReport;
 use App\Services\ExcelPipelineRunner;
+use App\Services\ExcelReportPurger;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -21,7 +22,7 @@ class GenerateExcelReportJob implements ShouldQueue
         return storage_path('app/excel-reports');
     }
 
-    public function handle(ExcelPipelineRunner $runner): void
+    public function handle(ExcelPipelineRunner $runner, ExcelReportPurger $purger): void
     {
         $report = ExcelReport::findOrFail($this->reportId);
         $report->update(['status' => 'processing']);
@@ -42,6 +43,7 @@ class GenerateExcelReportJob implements ShouldQueue
                     'rows_written' => (int) $result['rows_written'],
                     'message' => null,
                 ]);
+                $purger->purge();
             } else {
                 $report->update([
                     'status' => 'error',

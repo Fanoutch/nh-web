@@ -32,6 +32,9 @@
     @if ($notice)
         <p class="mt-3 text-sm text-ok">{{ $notice }}</p>
     @endif
+    @error('delete')
+        <p class="mt-3 text-sm text-danger">{{ $message }}</p>
+    @enderror
 
     {{-- Fichier en attente --}}
     @if ($csvFile)
@@ -75,6 +78,7 @@
                             <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Statut</th>
                             <th class="text-right px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Lignes</th>
                             <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Dispo (Excel)</th>
+                            <th class="px-4 py-2.5"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -116,10 +120,17 @@
                                         <span class="text-ink-muted">—</span>
                                     @endif
                                 </td>
+                                <td class="px-4 py-2.5 text-right">
+                                    @if ($this->canDelete($report) && !in_array($report->status, ['pending', 'processing'], true))
+                                        <button type="button" wire:click="delete({{ $report->id }})"
+                                                wire:confirm="Supprimer « {{ $report->filename }} » et son Excel de l'historique ?"
+                                                class="text-ink-muted hover:text-danger transition-colors text-sm leading-none" title="Supprimer">×</button>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="px-4 py-12 text-center text-ink-muted text-sm">
+                                <td colspan="7" class="px-4 py-12 text-center text-ink-muted text-sm">
                                     Aucune dispo générée pour le moment.
                                 </td>
                             </tr>

@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Jobs\GenerateExcelReportJob;
 use App\Models\ExcelReport;
+use App\Services\ExcelReportPurger;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -70,6 +71,27 @@ class ExcelReportUploader extends Component
 
         $this->csvFile = null;
         $this->notice = "« {$originalName} » envoyé : génération de la dispo en cours.";
+    }
+
+    public function canDelete(ExcelReport $report): bool
+    {
+        $user = auth()->user();
+        return $user !== null && ($report->user_id === $user->id || $user->isAdmin());
+    }
+
+    public function delete(int $reportId, ExcelReportPurger $purger): void
+    {
+        $report = ExcelReport::find($reportId);
+        if ($report === null) {
+            return;
+        }
+        abort_unless($this->canDelete($report), 403);
+        if (in_array($report->status, ['pending', 'processing'], true)) {
+            $this->addError('delete', 'Impossible de supprimer une génération en cours.');
+            return;
+        }
+        $purger->deleteReport($report);
+        $this->notice = "« {$report->filename} » supprimé de l'historique.";
     }
 
     public function render()

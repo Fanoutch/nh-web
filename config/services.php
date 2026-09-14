@@ -43,6 +43,8 @@ return [
     'excel_pipeline' => [
         'path' => env('EXCEL_PIPELINE_PATH', base_path('bmn')),
         'python' => env('EXCEL_PIPELINE_PYTHON', 'python3'),
+        // Rétention des dispos générées (jours). 0 = pas de purge.
+        'retention_days' => (int) env('EXCEL_REPORTS_RETENTION_DAYS', 30),
     ],
 
 ];

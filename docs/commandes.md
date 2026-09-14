@@ -836,6 +836,7 @@ Reference des variables principales du `.env`.
 | `PIPELINE_PATH` | chemin absolu de `nh-pipeline` | idem | Pipeline XML (Symfony Process) |
 | `EXCEL_PIPELINE_PATH` | (vide) | (vide) | Dossier du script `daily_report.py` (onglet BMN / dispo) ; defaut `bmn/` du repo, a renseigner seulement si deplace |
 | `EXCEL_PIPELINE_PYTHON` | chemin absolu de `bmn/.venv/bin/python` | idem | Interpreteur utilise pour l'onglet BMN (Windows : `...\bmn\.venv\Scripts\python.exe`) |
+| `EXCEL_REPORTS_RETENTION_DAYS` | `30` | `30` | Retention des dispos generees (jours) ; `0` = jamais purge |
 
 ---
 
@@ -1043,8 +1044,17 @@ Livewire ExcelReportUploader  ->  storage/app/staging/<uniqid>_<nom>.csv
                               ->  status ok (+ output_path) ou error (+ message lisible)
 ```
 
-Le CSV de staging est supprime apres traitement, succes ou echec. Les Excel generes restent dans
-`storage/app/excel-reports/` (a purger periodiquement si besoin, cf. « Liberer de l'espace disque »).
+Le CSV de staging est supprime apres traitement, succes ou echec. Les Excel generes sont stockes dans
+`storage/app/excel-reports/`.
+
+### Retention et suppression
+
+- **Purge automatique** : les dispos plus anciennes que `EXCEL_REPORTS_RETENTION_DAYS` (30 j par defaut)
+  sont supprimees, fichier compris. Declenchee apres chaque generation reussie (aucun cron necessaire)
+  et planifiee a 03:00 via `routes/console.php` si `php artisan schedule:run` tourne en cron.
+- **A la main** : `php artisan bmn:purge` ou `php artisan bmn:purge --days=7`.
+- **Depuis la page** : bouton « × » en bout de ligne, visible pour l'auteur du depot et les admins,
+  avec confirmation. Une generation en cours ne peut pas etre supprimee.
 
 ### Prerequis serveur
 
