@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Models\Secteur;
 use App\Models\User;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -103,9 +104,41 @@ class AdminUsersTable extends Component
         );
     }
 
+    public function setRoleSecteur(int $userId, int $secteurId, string $role): void
+    {
+        if (!auth()->user()->isSuperAdmin()) {
+            session()->flash('error', 'Seul un super admin peut modifier les rôles de secteur.');
+            return;
+        }
+
+        $user = User::findOrFail($userId);
+
+        if ($user->id === auth()->id()) {
+            session()->flash('error', 'Vous ne pouvez pas modifier vos propres rôles de secteur.');
+            return;
+        }
+
+        if (!in_array($role, ['aucun', Secteur::ROLE_UTILISATEUR, Secteur::ROLE_CHEF], true)) {
+            session()->flash('error', 'Rôle de secteur inconnu.');
+            return;
+        }
+
+        $secteur = Secteur::findOrFail($secteurId);
+
+        if ($role === 'aucun') {
+            $user->secteurs()->detach($secteur->id);
+            session()->flash('success', "{$user->name} n'a plus accès à {$secteur->nom}.");
+            return;
+        }
+
+        $user->secteurs()->syncWithoutDetaching([$secteur->id => ['role' => $role]]);
+        session()->flash('success', "{$user->name} est maintenant {$role} {$secteur->nom}.");
+    }
+
     public function render()
     {
-        $query = User::orderByDesc('is_super_admin')
+        $query = User::with('secteurs')
+            ->orderByDesc('is_super_admin')
             ->orderByDesc('is_admin')
             ->orderByDesc('is_personnel_navigant')
             ->orderBy('id');
@@ -120,6 +153,9 @@ class AdminUsersTable extends Component
             $query->where(function ($q) {
                 $q->where('is_admin', true)->orWhere('is_super_admin', true);
             });
+        } elseif (str_starts_with($this->roleFilter, 'secteur-')) {
+            $secteurId = (int) substr($this->roleFilter, strlen('secteur-'));
+            $query->whereHas('secteurs', fn ($q) => $q->where('secteurs.id', $secteurId));
         }
 
         if ($this->search !== '') {
@@ -133,6 +169,7 @@ class AdminUsersTable extends Component
         return view('livewire.admin-users-table', [
             'users' => $query->paginate(20),
             'currentIsSuperAdmin' => auth()->user()->isSuperAdmin(),
+            'secteurs' => Secteur::orderBy('nom')->get(),
         ]);
     }
 }

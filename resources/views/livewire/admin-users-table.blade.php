@@ -35,7 +35,7 @@
 
     <div class="flex items-center gap-2 text-[12px]">
         <span class="text-ink-muted">Filtre :</span>
-        @foreach (['all' => 'Tous', 'technicien' => 'Techniciens', 'pn' => 'Personnel Navigant', 'admin' => 'Admins'] as $key => $label)
+        @foreach (['all' => 'Tous', 'technicien' => 'Techniciens', 'pn' => 'Personnel Navigant', 'admin' => 'Admins'] + $secteurs->mapWithKeys(fn ($s) => ['secteur-' . $s->id => $s->nom])->all() as $key => $label)
             <button wire:click="$set('roleFilter', '{{ $key }}')"
                     class="px-2.5 py-1 rounded border {{ $roleFilter === $key ? 'bg-accent text-white border-accent' : 'bg-app-elevated border-app-border text-ink-secondary hover:border-accent' }} transition">
                 {{ $label }}
@@ -52,6 +52,7 @@
                         <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Nom</th>
                         <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Email</th>
                         <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted w-40">Statut</th>
+                        <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted w-48">Secteurs</th>
                         <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted w-72">Actions</th>
                     </tr>
                 </thead>
@@ -81,6 +82,23 @@
                                             Technicien
                                         </span>
                                     @endif
+                                </div>
+                            </td>
+                            <td class="px-4 py-2.5">
+                                <div class="flex flex-col gap-1">
+                                    @foreach ($secteurs as $s)
+                                        @php $roleSecteur = $u->secteurs->firstWhere('id', $s->id)?->pivot->role ?? 'aucun'; @endphp
+                                        <label class="flex items-center gap-2 text-[11px]" wire:key="user-{{ $u->id }}-secteur-{{ $s->id }}">
+                                            <span class="font-mono text-ink-secondary min-w-12">{{ $s->nom }}</span>
+                                            <select wire:change="setRoleSecteur({{ $u->id }}, {{ $s->id }}, $event.target.value)"
+                                                    @disabled(!$currentIsSuperAdmin || $u->id === auth()->id())
+                                                    class="bg-app-elevated border border-app-border text-ink-primary rounded px-2 py-0.5 text-[11px] disabled:opacity-60">
+                                                <option value="aucun" @selected($roleSecteur === 'aucun')>Aucun</option>
+                                                <option value="utilisateur" @selected($roleSecteur === 'utilisateur')>Utilisateur</option>
+                                                <option value="chef" @selected($roleSecteur === 'chef')>Chef</option>
+                                            </select>
+                                        </label>
+                                    @endforeach
                                 </div>
                             </td>
                             <td class="px-4 py-2.5">
@@ -131,7 +149,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="px-4 py-12 text-center text-ink-muted text-sm">
+                            <td colspan="6" class="px-4 py-12 text-center text-ink-muted text-sm">
                                 Aucun utilisateur trouvé.
                             </td>
                         </tr>
