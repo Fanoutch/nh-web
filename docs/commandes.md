@@ -1121,3 +1121,4 @@ App\Models\Secteur::create(['slug' => 'nouveau', 'nom' => 'Nouveau']);          
 2. Le super admin attribue les roles BMN (chef / utilisateur) aux personnes qui utilisaient l'onglet BMN :
    **sans role, elles n'ont plus acces a la generation de dispo.**
 3. Si les caches sont actifs : `php artisan route:clear && php artisan view:clear`
+4. `php artisan queue:restart` (ou redemarrer le service worker)
