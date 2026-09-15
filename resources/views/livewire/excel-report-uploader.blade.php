@@ -1,4 +1,5 @@
 <div>
+    @if ($this->peutGerer())
     {{-- Drop zone --}}
     <label for="csvFileInput"
            class="block bg-app-card border-2 border-dashed border-app-border rounded-xl p-12 text-center cursor-pointer hover:border-accent hover:bg-accent-soft transition-colors">
@@ -28,6 +29,7 @@
     @error('csvFile')
         <p class="mt-3 text-sm text-danger">{{ $message }}</p>
     @enderror
+    @endif
 
     @if ($notice)
         <p class="mt-3 text-sm text-ok">{{ $notice }}</p>
@@ -37,7 +39,7 @@
     @enderror
 
     {{-- Fichier en attente --}}
-    @if ($csvFile)
+    @if ($csvFile && $this->peutGerer())
         <div class="mt-6">
             <div class="flex items-center justify-between mb-3">
                 <div class="text-sm font-semibold text-ink-primary">CSV prêt : générer la dispo</div>
@@ -91,7 +93,7 @@
                                 <td class="px-4 py-2.5 text-xs text-ink-secondary">{{ $report->user?->name ?? '—' }}</td>
                                 <td class="px-4 py-2.5 text-xs">
                                     @if ($report->isDownloadable())
-                                        <a href="{{ route('bmn.download', $report) }}"
+                                        <a href="{{ route('secteurs.disponibilites.download', [$secteur, $report]) }}"
                                            class="font-mono text-[11px] text-accent hover:text-accent-pressed transition-colors">Télécharger ↓</a>
                                     @elseif ($report->status === 'error')
                                         <span class="font-mono text-[11px] text-danger" title="{{ $report->message }}">{{ \Illuminate\Support\Str::limit($report->message ?? 'Erreur', 60) }}</span>

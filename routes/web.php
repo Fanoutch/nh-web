@@ -36,10 +36,10 @@ Route::middleware(['auth'])->group(function () {
     // Upload / Imports / Dashboards
     Route::view('/upload', 'upload')->name('upload.index');
     Route::view('/imports', 'imports')->name('imports.index');
-    Route::view('/bmn', 'bmn')->name('bmn.index');
-    Route::get('/bmn/{report}/telecharger', [ExcelReportController::class, 'download'])
-        ->name('bmn.download');
     Route::view('/dashboards', 'dashboards')->name('dashboards.index');
+
+    // Ancienne adresse de l'onglet BMN (favoris)
+    Route::permanentRedirect('/bmn', '/secteurs/bmn/disponibilites');
 
     // Secteurs (droits : App\Policies\SecteurPolicy ; {secteur} = slug)
     Route::get('/secteurs', [SecteurController::class, 'index'])->name('secteurs.index');
@@ -49,6 +49,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('secteurs.disponibilites')->can('consulterDispos', 'secteur');
     Route::get('/secteurs/{secteur}/assistant', [SecteurController::class, 'assistant'])
         ->name('secteurs.assistant')->can('view', 'secteur');
+    Route::get('/secteurs/{secteur}/disponibilites/{report}/telecharger', [ExcelReportController::class, 'download'])
+        ->name('secteurs.disponibilites.download')->can('consulterDispos', 'secteur');
 
     // Profil (existant Breeze)
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

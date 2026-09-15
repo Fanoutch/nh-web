@@ -84,3 +84,11 @@ it('shows the Secteurs menu entry only to users with an accessible secteur', fun
     $this->actingAs($membre)->get(route('machines.index'))->assertSee(route('secteurs.index'));
     $this->actingAs($personne)->get(route('machines.index'))->assertDontSee(route('secteurs.index'));
 });
+
+it('permanently redirects the old /bmn address', function () {
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+
+    $this->actingAs($user)->get('/bmn')
+        ->assertStatus(301)
+        ->assertRedirect('/secteurs/bmn/disponibilites');
+});

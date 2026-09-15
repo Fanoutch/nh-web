@@ -4,17 +4,21 @@ namespace App\Livewire;
 
 use App\Jobs\GenerateExcelReportJob;
 use App\Models\ExcelReport;
+use App\Models\Secteur;
 use App\Services\ExcelReportPurger;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
 /**
- * Onglet « BMN » : dépôt du CSV du jour, génération de la dispo (Excel) + historique (tous utilisateurs).
+ * Onglet « Disponibilités » d'un secteur : dépôt du CSV du jour, génération de la dispo (Excel)
+ * + historique du secteur. Déposer / supprimer : ability gererDispos (chef ou admin).
  */
 class ExcelReportUploader extends Component
 {
     use WithFileUploads;
+
+    public Secteur $secteur;
 
     /** @var \Livewire\Features\SupportFileUploads\TemporaryUploadedFile|null */
     public $csvFile = null;
@@ -38,6 +42,11 @@ class ExcelReportUploader extends Component
         ];
     }
 
+    public function peutGerer(): bool
+    {
+        return auth()->user()?->can('gererDispos', $this->secteur) ?? false;
+    }
+
     public function updatedCsvFile(): void
     {
         $this->notice = null;
@@ -52,6 +61,7 @@ class ExcelReportUploader extends Component
 
     public function submit(): void
     {
+        abort_unless($this->peutGerer(), 403);
         $this->validate();
 
         $originalName = $this->csvFile->getClientOriginalName();
@@ -62,7 +72,7 @@ class ExcelReportUploader extends Component
         );
         $absolute = Storage::disk('local')->path($path);
 
-        $report = ExcelReport::create([
+        $report = $this->secteur->excelReports()->create([
             'user_id' => auth()->id(),
             'filename' => $originalName,
             'status' => 'pending',
@@ -75,13 +85,12 @@ class ExcelReportUploader extends Component
 
     public function canDelete(ExcelReport $report): bool
     {
-        $user = auth()->user();
-        return $user !== null && ($report->user_id === $user->id || $user->isAdmin());
+        return $report->secteur_id === $this->secteur->id && $this->peutGerer();
     }
 
     public function delete(int $reportId, ExcelReportPurger $purger): void
     {
-        $report = ExcelReport::find($reportId);
+        $report = $this->secteur->excelReports()->find($reportId);
         if ($report === null) {
             return;
         }
@@ -97,7 +106,7 @@ class ExcelReportUploader extends Component
     public function render()
     {
         return view('livewire.excel-report-uploader', [
-            'reports' => ExcelReport::with('user')->orderByDesc('id')->limit(100)->get(),
+            'reports' => $this->secteur->excelReports()->with('user')->orderByDesc('id')->limit(100)->get(),
         ]);
     }
 }
