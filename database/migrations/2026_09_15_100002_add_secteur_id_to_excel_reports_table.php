@@ -11,7 +11,7 @@ return new class extends Migration
     {
         Schema::table('excel_reports', function (Blueprint $table) {
             $table->foreignId('secteur_id')->nullable()->after('user_id')
-                ->constrained('secteurs')->cascadeOnDelete();
+                ->constrained('secteurs')->restrictOnDelete();
         });
 
         // Les dispos générées avant l'espace Secteurs appartiennent à BMN.

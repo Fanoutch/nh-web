@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\ExcelReport;
+use App\Models\Secteur;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -24,4 +25,12 @@ it('requires a secteur on every dispo', function () {
     $user = User::factory()->create();
 
     ExcelReport::create(['user_id' => $user->id, 'filename' => 'x.csv', 'status' => 'pending']);
+})->throws(QueryException::class);
+
+it('restricts deleting a secteur that still has a dispo', function () {
+    $user = User::factory()->create();
+    $test = Secteur::create(['slug' => 'test', 'nom' => 'Test']);
+    ExcelReport::create(['user_id' => $user->id, 'secteur_id' => $test->id, 'filename' => 'x.csv', 'status' => 'pending']);
+
+    $test->delete();
 })->throws(QueryException::class);

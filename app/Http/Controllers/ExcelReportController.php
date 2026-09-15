@@ -11,7 +11,7 @@ class ExcelReportController extends Controller
     /** Accès vérifié sur la route (consulterDispos) ; la dispo doit appartenir au secteur de l'URL. */
     public function download(Secteur $secteur, ExcelReport $report): BinaryFileResponse
     {
-        abort_unless($report->secteur_id === $secteur->id, 404, 'Dispo introuvable dans ce secteur.');
+        abort_unless($report->secteur()->is($secteur), 404, 'Dispo introuvable dans ce secteur.');
         abort_unless($report->isDownloadable(), 404, 'Dispo non disponible.');
 
         return response()->download(

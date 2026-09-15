@@ -47,6 +47,18 @@ class ExcelReportUploader extends Component
         return auth()->user()?->can('gererDispos', $this->secteur) ?? false;
     }
 
+    /** Re-vérifie l'accès à chaque hydratation (poll, action...) : un rôle retiré ferme l'onglet sans attendre un reload. */
+    public function hydrate(): void
+    {
+        abort_unless(auth()->user()?->can('consulterDispos', $this->secteur), 403);
+    }
+
+    /** Empêche de déposer un fichier via le cycle d'upload même si la drop zone est masquée côté vue. */
+    public function updatingCsvFile(): void
+    {
+        abort_unless(auth()->user()?->can('gererDispos', $this->secteur), 403);
+    }
+
     public function updatedCsvFile(): void
     {
         $this->notice = null;
@@ -83,9 +95,10 @@ class ExcelReportUploader extends Component
         $this->notice = "« {$originalName} » envoyé : génération de la dispo en cours.";
     }
 
+    /** Utilisé uniquement côté serveur par delete() : la vue reçoit $peutGerer, calculé une seule fois par render(). */
     public function canDelete(ExcelReport $report): bool
     {
-        return $report->secteur_id === $this->secteur->id && $this->peutGerer();
+        return $report->secteur()->is($this->secteur) && $this->peutGerer();
     }
 
     public function delete(int $reportId, ExcelReportPurger $purger): void
@@ -107,6 +120,7 @@ class ExcelReportUploader extends Component
     {
         return view('livewire.excel-report-uploader', [
             'reports' => $this->secteur->excelReports()->with('user')->orderByDesc('id')->limit(100)->get(),
+            'peutGerer' => $this->peutGerer(),
         ]);
     }
 }

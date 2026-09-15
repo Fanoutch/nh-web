@@ -1,5 +1,5 @@
 <div>
-    @if ($this->peutGerer())
+    @if ($peutGerer)
     {{-- Drop zone --}}
     <label for="csvFileInput"
            class="block bg-app-card border-2 border-dashed border-app-border rounded-xl p-12 text-center cursor-pointer hover:border-accent hover:bg-accent-soft transition-colors">
@@ -39,7 +39,7 @@
     @enderror
 
     {{-- Fichier en attente --}}
-    @if ($csvFile && $this->peutGerer())
+    @if ($csvFile && $peutGerer)
         <div class="mt-6">
             <div class="flex items-center justify-between mb-3">
                 <div class="text-sm font-semibold text-ink-primary">CSV prêt : générer la dispo</div>
@@ -102,7 +102,7 @@
                                     @endif
                                 </td>
                                 <td class="px-4 py-2.5 text-right">
-                                    @if ($this->canDelete($report) && !in_array($report->status, ['pending', 'processing'], true))
+                                    @if ($peutGerer && !in_array($report->status, ['pending', 'processing'], true))
                                         <button type="button" wire:click="delete({{ $report->id }})"
                                                 wire:confirm="Supprimer « {{ $report->filename }} » et son Excel de l'historique ?"
                                                 class="text-ink-muted hover:text-danger transition-colors text-sm leading-none" title="Supprimer">×</button>

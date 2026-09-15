@@ -19,10 +19,11 @@ it('lets a super admin make a user chef, then utilisateur, then remove access', 
     expect($u->roleDans($bmn))->toBe('chef');
     $step1->assertSee('Jean Test est maintenant chef BMN.');
 
-    Livewire::actingAs($sa)->test(AdminUsersTable::class)
+    $step2 = Livewire::actingAs($sa)->test(AdminUsersTable::class)
         ->call('setRoleSecteur', $u->id, $bmn->id, 'utilisateur');
     expect($u->roleDans($bmn))->toBe('utilisateur')
         ->and($u->secteurs()->count())->toBe(1);
+    $step2->assertSee('Jean Test est maintenant utilisateur BMN.');
 
     $step3 = Livewire::actingAs($sa)->test(AdminUsersTable::class)
         ->call('setRoleSecteur', $u->id, $bmn->id, 'aucun');
@@ -34,10 +35,11 @@ it('refuses a simple admin', function () {
     $admin = User::factory()->create(['is_admin' => true]);
     $u = User::factory()->create();
 
-    Livewire::actingAs($admin)->test(AdminUsersTable::class)
+    $result = Livewire::actingAs($admin)->test(AdminUsersTable::class)
         ->call('setRoleSecteur', $u->id, secteurBmn()->id, 'chef');
 
     expect($u->roleDans(secteurBmn()))->toBeNull();
+    $result->assertSee('Seul un super admin peut modifier les rôles de secteur.');
 });
 
 it('refuses to change your own secteur roles', function () {
