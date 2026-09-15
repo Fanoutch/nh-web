@@ -1,7 +1,16 @@
 @php
     $active = request()->route()?->getName() ?? '';
+    $user = auth()->user();
 
-    $baseLinks = [
+    // Entrée « Secteurs » : seulement si au moins un secteur est accessible (admins : tous).
+    $secteursLink = ($user && $user->secteursAccessibles()->isNotEmpty()) ? [[
+        'route' => 'secteurs.index',
+        'label' => 'Secteurs',
+        'prefixes' => ['secteurs.'],
+        'icon' => '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="2" y="1.5" width="11" height="12" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M2 5h11M2 8.5h11M6 5v8.5" stroke="currentColor" stroke-width="1.3"/></svg>',
+    ]] : [];
+
+    $baseLinks = array_merge([
         [
             'route' => 'machines.index',
             'label' => 'Machines',
@@ -14,22 +23,16 @@
             'prefixes' => ['imports.'],
             'icon' => '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M7.5 4v4l2.5 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
         ],
-        [
-            'route' => 'bmn.index',
-            'label' => 'BMN',
-            'prefixes' => ['bmn.'],
-            'icon' => '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="2" y="1.5" width="11" height="12" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M2 5h11M2 8.5h11M6 5v8.5" stroke="currentColor" stroke-width="1.3"/></svg>',
-        ],
+    ], $secteursLink, [
         [
             'route' => 'dashboards.index',
             'label' => 'Dashboards',
             'prefixes' => ['dashboards.'],
             'icon' => '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1.5" y="8" width="3" height="5.5" rx="0.5" stroke="currentColor" stroke-width="1.3"/><rect x="6" y="5" width="3" height="8.5" rx="0.5" stroke="currentColor" stroke-width="1.3"/><rect x="10.5" y="2" width="3" height="11.5" rx="0.5" stroke="currentColor" stroke-width="1.3"/></svg>',
         ],
-    ];
+    ]);
 
     $processingCount = \App\Models\Import::where('status', 'processing')->count();
-    $user = auth()->user();
 
     $pnLink = ($user?->isPersonnelNavigant() || $user?->isAdmin()) ? [[
         'route' => 'personnel-navigant.index',

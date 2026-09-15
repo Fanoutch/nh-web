@@ -6,6 +6,7 @@ use App\Http\Controllers\MachineController;
 use App\Http\Controllers\NonVolController;
 use App\Http\Controllers\PersonnelNavigantController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SecteurController;
 use Illuminate\Support\Facades\Route;
 
 // Racine -> redirige vers /machines si connecte, /login sinon
@@ -39,6 +40,15 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/bmn/{report}/telecharger', [ExcelReportController::class, 'download'])
         ->name('bmn.download');
     Route::view('/dashboards', 'dashboards')->name('dashboards.index');
+
+    // Secteurs (droits : App\Policies\SecteurPolicy ; {secteur} = slug)
+    Route::get('/secteurs', [SecteurController::class, 'index'])->name('secteurs.index');
+    Route::get('/secteurs/{secteur}', [SecteurController::class, 'show'])
+        ->name('secteurs.show')->can('view', 'secteur');
+    Route::get('/secteurs/{secteur}/disponibilites', [SecteurController::class, 'disponibilites'])
+        ->name('secteurs.disponibilites')->can('consulterDispos', 'secteur');
+    Route::get('/secteurs/{secteur}/assistant', [SecteurController::class, 'assistant'])
+        ->name('secteurs.assistant')->can('view', 'secteur');
 
     // Profil (existant Breeze)
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
