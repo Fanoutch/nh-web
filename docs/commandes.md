@@ -836,7 +836,7 @@ Reference des variables principales du `.env`.
 | `SESSION_DRIVER` | `database` | `database` | Stockage des sessions |
 | `CACHE_STORE` | `database` | `database` ou `redis` | Stockage du cache |
 | `PIPELINE_PATH` | chemin absolu de `nh-pipeline` | idem | Pipeline XML (Symfony Process) |
-| `EXCEL_PIPELINE_PATH` | (vide) | (vide) | Dossier du script `daily_report.py` (onglet BMN / dispo) ; defaut `bmn/` du repo, a renseigner seulement si deplace |
+| `EXCEL_PIPELINE_PATH` | (vide) | (vide) | Dossier du script `daily_report.py` (secteur BMN, onglet Disponibilites) ; defaut `bmn/` du repo, a renseigner seulement si deplace |
 | `EXCEL_PIPELINE_PYTHON` | chemin absolu de `bmn/.venv/bin/python` | idem | Interpreteur utilise pour l'onglet BMN (Windows : `...\bmn\.venv\Scripts\python.exe`) |
 | `EXCEL_REPORTS_RETENTION_DAYS` | `30` | `30` | Retention des dispos generees (jours) ; `0` = jamais purge |
 
