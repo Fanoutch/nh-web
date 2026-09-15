@@ -18,7 +18,9 @@ les pannes detectees par la pipeline Python [`nh-pipeline`](../nh-pipeline).
 - **Gestion des comptes** via `/admin/users` (creation, promotion, suppression, toggle Personnel Navigant — admin/super admin)
 - **Portail Personnel Navigant** (`/personnel-navigant`) : acces dedie equipages (flag `is_personnel_navigant`) — liste des machines, vols simplifies (date / DSN / duree / info) et validation des pannes
 - **Audit log** `/admin/audit-log` (super admin) : tracage des modifications metier + erreurs pipeline (Spatie ActivityLog)
-- **BMN — dispo** (`/bmn`) : depot du CSV quotidien, generation de la dispo (Excel) via le script Python BMN (formules du template preservees), historique + telechargement
+- **Secteurs** (`/secteurs`) : choix du secteur puis ses outils, roles chef / utilisateur par secteur (geres par le super admin dans `/admin/users`)
+  - **BMN — Disponibilites** (`/secteurs/bmn/disponibilites`) : depot du CSV quotidien, generation de la dispo (Excel) via le script Python BMN (formules du template preservees), historique + telechargement
+  - **BMN — Assistant IA** (`/secteurs/bmn/assistant`) : bientot disponible
 - Page profil `/profile` : modif infos, mot de passe, suppression de compte
 - Auth Laravel Breeze (login / register / password reset)
 

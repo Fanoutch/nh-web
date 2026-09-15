@@ -18,6 +18,8 @@ Reference complete des commandes Laravel, serveur et deploiement. Source de veri
 10. [Troubleshooting](#10-troubleshooting)
 11. [Dependances et separation des repos](#11-dependances-et-separation-des-repos)
 12. [Changement de logo](#12-changement-de-logo)
+13. [Secteur BMN — generation de la dispo](#13-secteur-bmn--generation-de-la-dispo-csv---excel-via-bmn)
+14. [Secteurs — profils chef / utilisateur](#14-secteurs--profils-chef--utilisateur)
 
 ---
 
@@ -1028,9 +1030,10 @@ Le dossier `logo/` a la racine du repo est **gitignore** (cf. `.gitignore`) — 
 
 ---
 
-## 13. Onglet BMN — generation de la dispo (CSV -> Excel via `bmn/`)
+## 13. Secteur BMN — generation de la dispo (CSV -> Excel via `bmn/`)
 
-Page `/bmn` (menu « BMN ») : l'utilisateur depose le CSV recu par mail, un job en queue appelle
+Page `/secteurs/bmn/disponibilites` (menu « Secteurs » -> BMN -> onglet Disponibilites ; l'ancienne adresse `/bmn`
+redirige ici). Acces : membres du secteur BMN et admins (voir section 14). Le chef (ou un admin) depose le CSV recu par mail, un job en queue appelle
 le script Python `bmn/daily_report.py` (sous-dossier du repo, pas de repo separe) et la dispo
 generee (Excel) est telechargeable dans l'historique de la page.
 
@@ -1053,8 +1056,8 @@ Le CSV de staging est supprime apres traitement, succes ou echec. Les Excel gene
   sont supprimees, fichier compris. Declenchee apres chaque generation reussie (aucun cron necessaire)
   et planifiee a 03:00 via `routes/console.php` si `php artisan schedule:run` tourne en cron.
 - **A la main** : `php artisan bmn:purge` ou `php artisan bmn:purge --days=7`.
-- **Depuis la page** : bouton « × » en bout de ligne, visible pour l'auteur du depot et les admins,
-  avec confirmation. Une generation en cours ne peut pas etre supprimee.
+- **Depuis la page** : bouton « × » en bout de ligne, visible pour les chefs du secteur et les admins,
+  avec confirmation. Une generation en cours ne peut pas etre supprimee. Un utilisateur simple consulte et telecharge seulement.
 
 ### Prerequis serveur
 
@@ -1067,7 +1070,7 @@ Le CSV de staging est supprime apres traitement, succes ou echec. Les Excel gene
    EXCEL_PIPELINE_PYTHON=/chemin/absolu/nh-web/bmn/.venv/bin/python
    ```
    (`EXCEL_PIPELINE_PATH` inutile tant que le script reste dans `bmn/`)
-4. `php artisan migrate` (table `excel_reports`) et un worker de queue actif (`php artisan queue:work`).
+4. `php artisan migrate` (tables `excel_reports`, `secteurs`, `secteur_user`) et un worker de queue actif (`php artisan queue:work`).
 
 ### Tests
 
@@ -1078,3 +1081,43 @@ cd bmn && .venv/bin/python -m pytest tests -q     # tests Python du script
 
 Les tests du job appellent le vrai script Python avec le CSV factice ; ils sont ignores si
 `EXCEL_PIPELINE_PATH` ne pointe pas sur un dossier contenant `daily_report.py`.
+
+---
+
+## 14. Secteurs — profils chef / utilisateur
+
+Menu « Secteurs » -> choix du secteur -> page du secteur a onglets (BMN : Disponibilites, Assistant IA).
+
+| Action | Utilisateur | Chef | Admin / super admin |
+|---|---|---|---|
+| Voir le secteur, consulter et telecharger les dispos | oui | oui | oui (tous les secteurs) |
+| Generer / supprimer une dispo | non | oui | oui |
+
+- Un compte peut etre membre de plusieurs secteurs, avec un role par secteur.
+- **Attribuer un role** : page « Utilisateurs » (`/admin/users`), colonne « Secteurs » -> Aucun / Utilisateur / Chef.
+  Reserve au super admin, jamais sur son propre compte. Filtre « BMN » pour lister les membres.
+- Le secteur BMN est cree par la migration `create_secteurs_table`.
+
+### Via tinker
+
+```bash
+php artisan tinker
+```
+
+```php
+$bmn = App\Models\Secteur::where('slug', 'bmn')->first();
+$u = App\Models\User::where('email', 'prenom.nom@exemple.fr')->first();
+
+$u->secteurs()->syncWithoutDetaching([$bmn->id => ['role' => 'chef']]);          // ou 'utilisateur'
+$u->secteurs()->detach($bmn->id);                                                 // retirer l'acces
+App\Models\User::whereHas('secteurs', fn ($q) => $q->where('slug', 'bmn'))->get(['name', 'email']);
+
+App\Models\Secteur::create(['slug' => 'nouveau', 'nom' => 'Nouveau']);           // creer un secteur (slug = URL)
+```
+
+### Mise en service apres deploiement
+
+1. `php artisan migrate`
+2. Le super admin attribue les roles BMN (chef / utilisateur) aux personnes qui utilisaient l'onglet BMN :
+   **sans role, elles n'ont plus acces a la generation de dispo.**
+3. Si les caches sont actifs : `php artisan route:clear && php artisan view:clear`
