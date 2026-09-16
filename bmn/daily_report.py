@@ -254,6 +254,24 @@ def _valeur_renseignee(valeur) -> bool:
                 or str(valeur).strip() == "")
 
 
+def _cible_colonne(champ: str, reglage) -> tuple[str, list[str]]:
+    """Une colonne de liste : « champ: "L" », ou « champ: {colonne, champs} ».
+
+    La seconde forme permet un repli : on prend le premier champ renseigné,
+    par exemple le libellé de la source, sinon celui produit par le LLM.
+    """
+    if isinstance(reglage, dict):
+        return reglage["colonne"], list(reglage.get("champs") or [champ])
+    return reglage, [champ]
+
+
+def _premiere_valeur(entree: pd.Series, champs: list[str]):
+    for champ in champs:
+        if champ in entree.index and _valeur_renseignee(entree[champ]):
+            return entree[champ]
+    return None
+
+
 def fill_blocs(ws: Worksheet, df: pd.DataFrame, conf: dict | None = None) -> tuple[int, int]:
     """Remplit un bloc par machine. Retourne (cellules écrites, lignes de liste écrites)."""
     conf = conf or config.BLOCS
@@ -313,17 +331,21 @@ def _ecrire_listes(ws: Worksheet, base: int, machine: str, lignes: pd.DataFrame,
         premier = base + reglage["decalage"]
         places = reglage["emplacements"]
 
+        cibles = [_cible_colonne(champ, reglage_colonne)
+                  for champ, reglage_colonne in reglage["colonnes"].items()]
+
         if conf.get("vider_avant_ecriture") and len(entrees):
             for i in range(places):
-                for colonne in reglage["colonnes"].values():
+                for colonne, _ in cibles:
                     write_value(ws, f"{colonne}{premier + i}", None)
 
         for i, (_, entree) in enumerate(entrees.iterrows()):
             if i >= places:
                 break
-            for champ, colonne in reglage["colonnes"].items():
-                if champ in entree.index and _valeur_renseignee(entree[champ]):
-                    write_value(ws, f"{colonne}{premier + i}", entree[champ])
+            for colonne, champs in cibles:
+                valeur = _premiere_valeur(entree, champs)
+                if valeur is not None:
+                    write_value(ws, f"{colonne}{premier + i}", valeur)
             ecrites += 1
 
         if len(entrees) > places:
@@ -331,6 +353,22 @@ def _ecrire_listes(ws: Worksheet, base: int, machine: str, lignes: pd.DataFrame,
                         "n'a que %d emplacement(s)",
                         machine, len(entrees) - places, nom_zone.upper(), places)
     return ecrites
+
+
+def _lignes_a_interroger(df: pd.DataFrame, conf: dict) -> pd.DataFrame:
+    """Sous-ensemble des lignes envoyées au modèle (filtre de config.LLM).
+
+    Sans filtre, toutes les lignes. Avec `{"champ": "zone", "valeurs": ["hil"]}`,
+    seules les lignes HIL, qui seules ont besoin d'un libellé d'équipement.
+    """
+    filtre = conf.get("filtre") or {}
+    champ = filtre.get("champ")
+    if not champ or champ not in df.columns:
+        return df
+    attendues = {str(v).strip().casefold() for v in filtre.get("valeurs", [])}
+    garder = df[champ].map(
+        lambda v: _valeur_renseignee(v) and str(v).strip().casefold() in attendues)
+    return df[garder]
 
 
 def enrichir_avec_llm(df: pd.DataFrame) -> pd.DataFrame:
@@ -351,8 +389,13 @@ def enrichir_avec_llm(df: pd.DataFrame) -> pd.DataFrame:
 
     import llm_client  # import tardif : le pipeline tourne sans lui si inactif
 
+    concernees = _lignes_a_interroger(df, conf)
+    if not len(concernees):
+        log.info("LLM : aucune ligne à interroger")
+        return df
+
     echecs = 0
-    for index, ligne in df.iterrows():
+    for index, ligne in concernees.iterrows():
         try:
             reponse = llm_client.extraire_equipement(ligne.to_dict(), conf)
         except llm_client.LlmError as exc:
@@ -364,7 +407,7 @@ def enrichir_avec_llm(df: pd.DataFrame) -> pd.DataFrame:
         for champ, valeur in reponse.items():
             df.at[index, f"{config.LLM_PREFIXE}{champ}"] = valeur
 
-    traitees = len(df) - echecs
+    traitees = len(concernees) - echecs
     log.info("LLM : %d ligne(s) enrichie(s), %d échec(s)", traitees, echecs)
     return df
 

@@ -44,9 +44,16 @@ def construire_messages(enregistrement: dict, conf: dict) -> list[dict]:
     charge = selectionner_champs(enregistrement, conf.get("champs_envoyes") or [])
     contenu = json.dumps(charge, ensure_ascii=False, indent=2, default=str)
     return [
-        {"role": "system", "content": conf["prompt_systeme"]},
+        {"role": "system", "content": _prompt_systeme(conf)},
         {"role": "user", "content": conf["gabarit_utilisateur"].format(enregistrement=contenu)},
     ]
+
+
+def _prompt_systeme(conf: dict) -> str:
+    """Prompt système, avec les exemples de libellés qui calent le style."""
+    exemples = conf.get("exemples") or []
+    return conf["prompt_systeme"].format(
+        exemples=", ".join(f"« {e} »" for e in exemples) or "aucun")
 
 
 def selectionner_champs(enregistrement: dict, champs: list) -> dict:

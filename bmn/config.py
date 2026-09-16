@@ -142,8 +142,15 @@ BLOCS: dict = {
 
     # Listes : decalage = première ligne du bloc, emplacements = capacité
     "listes": {
+        # Pour HIL, le libellé d'équipement est produit par le LLM à partir des
+        # textes « travail demandé / effectué » : on prend le champ de la source
+        # s'il est renseigné, sinon la réponse du modèle (premier non vide).
         "hil": {"decalage": 6, "emplacements": 6,
-                "colonnes": {"date": "I", "equipement": "L", "ref": "R"}},
+                "colonnes": {
+                    "date": "I",
+                    "equipement": {"colonne": "L", "champs": ["equipement", "llm.equipement"]},
+                    "ref": "R",
+                }},
         "cil": {"decalage": 12, "emplacements": 5,
                 "colonnes": {"date": "I", "equipement": "L", "ref": "R"}},
     },
@@ -179,25 +186,46 @@ LLM: dict = {
     "timeout": 120,          # secondes, par ligne
     "temperature": 0,        # 0 = réponse la plus stable
 
-    # Champs du CSV envoyés au modèle. Liste vide = la ligne entière.
-    "champs_envoyes": [],
+    # N'interroger le modèle que sur certaines lignes (économise les appels).
+    # Ici : uniquement les lignes HIL, qui seules ont besoin d'un libellé.
+    "filtre": {"champ": "zone", "valeurs": ["hil"]},
+
+    # Champs de la source envoyés au modèle. Liste vide = la ligne entière.
+    "champs_envoyes": ["travail_demande", "travail_effectue"],
+
+    # Exemples de libellés tels qu'ils sont saisis à la main dans la dispo :
+    # ils servent à caler le style de la réponse (longueur, ton, abréviations).
+    "exemples": [
+        "PDU (P)",
+        "Engine Anti Icing",
+        "ECS (PP)",
+        "Tactical RADAR",
+        "RHEAS",
+    ],
 
     # Champs attendus en retour -> colonnes llm.equipement, llm.indice, ...
+    # `equipement` est celui qui est écrit dans la colonne HIL du template.
     "champs_produits": ["equipement", "indice", "justification"],
 
     "prompt_systeme": (
-        "Tu es un assistant de maintenance aéronautique. À partir d'un enregistrement "
-        "de panne, tu identifies l'équipement incriminé. Tu réponds UNIQUEMENT par un "
-        "objet JSON valide, sans texte autour, sans bloc de code, avec exactement les "
-        "clés suivantes :\n"
-        '{"equipement": "nom de l\'équipement", "indice": "haut|moyen|faible", '
-        '"justification": "une phrase courte"}\n'
-        'Si l\'enregistrement ne permet pas de conclure, réponds '
-        '{"equipement": "indetermine", "indice": "faible", "justification": "..."}.'
+        "Tu es technicien de maintenance aéronautique et tu remplis le tableau de "
+        "disponibilité de la flottille. À partir du travail demandé et du travail "
+        "effectué sur un aéronef, tu identifies l'ÉQUIPEMENT incriminé, celui qui a "
+        "justifié la mise en HIL.\n"
+        "Tu écris ce libellé comme un technicien le saisirait à la main : court "
+        "(quelques mots), sans phrase, sans verbe, en gardant les abréviations "
+        "métier et la mention entre parenthèses quand elle existe. Exemples de "
+        "libellés déjà saisis : {exemples}.\n"
+        "Tu réponds UNIQUEMENT par un objet JSON valide, sans texte autour, sans "
+        "bloc de code, avec exactement ces clés :\n"
+        '{{"equipement": "libellé court", "indice": "haut|moyen|faible", '
+        '"justification": "une phrase courte"}}\n'
+        'Si le texte ne permet pas d\'identifier l\'équipement, réponds '
+        '{{"equipement": "indetermine", "indice": "faible", "justification": "..."}}.'
     ),
     "gabarit_utilisateur": (
-        "Enregistrement à analyser :\n\n{enregistrement}\n\n"
-        "Quel équipement est incriminé ?"
+        "Travail demandé et travail effectué :\n\n{enregistrement}\n\n"
+        "Quel équipement a été mis en HIL ?"
     ),
 }
 

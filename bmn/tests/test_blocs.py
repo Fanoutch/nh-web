@@ -5,6 +5,7 @@ intitulés en colonne AQ / valeurs en AU, listes HIL et CIL en I / L / R,
 et une colonne calculée qui ne doit jamais être écrasée.
 """
 import json
+import sys
 from datetime import date, datetime
 
 import pandas as pd
@@ -225,3 +226,57 @@ def test_process_accepte_un_json(blocs_actifs, tmp_path):
     assert ws["AU10"].value == 2581.73
     assert ws["L15"].value == "PDU (P)"
     assert ws["I15"].value == datetime(2026, 3, 27)     # date, pas texte
+
+
+# ---------------------------------------------------------------------------
+# Libellé HIL produit par le LLM
+# ---------------------------------------------------------------------------
+def test_colonne_avec_repli_prend_le_llm_si_la_source_est_vide(blocs_actifs):
+    df = donnees([
+        {"machine": "NH01", "zone": "hil", "date": date(2026, 1, 1),
+         "equipement": None, "llm.equipement": "PDU (P)", "ref": "X1"},
+        {"machine": "NH01", "zone": "hil", "date": date(2026, 1, 2),
+         "equipement": "saisi à la main", "llm.equipement": "ignoré", "ref": "X2"},
+    ])
+    wb = load_workbook(config.TEMPLATE_PATH)
+    dr.fill_blocs(wb["DISPO"], df)
+
+    ws = wb["DISPO"]
+    assert ws["L15"].value == "PDU (P)"           # repli sur la réponse du modèle
+    assert ws["L16"].value == "saisi à la main"   # la source prime
+
+
+def test_le_llm_nest_interroge_que_sur_les_lignes_hil(blocs_actifs, monkeypatch):
+    appels = []
+
+    class FauxClient:
+        LlmError = RuntimeError
+
+        @staticmethod
+        def extraire_equipement(enregistrement, conf):
+            appels.append(enregistrement)
+            return {"equipement": "PDU (P)", "indice": "haut", "justification": "x"}
+
+    monkeypatch.setitem(sys.modules, "llm_client", FauxClient)
+    monkeypatch.setattr(config, "LLM", dict(config.LLM, actif=True, hors_ligne=False,
+                                            filtre={"champ": "zone", "valeurs": ["hil"]}))
+    df = donnees([
+        {"machine": "NH01", "zone": None, "fh": 10},
+        {"machine": "NH01", "zone": "hil", "travail_demande": "vibration PDU",
+         "travail_effectue": "dépose PDU"},
+        {"machine": "NH01", "zone": "cil", "travail_demande": "autre"},
+    ])
+    resultat = dr.enrichir_avec_llm(df)
+
+    assert len(appels) == 1                                   # une seule ligne envoyée
+    assert "vibration PDU" in str(appels[0])
+    assert list(resultat["llm.equipement"]) == ["", "PDU (P)", ""]
+
+
+def test_le_prompt_reprend_les_exemples_de_style(blocs_actifs):
+    import llm_client
+    conf = dict(config.LLM, exemples=["PDU (P)", "RHEAS"])
+    messages = llm_client.construire_messages(
+        {"travail_demande": "x", "travail_effectue": "y"}, conf)
+    assert "PDU (P)" in messages[0]["content"] and "RHEAS" in messages[0]["content"]
+    assert "{exemples}" not in messages[0]["content"]
