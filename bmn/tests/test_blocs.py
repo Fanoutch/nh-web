@@ -282,3 +282,9 @@ def test_le_prompt_reprend_les_exemples_de_style(blocs_actifs):
     assert "{exemples}" not in messages[0]["content"]
     assert "SAISIES HUMAINES" in messages[0]["content"]      # le modèle est prévenu
     assert "NOM DE LA PIÈCE" in messages[0]["content"]       # et sait quoi rendre
+
+
+def test_source_sans_colonne_machine_donne_une_erreur_claire(blocs_actifs):
+    wb = load_workbook(config.TEMPLATE_PATH)
+    with pytest.raises(dr.MissingColumnsError, match="machine"):
+        dr.fill_blocs(wb["DISPO"], donnees([{"fh": 1}]))
