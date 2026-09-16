@@ -2,9 +2,11 @@
 from datetime import date
 
 import pytest
+from openpyxl import load_workbook
 
 import config
 import check_setup
+import explore_template as et
 import inspect_csv
 import make_fixtures as mf
 
@@ -63,3 +65,25 @@ def test_inspect_csv_cp1252_comma(tmp_path, capsys):
     assert inspect_csv.main([str(p)]) == 0
     out = capsys.readouterr().out
     assert "cp1252" in out and '"sep": \',\'' in out and '"decimal": \',\'' in out
+
+
+def test_scan_sheet_supporte_les_cellules_fusionnees(tmp_path):
+    """Un template avec fusions ne doit pas faire planter l'exploration."""
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws["A1"] = "Titre"
+    ws.merge_cells("A1:C2")
+    ws["D1"] = 3
+    ws["E1"] = "=D1*2"
+    chemin = tmp_path / "fusions.xlsx"
+    wb.save(chemin)
+
+    df = et.scan_sheet(load_workbook(chemin, data_only=False).active)
+
+    assert set(df.kind) >= {"merged", "input", "formula"}
+    fusionnees = df[df.kind == "merged"]
+    assert not fusionnees.empty
+    assert fusionnees.coord.str.match(r"^[A-Z]+\d+$").all()
+    assert (fusionnees.col != "").all()

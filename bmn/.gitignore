@@ -10,3 +10,6 @@ data/archive/*
 data/incoming/*
 !data/incoming/.gitkeep
 *.zip
+
+# Réglages LLM locaux (contiennent la clé d'API) : jamais dans git
+llm.env

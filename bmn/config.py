@@ -86,8 +86,150 @@ CLEAR_TABLE_BEFORE_WRITE = True
 
 
 def required_csv_columns() -> set[str]:
-    """Colonnes CSV attendues, déduites des deux mappings."""
-    return set(CELL_MAPPING) | set(TABLE_MAPPING["columns"])
+    """Colonnes CSV attendues, déduites des deux mappings.
+
+    Les colonnes `llm.*` sont produites par le modèle (cf. LLM ci-dessous),
+    elles ne sont donc pas attendues dans le CSV.
+    """
+    toutes = set(CELL_MAPPING) | set(TABLE_MAPPING["columns"])
+    return {c for c in toutes if not str(c).startswith(LLM_PREFIXE)}
+
+
+# ---------------------------------------------------------------------------
+# Remplissage par blocs machine (template « dispo »)
+# ---------------------------------------------------------------------------
+# Le template de dispo ne se remplit pas comme un tableau plat : il répète un
+# BLOC par machine (NH01, NH02, ...), toujours organisé pareil. On repère les
+# blocs par le nom de machine écrit en colonne A, puis on écrit à des
+# décalages fixes à l'intérieur du bloc.
+#
+# Deux sortes de cibles :
+#   - « valeurs » : repérées par leur INTITULÉ dans le template (colonne AQ),
+#     la valeur allant dans la colonne d'à côté (AU). Repérer par intitulé
+#     plutôt que par position protège des écarts entre machines (FIAA, RTRBK,
+#     Cable RHA... ne sont pas sur toutes) et d'une ligne insérée un jour.
+#   - « listes » : n emplacements consécutifs (HIL, CIL), chaque ligne portant
+#     plusieurs colonnes (date, équipement, référence).
+#
+# La source (CSV ou JSON) fournit, par machine : le nom de la machine, ses
+# compteurs, et ses lignes HIL / CIL. Voir `SOURCE_*` ci-dessous.
+BLOCS: dict = {
+    "actif": False,              # True = remplissage par blocs au lieu du tableau plat
+    "feuille": "DISPO",          # onglet contenant les blocs
+    "colonne_machine": "A",      # colonne où est écrit NH01, NH02, ...
+    "motif_machine": r"NH\s?\d+",
+
+    # Champs de la source
+    "champ_machine": "machine",  # colonne/clé portant NH01, NH02, ...
+    "champ_zone": "zone",        # colonne/clé valant "hil" ou "cil" (vide = ligne de compteurs)
+
+    # Valeurs repérées par intitulé : champ de la source -> intitulé du template
+    "valeurs": {
+        "colonne_libelle": "AQ",
+        "colonne_valeur": "AU",
+        "champs": {
+            "fh": "FH",
+            "att": "ATT",
+            "treuil": "TREUI",
+            "apu_oph": "APU OPH",
+            "apu_opc": "APU OPC",
+            # "fiaa": "FIAA",            # seulement 10 machines sur 26
+            # "rtrbk": "RTRBK",          # absent de certaines machines
+            # "cable_rha": "Cable RHA",
+            # "drum_cable": "Drum & Cable",
+        },
+    },
+
+    # Listes : decalage = première ligne du bloc, emplacements = capacité
+    "listes": {
+        # Pour HIL, le libellé d'équipement est produit par le LLM à partir des
+        # textes « travail demandé / effectué » : on prend le champ de la source
+        # s'il est renseigné, sinon la réponse du modèle (premier non vide).
+        "hil": {"decalage": 6, "emplacements": 6,
+                "colonnes": {
+                    "date": "I",
+                    "equipement": {"colonne": "L", "champs": ["equipement", "llm.equipement"]},
+                    "ref": "R",
+                }},
+        "cil": {"decalage": 12, "emplacements": 5,
+                "colonnes": {"date": "I", "equipement": "L", "ref": "R"}},
+    },
+
+    # Champs à convertir en vraies dates Excel (et non en texte).
+    "champs_dates": ["date"],
+
+    # Vider les emplacements d'une machine avant d'y écrire (évite qu'une
+    # ancienne ligne subsiste sous les nouvelles).
+    "vider_avant_ecriture": True,
+}
+
+
+# ---------------------------------------------------------------------------
+# Extraction par un LLM (équipement incriminé)
+# ---------------------------------------------------------------------------
+# Les champs produits par le modèle deviennent des colonnes `llm.<champ>`,
+# utilisables dans CELL_MAPPING / TABLE_MAPPING comme une colonne du CSV :
+#     TABLE_MAPPING["columns"]["llm.equipement"] = "F"
+#
+# Tant que `actif` est False, aucun appel n'est fait et ces colonnes restent
+# vides : le pipeline se comporte exactement comme avant.
+LLM_PREFIXE = "llm."
+
+LLM: dict = {
+    "actif": False,          # True = interroger le modèle pour chaque ligne
+    "hors_ligne": False,     # True = réponse simulée, pratique pour tester
+
+    # Service : Ollama http://127.0.0.1:11434/v1 | LM Studio http://127.0.0.1:1234/v1
+    "base_url": "http://127.0.0.1:11434/v1",
+    "modele": "A_DEFINIR",   # nom exact du modèle tel que le service l'expose
+    "cle_api": "",           # si le service en demande une
+    "timeout": 120,          # secondes, par ligne
+    "temperature": 0,        # 0 = réponse la plus stable
+
+    # N'interroger le modèle que sur certaines lignes (économise les appels).
+    # Ici : uniquement les lignes HIL, qui seules ont besoin d'un libellé.
+    "filtre": {"champ": "zone", "valeurs": ["hil"]},
+
+    # Champs de la source envoyés au modèle. Liste vide = la ligne entière.
+    "champs_envoyes": ["travail_demande", "travail_effectue"],
+
+    # Exemples de libellés tels qu'ils sont saisis à la main dans la dispo :
+    # ils servent à caler le style de la réponse (longueur, ton, abréviations).
+    "exemples": [
+        "PDU (P)",
+        "Engine Anti Icing",
+        "ECS (PP)",
+        "Tactical RADAR",
+        "RHEAS",
+    ],
+
+    # Champs attendus en retour -> colonnes llm.equipement, llm.indice, ...
+    # `equipement` est celui qui est écrit dans la colonne HIL du template.
+    "champs_produits": ["equipement", "indice", "justification"],
+
+    "prompt_systeme": (
+        "Tu es technicien de maintenance aéronautique et tu remplis le tableau de "
+        "disponibilité de la flottille. Tu reçois le « travail demandé » et le "
+        "« travail effectué » d'une intervention. Ce sont des SAISIES HUMAINES "
+        "brutes : style télégraphique, abréviations, fautes de frappe, majuscules "
+        "aléatoires, et le plus souvent une mention du type « mise en HIL <pièce> ».\n"
+        "Tu en extrais UNIQUEMENT LE NOM DE LA PIÈCE incriminée, celle qui justifie "
+        "la mise en HIL, tel qu'il doit apparaître dans le tableau de dispo : "
+        "quelques mots, sans phrase, sans verbe, sans « mise en HIL », en gardant "
+        "les abréviations métier et la mention entre parenthèses quand elle existe. "
+        "Exemples de noms de pièce tels qu'ils figurent dans le tableau : {exemples}.\n"
+        "Tu réponds UNIQUEMENT par un objet JSON valide, sans texte autour, sans "
+        "bloc de code, avec exactement ces clés :\n"
+        '{{"equipement": "libellé court", "indice": "haut|moyen|faible", '
+        '"justification": "une phrase courte"}}\n'
+        'Si le texte ne permet pas d\'identifier l\'équipement, réponds '
+        '{{"equipement": "indetermine", "indice": "faible", "justification": "..."}}.'
+    ),
+    "gabarit_utilisateur": (
+        "Travail demandé et travail effectué :\n\n{enregistrement}\n\n"
+        "Quel équipement a été mis en HIL ?"
+    ),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -112,3 +254,49 @@ EXIT_CODE_ERROR = 1
 LOG_FILE = LOG_DIR / "daily_report.log"
 LOG_MAX_BYTES = 2_000_000
 LOG_BACKUP_COUNT = 5
+
+
+# ---------------------------------------------------------------------------
+# Réglages LLM locaux : bmn/llm.env (voir llm.env.example)
+# ---------------------------------------------------------------------------
+# Adresse, modèle, clé... sont lus dans ce fichier, ignoré par git, pour que le
+# passage d'un LLM à un autre (ici / au bureau) ne touche jamais au code.
+# Priorité : variables d'environnement > llm.env > valeurs par défaut ci-dessus.
+LLM_ENV_FILE = BASE_DIR / "llm.env"
+
+_LLM_ENV_CLES = {
+    "LLM_ACTIF": ("actif", lambda v: v.strip().lower() in ("1", "true", "oui", "yes")),
+    "LLM_BASE_URL": ("base_url", str),
+    "LLM_MODELE": ("modele", str),
+    "LLM_CLE_API": ("cle_api", str),
+    "LLM_TIMEOUT": ("timeout", lambda v: int(float(v))),
+    "LLM_TEMPERATURE": ("temperature", float),
+}
+
+
+def lire_llm_env(chemin: Path | None = None, environ=None) -> dict:
+    """Lit les réglages LLM (fichier KEY=VALUE, puis variables d'environnement)."""
+    import os
+
+    chemin = chemin or LLM_ENV_FILE
+    environ = os.environ if environ is None else environ
+    brut: dict[str, str] = {}
+    if chemin.exists():
+        for ligne in chemin.read_text(encoding="utf-8-sig").splitlines():
+            ligne = ligne.strip()
+            if not ligne or ligne.startswith("#") or "=" not in ligne:
+                continue
+            cle, valeur = ligne.split("=", 1)
+            brut[cle.strip()] = valeur.strip().strip('"').strip("'")
+    for cle in _LLM_ENV_CLES:
+        if environ.get(cle):
+            brut[cle] = environ[cle]
+
+    reglages = {}
+    for cle, (champ, convertir) in _LLM_ENV_CLES.items():
+        if brut.get(cle, "") != "":
+            reglages[champ] = convertir(brut[cle])
+    return reglages
+
+
+LLM.update(lire_llm_env())
