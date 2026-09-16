@@ -106,3 +106,11 @@ def test_le_modele_de_reglage_est_fourni():
     for cle in ("DISPO_TEMPLATE", "DISPO_BLOCS_ACTIF",
                 "LLM_ACTIF", "LLM_BASE_URL", "LLM_MODELE", "LLM_CLE_API"):
         assert cle in contenu
+
+
+def test_les_tests_ignorent_les_reglages_locaux():
+    """Un reglages.env de poste (vrai template, blocs, LLM) ne doit pas fausser les tests."""
+    assert config.REGLAGES_FILE is None
+    assert config.BLOCS["actif"] is False
+    assert config.LLM["actif"] is False
+    assert config.TEMPLATE_PATH == config.BASE_DIR / "template" / "template.xlsx"
