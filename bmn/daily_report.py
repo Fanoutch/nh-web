@@ -305,6 +305,26 @@ def _premiere_valeur(entree: pd.Series, champs: list[str]):
     return None
 
 
+def supprimer_blocs_absents(ws: Worksheet, df: pd.DataFrame,
+                            conf: dict | None = None) -> int:
+    """Retire de la dispo les blocs des NH absentes de l'extraction. Retourne le nombre de lignes."""
+    import suppression_blocs as sb
+
+    conf = conf or config.BLOCS
+    presentes = {normaliser_machine(m) for m in df[conf["champ_machine"]]
+                 if _valeur_renseignee(m)}
+    lignes = sb.lignes_des_blocs_absents(
+        ws, presentes, hauteur=conf.get("hauteur_bloc", 24),
+        colonne_machine=conf["colonne_machine"], motif=conf["motif_machine"])
+    if not presentes:
+        log.warning("Aucune machine dans l'extraction : aucun bloc supprimé")
+        return 0
+    sb.supprimer_lignes(ws, lignes)
+    log.info("Blocs supprimés : %d ligne(s) retirée(s), machines conservées : %s",
+             len(lignes), ", ".join(sorted(presentes)))
+    return len(lignes)
+
+
 def fill_blocs(ws: Worksheet, df: pd.DataFrame, conf: dict | None = None) -> tuple[int, int]:
     """Remplit un bloc par machine. Retourne (cellules écrites, lignes de liste écrites)."""
     conf = conf or config.BLOCS
@@ -650,7 +670,10 @@ def process(csv_path: Path, *, dry_run: bool = False,
     df = enrichir_avec_llm(df)
     wb = load_template()
     if config.BLOCS.get("actif"):
-        n_cells, n_rows = fill_blocs(get_target_sheet(wb, config.BLOCS["feuille"]), df)
+        feuille = get_target_sheet(wb, config.BLOCS["feuille"])
+        n_cells, n_rows = fill_blocs(feuille, df)
+        if config.BLOCS.get("supprimer_absentes"):
+            supprimer_blocs_absents(feuille, df)
     else:
         n_cells, n_rows = fill_workbook(wb, df)
     out_path = build_output_path(csv_path, run_ts, output_dir=output_dir)
