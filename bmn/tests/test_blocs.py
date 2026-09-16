@@ -280,3 +280,5 @@ def test_le_prompt_reprend_les_exemples_de_style(blocs_actifs):
         {"travail_demande": "x", "travail_effectue": "y"}, conf)
     assert "PDU (P)" in messages[0]["content"] and "RHEAS" in messages[0]["content"]
     assert "{exemples}" not in messages[0]["content"]
+    assert "SAISIES HUMAINES" in messages[0]["content"]      # le modèle est prévenu
+    assert "NOM DE LA PIÈCE" in messages[0]["content"]       # et sait quoi rendre
