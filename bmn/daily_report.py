@@ -126,6 +126,70 @@ def load_csv(path: Path) -> pd.DataFrame:
     return df
 
 
+def load_source(path: Path) -> pd.DataFrame:
+    """Charge la source du jour : CSV, ou JSON (plat, imbriqué, ou JSON Lines)."""
+    if path.suffix.lower() in (".json", ".jsonl"):
+        return load_json(path)
+    return _convertir_dates(load_csv(path))
+
+
+def load_json(path: Path) -> pd.DataFrame:
+    """Aplati un JSON en lignes : une ligne de compteurs par machine, puis une
+    ligne par entrée de liste (HIL, CIL), repérée par la colonne « zone »."""
+    texte = path.read_text(encoding="utf-8-sig").strip()
+    try:
+        donnees = json.loads(texte)
+    except json.JSONDecodeError as exc:
+        try:
+            donnees = [json.loads(l) for l in texte.splitlines() if l.strip()]
+        except json.JSONDecodeError:
+            raise PipelineError(f"JSON illisible ({exc.msg}, ligne {exc.lineno}) : {path.name}")
+
+    enregistrements = _enregistrements_json(donnees)
+    conf = config.BLOCS
+    champ_machine, champ_zone = conf["champ_machine"], conf["champ_zone"]
+    zones = list(conf["listes"])
+
+    lignes: list[dict] = []
+    for enr in enregistrements:
+        if not isinstance(enr, dict):
+            continue
+        lignes.append({cle: val for cle, val in enr.items()
+                       if cle not in zones and not isinstance(val, (list, dict))})
+        for zone in zones:
+            for entree in enr.get(zone) or []:
+                if not isinstance(entree, dict):
+                    continue
+                ligne = {champ_machine: enr.get(champ_machine), champ_zone: zone}
+                ligne.update({c: v for c, v in entree.items()
+                              if not isinstance(v, (list, dict))})
+                lignes.append(ligne)
+
+    df = _convertir_dates(pd.DataFrame(lignes))
+    log.info("JSON chargé : %s (%d enregistrement(s) -> %d ligne(s))",
+             path.name, len(enregistrements), len(df))
+    return df
+
+
+def _enregistrements_json(donnees):
+    """Retrouve la liste d'enregistrements : racine, ou plus longue liste d'objets."""
+    if isinstance(donnees, list):
+        return donnees
+    if isinstance(donnees, dict):
+        listes = [v for v in donnees.values()
+                  if isinstance(v, list) and v and isinstance(v[0], dict)]
+        return max(listes, key=len) if listes else [donnees]
+    raise PipelineError("JSON inexploitable : ni liste, ni objet.")
+
+
+def _convertir_dates(df: pd.DataFrame) -> pd.DataFrame:
+    """Les champs de date deviennent de vraies dates (sinon Excel affiche du texte)."""
+    for champ in config.BLOCS.get("champs_dates", []):
+        if champ in df.columns:
+            df[champ] = pd.to_datetime(df[champ], errors="coerce", format="mixed")
+    return df
+
+
 def validate_columns(df: pd.DataFrame,
                      required: set[str] | None = None) -> None:
     required = required if required is not None else config.required_csv_columns()
@@ -140,6 +204,135 @@ def validate_columns(df: pd.DataFrame,
 # ---------------------------------------------------------------------------
 # 3. Template Excel
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 4 bis. Remplissage par blocs machine (template « dispo »)
+# ---------------------------------------------------------------------------
+def reperer_blocs(ws: Worksheet, conf: dict | None = None) -> dict[str, int]:
+    """Nom de machine -> première ligne de son bloc, lu en colonne A du template."""
+    conf = conf or config.BLOCS
+    motif = re.compile(conf["motif_machine"], re.IGNORECASE)
+    colonne = conf["colonne_machine"]
+    blocs: dict[str, int] = {}
+    for ligne in range(1, ws.max_row + 1):
+        valeur = ws[f"{colonne}{ligne}"].value
+        if isinstance(valeur, str) and motif.fullmatch(valeur.strip()):
+            blocs[normaliser_machine(valeur)] = ligne
+    return blocs
+
+
+def normaliser_machine(nom) -> str:
+    """« nh 01 » et « NH01 » désignent la même machine."""
+    return str(nom).replace(" ", "").upper()
+
+
+def trouver_ligne_intitule(ws: Worksheet, base: int, intitule: str,
+                           conf: dict) -> int | None:
+    """Ligne du bloc dont la colonne d'intitulés porte ce libellé."""
+    colonne = conf["valeurs"]["colonne_libelle"]
+    attendu = intitule.strip().casefold()
+    for ligne in range(base, base + config_pas_bloc(ws, base)):
+        valeur = ws[f"{colonne}{ligne}"].value
+        if isinstance(valeur, str) and valeur.strip().casefold() == attendu:
+            return ligne
+    return None
+
+
+def config_pas_bloc(ws: Worksheet, base: int) -> int:
+    """Hauteur d'un bloc : jusqu'au bloc suivant, sinon jusqu'au bas de la feuille."""
+    suivantes = [l for l in _lignes_blocs(ws) if l > base]
+    return (min(suivantes) - base) if suivantes else (ws.max_row - base + 1)
+
+
+def _lignes_blocs(ws: Worksheet) -> list[int]:
+    if not hasattr(ws, "_bmn_lignes_blocs"):
+        ws._bmn_lignes_blocs = sorted(reperer_blocs(ws).values())
+    return ws._bmn_lignes_blocs
+
+
+def _valeur_renseignee(valeur) -> bool:
+    return not (valeur is None or (isinstance(valeur, float) and pd.isna(valeur))
+                or str(valeur).strip() == "")
+
+
+def fill_blocs(ws: Worksheet, df: pd.DataFrame, conf: dict | None = None) -> tuple[int, int]:
+    """Remplit un bloc par machine. Retourne (cellules écrites, lignes de liste écrites)."""
+    conf = conf or config.BLOCS
+    blocs = reperer_blocs(ws, conf)
+    champ_machine, champ_zone = conf["champ_machine"], conf["champ_zone"]
+    if champ_machine not in df.columns:
+        raise ColonnesManquantesError(
+            f"Colonne « {champ_machine} » absente de la source : impossible de savoir "
+            "à quelle machine rattacher les données.")
+
+    n_cellules = n_lignes = 0
+    for machine, lignes in df.groupby(df[champ_machine].map(normaliser_machine), sort=False):
+        base = blocs.get(machine)
+        if base is None:
+            log.warning("Machine %s absente du template (%d ligne(s) ignorée(s))",
+                        machine, len(lignes))
+            continue
+        n_cellules += _ecrire_valeurs(ws, base, machine, lignes, conf, champ_zone)
+        n_lignes += _ecrire_listes(ws, base, machine, lignes, conf, champ_zone)
+
+    log.info("Blocs remplis : %d cellule(s), %d ligne(s) de liste", n_cellules, n_lignes)
+    return n_cellules, n_lignes
+
+
+def _ecrire_valeurs(ws: Worksheet, base: int, machine: str, lignes: pd.DataFrame,
+                    conf: dict, champ_zone: str) -> int:
+    """Compteurs repérés par leur intitulé (colonne AQ -> colonne AU)."""
+    colonne_valeur = conf["valeurs"]["colonne_valeur"]
+    ecrites = 0
+    for champ, intitule in conf["valeurs"]["champs"].items():
+        if champ not in lignes.columns:
+            continue
+        valeurs = [v for v in lignes[champ] if _valeur_renseignee(v)]
+        if not valeurs:
+            continue
+        ligne = trouver_ligne_intitule(ws, base, intitule, conf)
+        if ligne is None:
+            log.warning("Machine %s : intitulé « %s » absent de son bloc, %s non écrit",
+                        machine, intitule, champ)
+            continue
+        write_value(ws, f"{colonne_valeur}{ligne}", valeurs[0])
+        ecrites += 1
+    return ecrites
+
+
+def _ecrire_listes(ws: Worksheet, base: int, machine: str, lignes: pd.DataFrame,
+                   conf: dict, champ_zone: str) -> int:
+    """Listes HIL / CIL : n emplacements consécutifs, plusieurs colonnes par ligne."""
+    ecrites = 0
+    zones = lignes[champ_zone] if champ_zone in lignes.columns else None
+    for nom_zone, reglage in conf["listes"].items():
+        if zones is None:
+            entrees = lignes.iloc[0:0]
+        else:
+            entrees = lignes[zones.map(
+                lambda v: _valeur_renseignee(v) and str(v).strip().casefold() == nom_zone)]
+        premier = base + reglage["decalage"]
+        places = reglage["emplacements"]
+
+        if conf.get("vider_avant_ecriture") and len(entrees):
+            for i in range(places):
+                for colonne in reglage["colonnes"].values():
+                    write_value(ws, f"{colonne}{premier + i}", None)
+
+        for i, (_, entree) in enumerate(entrees.iterrows()):
+            if i >= places:
+                break
+            for champ, colonne in reglage["colonnes"].items():
+                if champ in entree.index and _valeur_renseignee(entree[champ]):
+                    write_value(ws, f"{colonne}{premier + i}", entree[champ])
+            ecrites += 1
+
+        if len(entrees) > places:
+            log.warning("Machine %s : %d ligne(s) %s laissée(s) de côté, le template "
+                        "n'a que %d emplacement(s)",
+                        machine, len(entrees) - places, nom_zone.upper(), places)
+    return ecrites
+
+
 def enrichir_avec_llm(df: pd.DataFrame) -> pd.DataFrame:
     """Ajoute les colonnes `llm.*` au tableau (vides si le LLM est inactif).
 
@@ -373,11 +566,15 @@ def process(csv_path: Path, *, dry_run: bool = False,
     `output_dir` : dossier de sortie, sinon config.OUTPUT_DIR.
     """
     run_ts = run_ts or datetime.now()
-    df = load_csv(csv_path)
-    validate_columns(df)
+    df = load_source(csv_path)
+    if not config.BLOCS.get("actif"):
+        validate_columns(df)
     df = enrichir_avec_llm(df)
     wb = load_template()
-    n_cells, n_rows = fill_workbook(wb, df)
+    if config.BLOCS.get("actif"):
+        n_cells, n_rows = fill_blocs(get_target_sheet(wb, config.BLOCS["feuille"]), df)
+    else:
+        n_cells, n_rows = fill_workbook(wb, df)
     out_path = build_output_path(csv_path, run_ts, output_dir=output_dir)
     save_workbook(wb, out_path)
     archived = None

@@ -96,6 +96,68 @@ def required_csv_columns() -> set[str]:
 
 
 # ---------------------------------------------------------------------------
+# Remplissage par blocs machine (template « dispo »)
+# ---------------------------------------------------------------------------
+# Le template de dispo ne se remplit pas comme un tableau plat : il répète un
+# BLOC par machine (NH01, NH02, ...), toujours organisé pareil. On repère les
+# blocs par le nom de machine écrit en colonne A, puis on écrit à des
+# décalages fixes à l'intérieur du bloc.
+#
+# Deux sortes de cibles :
+#   - « valeurs » : repérées par leur INTITULÉ dans le template (colonne AQ),
+#     la valeur allant dans la colonne d'à côté (AU). Repérer par intitulé
+#     plutôt que par position protège des écarts entre machines (FIAA, RTRBK,
+#     Cable RHA... ne sont pas sur toutes) et d'une ligne insérée un jour.
+#   - « listes » : n emplacements consécutifs (HIL, CIL), chaque ligne portant
+#     plusieurs colonnes (date, équipement, référence).
+#
+# La source (CSV ou JSON) fournit, par machine : le nom de la machine, ses
+# compteurs, et ses lignes HIL / CIL. Voir `SOURCE_*` ci-dessous.
+BLOCS: dict = {
+    "actif": False,              # True = remplissage par blocs au lieu du tableau plat
+    "feuille": "DISPO",          # onglet contenant les blocs
+    "colonne_machine": "A",      # colonne où est écrit NH01, NH02, ...
+    "motif_machine": r"NH\s?\d+",
+
+    # Champs de la source
+    "champ_machine": "machine",  # colonne/clé portant NH01, NH02, ...
+    "champ_zone": "zone",        # colonne/clé valant "hil" ou "cil" (vide = ligne de compteurs)
+
+    # Valeurs repérées par intitulé : champ de la source -> intitulé du template
+    "valeurs": {
+        "colonne_libelle": "AQ",
+        "colonne_valeur": "AU",
+        "champs": {
+            "fh": "FH",
+            "att": "ATT",
+            "treuil": "TREUI",
+            "apu_oph": "APU OPH",
+            "apu_opc": "APU OPC",
+            # "fiaa": "FIAA",            # seulement 10 machines sur 26
+            # "rtrbk": "RTRBK",          # absent de certaines machines
+            # "cable_rha": "Cable RHA",
+            # "drum_cable": "Drum & Cable",
+        },
+    },
+
+    # Listes : decalage = première ligne du bloc, emplacements = capacité
+    "listes": {
+        "hil": {"decalage": 6, "emplacements": 6,
+                "colonnes": {"date": "I", "equipement": "L", "ref": "R"}},
+        "cil": {"decalage": 12, "emplacements": 5,
+                "colonnes": {"date": "I", "equipement": "L", "ref": "R"}},
+    },
+
+    # Champs à convertir en vraies dates Excel (et non en texte).
+    "champs_dates": ["date"],
+
+    # Vider les emplacements d'une machine avant d'y écrire (évite qu'une
+    # ancienne ligne subsiste sous les nouvelles).
+    "vider_avant_ecriture": True,
+}
+
+
+# ---------------------------------------------------------------------------
 # Extraction par un LLM (équipement incriminé)
 # ---------------------------------------------------------------------------
 # Les champs produits par le modèle deviennent des colonnes `llm.<champ>`,
