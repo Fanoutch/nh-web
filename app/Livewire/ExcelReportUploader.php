@@ -11,7 +11,7 @@ use Livewire\Component;
 use Livewire\WithFileUploads;
 
 /**
- * Onglet « Disponibilités » d'un secteur : dépôt du CSV du jour, génération de la dispo (Excel)
+ * Onglet « Disponibilités » d'un secteur : dépôt de l'extraction du jour (CSV ou JSON), génération de la dispo (Excel)
  * + historique du secteur. Déposer / supprimer : ability gererDispos (chef ou admin).
  */
 class ExcelReportUploader extends Component
@@ -28,16 +28,16 @@ class ExcelReportUploader extends Component
     protected function rules(): array
     {
         return [
-            'csvFile' => 'required|file|extensions:csv,txt|mimetypes:text/csv,text/plain,application/csv,application/vnd.ms-excel|max:20480',
+            'csvFile' => 'required|file|extensions:csv,txt,json|mimetypes:text/csv,text/plain,application/csv,application/vnd.ms-excel,application/json|max:20480',
         ];
     }
 
     protected function messages(): array
     {
         return [
-            'csvFile.required' => 'Sélectionnez un fichier CSV.',
-            'csvFile.extensions' => 'Le fichier doit être un CSV.',
-            'csvFile.mimetypes' => 'Le fichier doit être un CSV.',
+            'csvFile.required' => 'Sélectionnez un fichier CSV ou JSON.',
+            'csvFile.extensions' => 'Le fichier doit être un CSV ou un JSON.',
+            'csvFile.mimetypes' => 'Le fichier doit être un CSV ou un JSON.',
             'csvFile.max' => 'Le fichier dépasse 20 Mo.',
         ];
     }

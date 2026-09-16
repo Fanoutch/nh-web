@@ -68,7 +68,7 @@ it('hides the drop zone from a simple utilisateur and forbids submit', function 
     // on vérifie ici que submit() reste protégé indépendamment de l'état de csvFile.
     Livewire::actingAs($utilisateur)
         ->test(ExcelReportUploader::class, ['secteur' => $bmn])
-        ->assertDontSee('Glisser-déposer le CSV du jour')
+        ->assertDontSee('Glisser-déposer l’extraction du jour')
         ->call('submit')
         ->assertForbidden();
 
@@ -76,7 +76,29 @@ it('hides the drop zone from a simple utilisateur and forbids submit', function 
     Queue::assertNothingPushed();
 });
 
-it('rejects a file that is not a csv', function () {
+it('accepts a json extraction and dispatches the generation job', function () {
+    Queue::fake();
+    Storage::fake('local');
+
+    $bmn = secteurBmn();
+    $chef = membreSecteur($bmn, 'chef');
+    $file = UploadedFile::fake()->createWithContent(
+        'dispo_2026-09-16.json',
+        '[{"machine": "NH01", "fh": 2581.73}]'
+    );
+
+    Livewire::actingAs($chef)
+        ->test(ExcelReportUploader::class, ['secteur' => $bmn])
+        ->set('csvFile', $file)
+        ->assertHasNoErrors(['csvFile'])
+        ->call('submit')
+        ->assertHasNoErrors();
+
+    expect(ExcelReport::first()->filename)->toBe('dispo_2026-09-16.json');
+    Queue::assertPushed(GenerateExcelReportJob::class);
+});
+
+it('rejects a file that is neither csv nor json', function () {
     Queue::fake();
 
     $bmn = secteurBmn();

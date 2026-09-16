@@ -9,12 +9,12 @@
                 <path d="M3 19v1.5A1.5 1.5 0 004.5 22h15a1.5 1.5 0 001.5-1.5V19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="text-ink-muted"/>
             </svg>
         </div>
-        <p class="text-[15px] font-medium text-ink-primary mb-1">Glisser-déposer le CSV du jour pour générer la dispo</p>
+        <p class="text-[15px] font-medium text-ink-primary mb-1">Glisser-déposer l’extraction du jour (CSV ou JSON) pour générer la dispo</p>
         <p class="text-sm text-ink-muted mb-4">ou cliquer pour sélectionner — un seul fichier, jusqu'à 20 Mo</p>
         <span class="inline-block bg-accent-soft border border-accent-soft-border text-warn px-3.5 py-1 rounded text-xs font-medium">
             Parcourir…
         </span>
-        <input type="file" id="csvFileInput" accept=".csv,text/csv"
+        <input type="file" id="csvFileInput" accept=".csv,.json,text/csv,application/json"
                wire:model="csvFile" class="hidden" />
     </label>
 
@@ -42,7 +42,7 @@
     @if ($csvFile && $peutGerer)
         <div class="mt-6">
             <div class="flex items-center justify-between mb-3">
-                <div class="text-sm font-semibold text-ink-primary">CSV prêt : générer la dispo</div>
+                <div class="text-sm font-semibold text-ink-primary">Fichier prêt : générer la dispo</div>
                 <x-primary-button wire:click="submit" wire:loading.attr="disabled" wire:target="submit">
                     <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
                         <path d="M6.5 1L12 6.5 6.5 12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
@@ -74,7 +74,7 @@
                 <table class="w-full text-[12px]">
                     <thead>
                         <tr class="border-b border-app-border">
-                            <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">CSV déposé</th>
+                            <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Fichier déposé</th>
                             <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Date</th>
                             <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Par</th>
                             <th class="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-ink-muted">Dispo (Excel)</th>
