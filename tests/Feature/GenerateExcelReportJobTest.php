@@ -95,7 +95,7 @@ it('passes the local settings file to the python script', function () {
     $user = User::factory()->create();
     $staging = storage_path('app/staging_excel_test_' . uniqid() . '.csv');
     file_put_contents($staging, fakeBmnCsv());
-    $report = ExcelReport::create(['user_id' => $user->id, 'filename' => 'rapport_2026-09-14.csv', 'status' => 'pending']);
+    $report = ExcelReport::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'filename' => 'rapport_2026-09-14.csv', 'status' => 'pending']);
 
     (new GenerateExcelReportJob($report->id, $staging))->handle(app(ExcelPipelineRunner::class), app(\App\Services\ExcelReportPurger::class));
 
