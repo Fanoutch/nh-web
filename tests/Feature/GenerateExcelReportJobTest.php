@@ -86,8 +86,9 @@ it('passes the local settings file to the python script', function () {
         $this->markTestSkipped('Projet BMN introuvable (EXCEL_PIPELINE_PATH)');
     }
 
-    // Réglages qui activent le remplissage par blocs : le CSV factice, sans colonne
-    // « machine », doit alors être refusé. Preuve que le fichier a bien été transmis.
+    // Réglages qui activent le remplissage par blocs : le script cherche alors l'onglet
+    // DISPO, absent du template factice. Preuve que le fichier a bien été transmis
+    // (sans lui, la génération réussit : voir le premier test).
     $reglages = storage_path('app/reglages_test_' . uniqid() . '.env');
     file_put_contents($reglages, "DISPO_BLOCS_ACTIF=true\n");
     config(['services.excel_pipeline.reglages' => $reglages]);
@@ -101,7 +102,7 @@ it('passes the local settings file to the python script', function () {
 
     $report->refresh();
     expect($report->status)->toBe('error')
-        ->and($report->message)->toContain('machine');
+        ->and($report->message)->toContain('DISPO');
 
     @unlink($reglages);
 });

@@ -278,7 +278,7 @@ def fill_blocs(ws: Worksheet, df: pd.DataFrame, conf: dict | None = None) -> tup
     blocs = reperer_blocs(ws, conf)
     champ_machine, champ_zone = conf["champ_machine"], conf["champ_zone"]
     if champ_machine not in df.columns:
-        raise ColonnesManquantesError(
+        raise MissingColumnsError(
             f"Colonne « {champ_machine} » absente de la source : impossible de savoir "
             "à quelle machine rattacher les données.")
 
