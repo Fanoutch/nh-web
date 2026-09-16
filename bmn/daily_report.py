@@ -182,11 +182,33 @@ def _enregistrements_json(donnees):
     raise PipelineError("JSON inexploitable : ni liste, ni objet.")
 
 
+_DATE_ISO = re.compile(r"^\s*\d{4}-\d{2}-\d{2}")
+
+
+def _lire_date(valeur):
+    """Une date de l'extraction : ISO (2026-04-03) tel quel, sinon JOUR D'ABORD.
+
+    Sans dayfirst, « 03/04/2026 » serait lu comme le 4 mars : erreur silencieuse
+    sur une extraction française. Illisible -> NaT (case laissée vide).
+    """
+    if not _valeur_renseignee(valeur):
+        return pd.NaT
+    if isinstance(valeur, (datetime, pd.Timestamp)):
+        return pd.Timestamp(valeur)
+    texte = str(valeur).strip()
+    try:
+        if _DATE_ISO.match(texte):
+            return pd.to_datetime(texte, errors="raise")
+        return pd.to_datetime(texte, errors="raise", dayfirst=True)
+    except (ValueError, TypeError):
+        return pd.NaT
+
+
 def _convertir_dates(df: pd.DataFrame) -> pd.DataFrame:
     """Les champs de date deviennent de vraies dates (sinon Excel affiche du texte)."""
     for champ in config.BLOCS.get("champs_dates", []):
         if champ in df.columns:
-            df[champ] = pd.to_datetime(df[champ], errors="coerce", format="mixed")
+            df[champ] = pd.to_datetime(df[champ].map(_lire_date), errors="coerce")
     return df
 
 
@@ -220,9 +242,20 @@ def reperer_blocs(ws: Worksheet, conf: dict | None = None) -> dict[str, int]:
     return blocs
 
 
-def normaliser_machine(nom) -> str:
-    """« nh 01 » et « NH01 » désignent la même machine."""
-    return str(nom).replace(" ", "").upper()
+def normaliser_machine(nom, prefixe: str | None = None) -> str:
+    """Forme canonique d'un nom de machine : préfixe + numéro sur deux chiffres.
+
+    « NH01 », « nh 01 », « NH-01 », « NH1 », « NH001 », « 01 » et « 1 » -> « NH01 ».
+    Un numéro seul reçoit le préfixe de config.BLOCS["prefixe_machine"].
+    """
+    prefixe = (prefixe if prefixe is not None
+               else config.BLOCS.get("prefixe_machine", "NH")).upper()
+    texte = re.sub(r"[^A-Za-z0-9]", "", str(nom)).upper()
+    m = re.fullmatch(r"([A-Z]*)0*(\d+)", texte)
+    if not m:
+        return texte
+    lettres, numero = m.groups()
+    return f"{lettres or prefixe}{int(numero):02d}"
 
 
 def trouver_ligne_intitule(ws: Worksheet, base: int, intitule: str,
@@ -334,7 +367,9 @@ def _ecrire_listes(ws: Worksheet, base: int, machine: str, lignes: pd.DataFrame,
         cibles = [_cible_colonne(champ, reglage_colonne)
                   for champ, reglage_colonne in reglage["colonnes"].items()]
 
-        if conf.get("vider_avant_ecriture") and len(entrees):
+        # Machine présente dans l'extraction : on vide ses emplacements même si elle
+        # n'a aucune entrée, sinon un ancien HIL resterait affiché (décision user).
+        if conf.get("vider_avant_ecriture"):
             for i in range(places):
                 for colonne, _ in cibles:
                     write_value(ws, f"{colonne}{premier + i}", None)

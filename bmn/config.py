@@ -118,6 +118,7 @@ BLOCS: dict = {
     "feuille": "DISPO",          # onglet contenant les blocs
     "colonne_machine": "A",      # colonne où est écrit NH01, NH02, ...
     "motif_machine": r"NH\s?\d+",
+    "prefixe_machine": "NH",     # ajouté quand l'extraction ne donne que le numéro (« 01 »)
 
     # Champs de la source
     "champ_machine": "machine",  # colonne/clé portant NH01, NH02, ...
@@ -158,8 +159,9 @@ BLOCS: dict = {
     # Champs à convertir en vraies dates Excel (et non en texte).
     "champs_dates": ["date"],
 
-    # Vider les emplacements d'une machine avant d'y écrire (évite qu'une
-    # ancienne ligne subsiste sous les nouvelles).
+    # Vider les emplacements HIL / CIL de chaque machine PRÉSENTE dans l'extraction,
+    # même si elle n'en a aucun (l'extraction est l'état du jour). Les machines
+    # absentes de l'extraction ne sont pas touchées.
     "vider_avant_ecriture": True,
 }
 

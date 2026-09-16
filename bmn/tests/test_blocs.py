@@ -288,3 +288,58 @@ def test_source_sans_colonne_machine_donne_une_erreur_claire(blocs_actifs):
     wb = load_workbook(config.TEMPLATE_PATH)
     with pytest.raises(dr.MissingColumnsError, match="machine"):
         dr.fill_blocs(wb["DISPO"], donnees([{"fh": 1}]))
+
+
+# ---------------------------------------------------------------------------
+# Dates : jour d'abord (extractions françaises), ISO inchangé
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("brut, attendu", [
+    ("2026-04-03", datetime(2026, 4, 3)),          # ISO : année-mois-jour
+    ("03/04/2026", datetime(2026, 4, 3)),          # français : 3 avril, pas 4 mars
+    ("3/4/2026", datetime(2026, 4, 3)),
+    ("03.04.2026", datetime(2026, 4, 3)),
+    ("03-04-2026", datetime(2026, 4, 3)),
+    ("27/03/2026", datetime(2026, 3, 27)),
+    ("03/04/2026 14:30", datetime(2026, 4, 3, 14, 30)),
+    ("2026-04-03T08:15:00", datetime(2026, 4, 3, 8, 15)),
+])
+def test_dates_lues_jour_dabord(brut, attendu):
+    df = dr._convertir_dates(pd.DataFrame({"date": [brut]}))
+    assert df["date"].iloc[0].to_pydatetime() == attendu
+
+
+def test_date_illisible_devient_vide():
+    df = dr._convertir_dates(pd.DataFrame({"date": ["pas une date", None]}))
+    assert df["date"].isna().all()
+
+
+# ---------------------------------------------------------------------------
+# Noms de machine : NH1, NH-01, nh 01, 01 désignent NH01
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("brut", ["NH01", "nh01", "NH 01", "NH-01", "NH_01", "NH1", "NH001", "01", "1"])
+def test_noms_de_machine_normalises(brut):
+    assert dr.normaliser_machine(brut) == "NH01"
+
+
+def test_machine_ecrite_autrement_retrouve_son_bloc(blocs_actifs):
+    df = donnees([{"machine": "NH-1", "fh": 7}, {"machine": "2", "fh": 8}])
+    wb = load_workbook(config.TEMPLATE_PATH)
+    dr.fill_blocs(wb["DISPO"], df)
+    assert wb["DISPO"]["AU10"].value == 7      # NH-1 -> NH01
+    assert wb["DISPO"]["AU34"].value == 8      # 2    -> NH02
+
+
+# ---------------------------------------------------------------------------
+# Machine présente sans HIL / CIL : ses anciennes lignes sont vidées
+# ---------------------------------------------------------------------------
+def test_machine_presente_sans_hil_vide_ses_anciens_hil(blocs_actifs):
+    wb = load_workbook(config.TEMPLATE_PATH)
+    ws = wb["DISPO"]
+    ws["I15"], ws["L15"], ws["R15"] = "01/01/2026", "ancien HIL", "OLD"
+    ws["L21"] = "ancien CIL"
+
+    dr.fill_blocs(ws, donnees([{"machine": "NH01", "fh": 1}]))   # compteurs seulement
+
+    assert ws["L15"].value is None and ws["I15"].value is None and ws["R15"].value is None
+    assert ws["L21"].value is None
+    assert ws["AU10"].value == 1
