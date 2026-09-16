@@ -257,15 +257,19 @@ LOG_BACKUP_COUNT = 5
 
 
 # ---------------------------------------------------------------------------
-# Réglages LLM locaux : bmn/llm.env (voir llm.env.example)
+# Réglages locaux : bmn/reglages.env (voir reglages.env.example)
 # ---------------------------------------------------------------------------
-# Adresse, modèle, clé... sont lus dans ce fichier, ignoré par git, pour que le
-# passage d'un LLM à un autre (ici / au bureau) ne touche jamais au code.
-# Priorité : variables d'environnement > llm.env > valeurs par défaut ci-dessus.
-LLM_ENV_FILE = BASE_DIR / "llm.env"
+# Tout ce qui change entre ce serveur et le bureau est lu dans UN fichier,
+# ignoré par git : template réel, activation des blocs, connexion au LLM.
+# Changer d'environnement ne touche donc jamais au code.
+#
+# Priorité : variables d'environnement > reglages.env > valeurs par défaut.
+# La variable BMN_REGLAGES désigne un autre fichier, ou « aucun » pour ignorer
+# tout réglage local (utilisé par les tests du site).
+_BOOLEEN = lambda v: str(v).strip().lower() in ("1", "true", "oui", "yes", "vrai")
 
-_LLM_ENV_CLES = {
-    "LLM_ACTIF": ("actif", lambda v: v.strip().lower() in ("1", "true", "oui", "yes")),
+_CLES_LLM = {
+    "LLM_ACTIF": ("actif", _BOOLEEN),
     "LLM_BASE_URL": ("base_url", str),
     "LLM_MODELE": ("modele", str),
     "LLM_CLE_API": ("cle_api", str),
@@ -273,13 +277,32 @@ _LLM_ENV_CLES = {
     "LLM_TEMPERATURE": ("temperature", float),
 }
 
+_CLES_DISPO = {
+    "DISPO_TEMPLATE": ("template",
+                       lambda v: Path(v) if Path(v).is_absolute() else BASE_DIR / v),
+    "DISPO_BLOCS_ACTIF": ("blocs_actif", _BOOLEEN),
+}
 
-def lire_llm_env(chemin: Path | None = None, environ=None) -> dict:
-    """Lit les réglages LLM (fichier KEY=VALUE, puis variables d'environnement)."""
+
+def fichier_reglages(environ=None) -> Path | None:
+    """Fichier de réglages à lire : défaut, désigné par BMN_REGLAGES, ou aucun."""
     import os
 
-    chemin = chemin or LLM_ENV_FILE
     environ = os.environ if environ is None else environ
+    choix = (environ.get("BMN_REGLAGES") or "").strip()
+    if choix.lower() in ("aucun", "none", "0"):
+        return None
+    return Path(choix) if choix else BASE_DIR / "reglages.env"
+
+
+def lire_reglages(chemin: Path | None, environ=None) -> tuple[dict, dict]:
+    """Retourne (réglages LLM, réglages dispo) lus dans le fichier puis l'environnement."""
+    import os
+
+    environ = os.environ if environ is None else environ
+    if chemin is None:
+        return {}, {}
+
     brut: dict[str, str] = {}
     if chemin.exists():
         for ligne in chemin.read_text(encoding="utf-8-sig").splitlines():
@@ -287,16 +310,23 @@ def lire_llm_env(chemin: Path | None = None, environ=None) -> dict:
             if not ligne or ligne.startswith("#") or "=" not in ligne:
                 continue
             cle, valeur = ligne.split("=", 1)
+            valeur = valeur.split(" #", 1)[0]          # commentaire en fin de ligne
             brut[cle.strip()] = valeur.strip().strip('"').strip("'")
-    for cle in _LLM_ENV_CLES:
+    for cle in (*_CLES_LLM, *_CLES_DISPO):
         if environ.get(cle):
             brut[cle] = environ[cle]
 
-    reglages = {}
-    for cle, (champ, convertir) in _LLM_ENV_CLES.items():
-        if brut.get(cle, "") != "":
-            reglages[champ] = convertir(brut[cle])
-    return reglages
+    def convertir(cles):
+        return {champ: conv(brut[cle]) for cle, (champ, conv) in cles.items()
+                if brut.get(cle, "") != ""}
+
+    return convertir(_CLES_LLM), convertir(_CLES_DISPO)
 
 
-LLM.update(lire_llm_env())
+REGLAGES_FILE = fichier_reglages()
+_llm_local, _dispo_local = lire_reglages(REGLAGES_FILE)
+LLM.update(_llm_local)
+if "template" in _dispo_local:
+    TEMPLATE_PATH = _dispo_local["template"]
+if "blocs_actif" in _dispo_local:
+    BLOCS["actif"] = _dispo_local["blocs_actif"]

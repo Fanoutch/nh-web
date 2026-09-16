@@ -20,6 +20,12 @@ function bmnAvailable(): bool
     return is_file(rtrim(config('services.excel_pipeline.path'), '/') . '/daily_report.py');
 }
 
+// Ces tests visent le template factice : on ignore tout bmn/reglages.env local
+// (qui peut activer le vrai template et les blocs sur un serveur de dev).
+beforeEach(function () {
+    config(['services.excel_pipeline.reglages' => 'aucun']);
+});
+
 it('generates an excel from a csv via the real python script', function () {
     if (!bmnAvailable()) {
         $this->markTestSkipped('Projet BMN introuvable (EXCEL_PIPELINE_PATH)');
@@ -73,4 +79,29 @@ it('marks the report as error when the script path is invalid', function () {
     $report->refresh();
     expect($report->status)->toBe('error')
         ->and($report->message)->toContain('Réponse invalide du script Excel');
+});
+
+it('passes the local settings file to the python script', function () {
+    if (!bmnAvailable()) {
+        $this->markTestSkipped('Projet BMN introuvable (EXCEL_PIPELINE_PATH)');
+    }
+
+    // Réglages qui activent le remplissage par blocs : le CSV factice, sans colonne
+    // « machine », doit alors être refusé. Preuve que le fichier a bien été transmis.
+    $reglages = storage_path('app/reglages_test_' . uniqid() . '.env');
+    file_put_contents($reglages, "DISPO_BLOCS_ACTIF=true\n");
+    config(['services.excel_pipeline.reglages' => $reglages]);
+
+    $user = User::factory()->create();
+    $staging = storage_path('app/staging_excel_test_' . uniqid() . '.csv');
+    file_put_contents($staging, fakeBmnCsv());
+    $report = ExcelReport::create(['user_id' => $user->id, 'filename' => 'rapport_2026-09-14.csv', 'status' => 'pending']);
+
+    (new GenerateExcelReportJob($report->id, $staging))->handle(app(ExcelPipelineRunner::class), app(\App\Services\ExcelReportPurger::class));
+
+    $report->refresh();
+    expect($report->status)->toBe('error')
+        ->and($report->message)->toContain('machine');
+
+    @unlink($reglages);
 });

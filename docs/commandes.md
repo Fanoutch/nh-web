@@ -1068,6 +1068,13 @@ Le bloc `LLM` de `bmn/config.py` permet de faire remplir certains champs par un 
   seule la fonction `appeler_modele` de `bmn/llm_client.py` est a reecrire.
 - Service injoignable : la dispo est generee quand meme, colonnes `llm.*` vides.
 
+### Reglages locaux (bmn/reglages.env)
+
+Un seul fichier, ignore par git, pour tout ce qui change entre le dev et le bureau : template reel
+(`DISPO_TEMPLATE`), remplissage par blocs (`DISPO_BLOCS_ACTIF`), connexion au LLM (`LLM_*`).
+Copier `bmn/reglages.env.example` en `bmn/reglages.env`. Cote site, `EXCEL_PIPELINE_REGLAGES`
+peut designer un autre fichier, ou `aucun` pour l'ignorer (c'est ce que font les tests).
+
 ### Prerequis serveur
 
 1. Venv Python dans `bmn/` : `cd bmn && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`

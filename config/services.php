@@ -43,6 +43,9 @@ return [
     'excel_pipeline' => [
         'path' => env('EXCEL_PIPELINE_PATH', base_path('bmn')),
         'python' => env('EXCEL_PIPELINE_PYTHON', 'python3'),
+        // Réglages locaux du script (template réel, blocs, LLM) : vide = bmn/reglages.env,
+        // sinon un chemin, ou « aucun » pour les ignorer.
+        'reglages' => env('EXCEL_PIPELINE_REGLAGES'),
         // Rétention des dispos générées (jours). 0 = pas de purge.
         'retention_days' => (int) env('EXCEL_REPORTS_RETENTION_DAYS', 30),
     ],

@@ -11,5 +11,9 @@ data/incoming/*
 !data/incoming/.gitkeep
 *.zip
 
-# Réglages LLM locaux (contiennent la clé d'API) : jamais dans git
-llm.env
+# Réglages locaux (clé d'API, chemin du template réel) : jamais dans git
+reglages.env
+
+# Templates réels (données réelles) : seul le template factice est versionné
+template/*
+!template/template.xlsx
