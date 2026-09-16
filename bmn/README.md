@@ -135,3 +135,17 @@ utilisables dans `CELL_MAPPING` / `TABLE_MAPPING` comme une colonne du CSV.
   `appeler_modele` de `llm_client.py` est à réécrire.**
 - Un service injoignable ne bloque pas la génération : les colonnes `llm.*`
   restent vides et l'incident est journalisé.
+
+## Réglages locaux : `reglages.env`
+
+Tout ce qui change entre le serveur de dev et le bureau est dans **un seul
+fichier**, `bmn/reglages.env`, ignoré par git (copier `reglages.env.example`) :
+
+- `DISPO_TEMPLATE` : template à remplir (le template réel, qui contient des
+  données, se dépose dans `bmn/template/`, dossier ignoré par git) ;
+- `DISPO_BLOCS_ACTIF` : remplissage par blocs machine (vrai template) ;
+- `LLM_ACTIF`, `LLM_BASE_URL`, `LLM_MODELE`, `LLM_CLE_API`… : connexion au modèle.
+
+Priorité : variables d'environnement > `reglages.env` > valeurs de `config.py`.
+`BMN_REGLAGES=aucun` ignore tout réglage local ; côté site, la variable
+`EXCEL_PIPELINE_REGLAGES` fait de même.

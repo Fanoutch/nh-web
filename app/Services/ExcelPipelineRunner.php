@@ -26,7 +26,12 @@ class ExcelPipelineRunner
             '--json-output',
         ];
 
-        $process = new Process($cmd, $pythonRoot);
+        // Fichier de réglages locaux du script (bmn/reglages.env par défaut) :
+        // un chemin, ou « aucun » pour l'ignorer (tests sur le template factice).
+        $reglages = config('services.excel_pipeline.reglages');
+        $env = $reglages ? ['BMN_REGLAGES' => $reglages] : null;
+
+        $process = new Process($cmd, $pythonRoot, $env);
         $process->setTimeout(300);
         $process->run();
 
