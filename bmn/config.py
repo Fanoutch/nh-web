@@ -119,6 +119,12 @@ BLOCS: dict = {
     "colonne_machine": "A",      # colonne où est écrit NH01, NH02, ...
     "motif_machine": r"NH\s?\d+",
     "prefixe_machine": "NH",     # ajouté quand l'extraction ne donne que le numéro (« 01 »)
+    "hauteur_bloc": 24,          # nombre de lignes d'un bloc machine
+
+    # Supprimer de la dispo les blocs des NH absentes de l'extraction (et les
+    # emplacements sans nom). Suppression réelle des lignes, formules / fusions /
+    # mises en forme décalées comme dans Excel (voir suppression_blocs.py).
+    "supprimer_absentes": True,
 
     # Champs de la source
     "champ_machine": "machine",  # colonne/clé portant NH01, NH02, ...
