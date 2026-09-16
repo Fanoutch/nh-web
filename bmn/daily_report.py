@@ -140,6 +140,42 @@ def validate_columns(df: pd.DataFrame,
 # ---------------------------------------------------------------------------
 # 3. Template Excel
 # ---------------------------------------------------------------------------
+def enrichir_avec_llm(df: pd.DataFrame) -> pd.DataFrame:
+    """Ajoute les colonnes `llm.*` au tableau (vides si le LLM est inactif).
+
+    Une ligne dont l'appel échoue reste vide : la dispo est générée quand même,
+    l'incident est journalisé. Les colonnes existent toujours, pour qu'un
+    mapping qui les référence ne casse pas quand le LLM est désactivé.
+    """
+    conf = config.LLM
+    colonnes = [f"{config.LLM_PREFIXE}{champ}" for champ in conf["champs_produits"]]
+    for colonne in colonnes:
+        if colonne not in df.columns:
+            df[colonne] = ""
+
+    if not conf.get("actif"):
+        return df
+
+    import llm_client  # import tardif : le pipeline tourne sans lui si inactif
+
+    echecs = 0
+    for index, ligne in df.iterrows():
+        try:
+            reponse = llm_client.extraire_equipement(ligne.to_dict(), conf)
+        except llm_client.LlmError as exc:
+            echecs += 1
+            if echecs == 1:
+                log.warning("LLM injoignable, colonnes %s laissées vides : %s",
+                            config.LLM_PREFIXE + "*", exc)
+            continue
+        for champ, valeur in reponse.items():
+            df.at[index, f"{config.LLM_PREFIXE}{champ}"] = valeur
+
+    traitees = len(df) - echecs
+    log.info("LLM : %d ligne(s) enrichie(s), %d échec(s)", traitees, echecs)
+    return df
+
+
 def load_template(path: Path | None = None) -> Workbook:
     """Ouvre le template en conservant les formules (data_only=False, jamais True)."""
     path = path or config.TEMPLATE_PATH
@@ -339,6 +375,7 @@ def process(csv_path: Path, *, dry_run: bool = False,
     run_ts = run_ts or datetime.now()
     df = load_csv(csv_path)
     validate_columns(df)
+    df = enrichir_avec_llm(df)
     wb = load_template()
     n_cells, n_rows = fill_workbook(wb, df)
     out_path = build_output_path(csv_path, run_ts, output_dir=output_dir)

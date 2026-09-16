@@ -1056,6 +1056,18 @@ Le CSV de staging est supprime apres traitement, succes ou echec. Les Excel gene
 - **Depuis la page** : bouton « × » en bout de ligne, visible pour l'auteur du depot et les admins,
   avec confirmation. Une generation en cours ne peut pas etre supprimee.
 
+### Extraction par un LLM (optionnelle, desactivee par defaut)
+
+Le bloc `LLM` de `bmn/config.py` permet de faire remplir certains champs par un modele
+(equipement incrimine). Les champs de sa reponse deviennent des colonnes `llm.equipement`,
+`llm.indice`, `llm.justification`, utilisables dans les mappings comme une colonne du CSV.
+
+- `actif: False` par defaut : aucun appel reseau, colonnes vides, pipeline inchange.
+- Test du service : `python bmn/llm_client.py --test` (`--hors-ligne` pour simuler).
+- API attendue : format OpenAI `/v1/chat/completions`. Si le service est different,
+  seule la fonction `appeler_modele` de `bmn/llm_client.py` est a reecrire.
+- Service injoignable : la dispo est generee quand meme, colonnes `llm.*` vides.
+
 ### Prerequis serveur
 
 1. Venv Python dans `bmn/` : `cd bmn && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`

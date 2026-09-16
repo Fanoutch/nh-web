@@ -24,6 +24,7 @@ python -m venv .venv
 | `explore_template.py` | Inventaire du template : formules (protégées) vs inputs vs cellules vides |
 | `make_fixtures.py` | Template factice avec formules + CSV factice pour tester |
 | `tests/` | Tests pytest (bout en bout, refus d'écraser une formule, CSV absent, ...) |
+| `llm_client.py` | Appel d'un LLM pour l'équipement incriminé -> colonnes `llm.*` (bloc `LLM` de `config.py`) |
 | `check_setup.py` | Autodiagnostic : environnement, template, mapping vs formules, CSV. Ne modifie rien |
 | `inspect_csv.py` | À lancer sur le vrai CSV : détecte séparateur/encodage, propose `CSV_READ_KWARGS` et un squelette de mapping |
 | `scheduling/` | Scripts de lancement cron / Planificateur de tâches + notice |
@@ -119,3 +120,18 @@ Côté nh-web, renseigner `EXCEL_PIPELINE_PYTHON` (interpréteur de `bmn/.venv`)
 `0` succès, `2` aucun CSV (run ignoré), `1` erreur. Chaque run trace
 `RUN START` / `RUN OK` / `RUN SKIPPED` / `RUN FAILED` dans `logs/daily_report.log`
 (rotation automatique). Voir `scheduling/README.md`.
+
+## Extraction par un LLM (optionnelle)
+
+Le bloc `LLM` de `config.py` permet de faire remplir certains champs par un
+modèle : chaque ligne du CSV lui est envoyée, et les champs de sa réponse
+deviennent des colonnes `llm.equipement`, `llm.indice`, `llm.justification`,
+utilisables dans `CELL_MAPPING` / `TABLE_MAPPING` comme une colonne du CSV.
+
+- `actif: False` par défaut : aucun appel, colonnes vides, pipeline inchangé.
+- Vérifier le service : `python llm_client.py --test` (ou `--test --hors-ligne`).
+- API attendue : format OpenAI `/v1/chat/completions` (Ollama, LM Studio, vLLM,
+  llama.cpp). **Si le service du bureau parle autrement, seule la fonction
+  `appeler_modele` de `llm_client.py` est à réécrire.**
+- Un service injoignable ne bloque pas la génération : les colonnes `llm.*`
+  restent vides et l'incident est journalisé.

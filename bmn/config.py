@@ -86,8 +86,58 @@ CLEAR_TABLE_BEFORE_WRITE = True
 
 
 def required_csv_columns() -> set[str]:
-    """Colonnes CSV attendues, déduites des deux mappings."""
-    return set(CELL_MAPPING) | set(TABLE_MAPPING["columns"])
+    """Colonnes CSV attendues, déduites des deux mappings.
+
+    Les colonnes `llm.*` sont produites par le modèle (cf. LLM ci-dessous),
+    elles ne sont donc pas attendues dans le CSV.
+    """
+    toutes = set(CELL_MAPPING) | set(TABLE_MAPPING["columns"])
+    return {c for c in toutes if not str(c).startswith(LLM_PREFIXE)}
+
+
+# ---------------------------------------------------------------------------
+# Extraction par un LLM (équipement incriminé)
+# ---------------------------------------------------------------------------
+# Les champs produits par le modèle deviennent des colonnes `llm.<champ>`,
+# utilisables dans CELL_MAPPING / TABLE_MAPPING comme une colonne du CSV :
+#     TABLE_MAPPING["columns"]["llm.equipement"] = "F"
+#
+# Tant que `actif` est False, aucun appel n'est fait et ces colonnes restent
+# vides : le pipeline se comporte exactement comme avant.
+LLM_PREFIXE = "llm."
+
+LLM: dict = {
+    "actif": False,          # True = interroger le modèle pour chaque ligne
+    "hors_ligne": False,     # True = réponse simulée, pratique pour tester
+
+    # Service : Ollama http://127.0.0.1:11434/v1 | LM Studio http://127.0.0.1:1234/v1
+    "base_url": "http://127.0.0.1:11434/v1",
+    "modele": "A_DEFINIR",   # nom exact du modèle tel que le service l'expose
+    "cle_api": "",           # si le service en demande une
+    "timeout": 120,          # secondes, par ligne
+    "temperature": 0,        # 0 = réponse la plus stable
+
+    # Champs du CSV envoyés au modèle. Liste vide = la ligne entière.
+    "champs_envoyes": [],
+
+    # Champs attendus en retour -> colonnes llm.equipement, llm.indice, ...
+    "champs_produits": ["equipement", "indice", "justification"],
+
+    "prompt_systeme": (
+        "Tu es un assistant de maintenance aéronautique. À partir d'un enregistrement "
+        "de panne, tu identifies l'équipement incriminé. Tu réponds UNIQUEMENT par un "
+        "objet JSON valide, sans texte autour, sans bloc de code, avec exactement les "
+        "clés suivantes :\n"
+        '{"equipement": "nom de l\'équipement", "indice": "haut|moyen|faible", '
+        '"justification": "une phrase courte"}\n'
+        'Si l\'enregistrement ne permet pas de conclure, réponds '
+        '{"equipement": "indetermine", "indice": "faible", "justification": "..."}.'
+    ),
+    "gabarit_utilisateur": (
+        "Enregistrement à analyser :\n\n{enregistrement}\n\n"
+        "Quel équipement est incriminé ?"
+    ),
+}
 
 
 # ---------------------------------------------------------------------------
