@@ -254,3 +254,49 @@ EXIT_CODE_ERROR = 1
 LOG_FILE = LOG_DIR / "daily_report.log"
 LOG_MAX_BYTES = 2_000_000
 LOG_BACKUP_COUNT = 5
+
+
+# ---------------------------------------------------------------------------
+# Réglages LLM locaux : bmn/llm.env (voir llm.env.example)
+# ---------------------------------------------------------------------------
+# Adresse, modèle, clé... sont lus dans ce fichier, ignoré par git, pour que le
+# passage d'un LLM à un autre (ici / au bureau) ne touche jamais au code.
+# Priorité : variables d'environnement > llm.env > valeurs par défaut ci-dessus.
+LLM_ENV_FILE = BASE_DIR / "llm.env"
+
+_LLM_ENV_CLES = {
+    "LLM_ACTIF": ("actif", lambda v: v.strip().lower() in ("1", "true", "oui", "yes")),
+    "LLM_BASE_URL": ("base_url", str),
+    "LLM_MODELE": ("modele", str),
+    "LLM_CLE_API": ("cle_api", str),
+    "LLM_TIMEOUT": ("timeout", lambda v: int(float(v))),
+    "LLM_TEMPERATURE": ("temperature", float),
+}
+
+
+def lire_llm_env(chemin: Path | None = None, environ=None) -> dict:
+    """Lit les réglages LLM (fichier KEY=VALUE, puis variables d'environnement)."""
+    import os
+
+    chemin = chemin or LLM_ENV_FILE
+    environ = os.environ if environ is None else environ
+    brut: dict[str, str] = {}
+    if chemin.exists():
+        for ligne in chemin.read_text(encoding="utf-8-sig").splitlines():
+            ligne = ligne.strip()
+            if not ligne or ligne.startswith("#") or "=" not in ligne:
+                continue
+            cle, valeur = ligne.split("=", 1)
+            brut[cle.strip()] = valeur.strip().strip('"').strip("'")
+    for cle in _LLM_ENV_CLES:
+        if environ.get(cle):
+            brut[cle] = environ[cle]
+
+    reglages = {}
+    for cle, (champ, convertir) in _LLM_ENV_CLES.items():
+        if brut.get(cle, "") != "":
+            reglages[champ] = convertir(brut[cle])
+    return reglages
+
+
+LLM.update(lire_llm_env())
