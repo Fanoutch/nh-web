@@ -18,6 +18,7 @@ from pathlib import Path
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.cell.cell import MergedCell
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
 import config
@@ -37,9 +38,11 @@ def scan_sheet(ws: Worksheet) -> pd.DataFrame:
                 kind = "empty"
             else:
                 kind = "input"
+            # Une MergedCell n'a pas de column_letter : on le calcule depuis l'index.
+            col = get_column_letter(cell.column)
             rows.append({
                 "sheet": ws.title, "coord": cell.coordinate,
-                "row": cell.row, "col": cell.column_letter,
+                "row": cell.row, "col": col,
                 "kind": kind,
                 "value": str(cell.value) if cell.value is not None else "",
                 "number_format": cell.number_format,
@@ -73,7 +76,10 @@ def describe_workbook(path: Path, sheet: str | None = None) -> pd.DataFrame:
         counts = df.kind.value_counts().to_dict()
         print(f"\n=== Onglet '{ws.title}' | dimensions {ws.dimensions} | {counts}")
         if ws.merged_cells.ranges:
-            print(f"Plages fusionnées : {[str(r) for r in ws.merged_cells.ranges]}")
+            plages = sorted(str(r) for r in ws.merged_cells.ranges)
+            apercu = ", ".join(plages[:10])
+            reste = f" … (+{len(plages) - 10})" if len(plages) > 10 else ""
+            print(f"Plages fusionnées : {len(plages)} — {apercu}{reste}")
 
         fc = formula_columns_summary(df)
         bulk_cols = set(fc[fc.n > 5].col) if not fc.empty else set()
