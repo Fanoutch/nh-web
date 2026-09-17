@@ -155,6 +155,22 @@ def extraire_equipement(enregistrement: dict, conf: dict | None = None) -> dict:
     return {champ: donnees.get(champ, "") for champ in conf["champs_produits"]}
 
 
+def exemple_de_test(conf: dict) -> dict:
+    """Enregistrement d'exemple pour --test : une saisie HIL réaliste.
+
+    Les champs envoyés au modèle (conf["champs_envoyes"]) sont tous renseignés,
+    pour tester une vraie extraction et pas un enregistrement vide.
+    """
+    exemple = {
+        "travail_demande": "voyant ENG ANTI ICE allumé au demarrage",
+        "travail_effectue": "test syst KO defaut confirmé anti givrage moteur. "
+                            "Mise en hil eng anti icing attente piece",
+    }
+    for champ in conf.get("champs_envoyes") or []:
+        exemple.setdefault(champ, "mise en HIL PDU, jeu constaté au contrôle")
+    return exemple
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description="Vérifie l'appel au LLM configuré.")
     p.add_argument("--test", action="store_true",
@@ -178,7 +194,7 @@ def main() -> int:
                   " (copier llm.env.example si le fichier n'existe pas).")
             return 2
         print(f"Modèle : {conf['modele']} sur {conf['base_url']}")
-    exemple = {"code": "46830", "description": "Vibration transmission principale"}
+    exemple = exemple_de_test(conf)
     try:
         resultat = extraire_equipement(exemple, conf)
     except LlmError as exc:

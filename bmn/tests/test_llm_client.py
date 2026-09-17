@@ -157,3 +157,10 @@ def test_colonnes_llm_hors_des_colonnes_csv_obligatoires(monkeypatch):
     mapping["columns"] = dict(mapping["columns"], **{"llm.equipement": "B"})
     monkeypatch.setattr(config, "TABLE_MAPPING", mapping)
     assert not any(c.startswith("llm.") for c in config.required_csv_columns())
+
+
+def test_lexemple_de_test_contient_les_champs_envoyes():
+    """--test doit envoyer des champs que le modèle reçoit vraiment (sinon il répond « indetermine »)."""
+    exemple = llm_client.exemple_de_test(config.LLM)
+    envoye = llm_client.selectionner_champs(exemple, config.LLM["champs_envoyes"])
+    assert all(v not in (None, "") for v in envoye.values())
