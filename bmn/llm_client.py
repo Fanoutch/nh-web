@@ -12,8 +12,9 @@
 # `appeler_modele`.** Elle reçoit les messages et la config, elle retourne le
 # texte brut de la réponse. Ne pas toucher au reste ni aux noms de fonctions.
 #
-# Réglages de connexion (adresse, modèle, clé) : fichier `bmn/reglages.env`, à
-# créer depuis `reglages.env.example`. Prompt et champs : bloc `LLM` de `config.py`.
+# Réglages de connexion (adresse, modèle, clé) : fichier `llm.env` à la RACINE de
+# nh-web (partagé avec l'assistant IA), à créer depuis `llm.env.example`.
+# Prompt et champs : bloc `LLM` de `config.py`.
 # Vérification rapide du service :
 #
 #     python llm_client.py --test                 # avec le vrai modèle
@@ -173,8 +174,8 @@ def main() -> int:
     if not conf.get("hors_ligne"):
         if conf.get("modele") in (None, "", "A_DEFINIR"):
             print(f"[KO] Modèle non renseigné : remplir LLM_MODELE dans "
-                  f"{config.REGLAGES_FILE or config.BASE_DIR / 'reglages.env'}"
-                  " (copier reglages.env.example si le fichier n'existe pas).")
+                  f"{config.LLM_FILE or config.BASE_DIR.parent / 'llm.env'}"
+                  " (copier llm.env.example si le fichier n'existe pas).")
             return 2
         print(f"Modèle : {conf['modele']} sur {conf['base_url']}")
     exemple = {"code": "46830", "description": "Vibration transmission principale"}
