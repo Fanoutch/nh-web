@@ -136,16 +136,18 @@ utilisables dans `CELL_MAPPING` / `TABLE_MAPPING` comme une colonne du CSV.
 - Un service injoignable ne bloque pas la génération : les colonnes `llm.*`
   restent vides et l'incident est journalisé.
 
-## Réglages locaux : `reglages.env`
+## Réglages locaux (ignorés par git)
 
-Tout ce qui change entre le serveur de dev et le bureau est dans **un seul
-fichier**, `bmn/reglages.env`, ignoré par git (copier `reglages.env.example`) :
+Deux fichiers, chacun avec son modèle `.example` :
 
-- `DISPO_TEMPLATE` : template à remplir (le template réel, qui contient des
-  données, se dépose dans `bmn/template/`, dossier ignoré par git) ;
-- `DISPO_BLOCS_ACTIF` : remplissage par blocs machine (vrai template) ;
-- `LLM_ACTIF`, `LLM_BASE_URL`, `LLM_MODELE`, `LLM_CLE_API`… : connexion au modèle.
+- **`llm.env`, à la racine de nh-web** : tout ce qui concerne le LLM (`LLM_ACTIF`,
+  `LLM_BASE_URL`, `LLM_MODELE`, `LLM_CLE_API`…). Partagé entre l'envoi des HIL
+  (ce pipeline) et l'assistant IA du site (`config/llm.php`). Le `.env` de
+  Laravel n'est pas utilisé pour ça.
+- **`bmn/reglages.env`** : la dispo — `DISPO_TEMPLATE` (le template réel, qui
+  contient des données, se dépose dans `bmn/template/`, ignoré par git) et
+  `DISPO_BLOCS_ACTIF`.
 
-Priorité : variables d'environnement > `reglages.env` > valeurs de `config.py`.
-`BMN_REGLAGES=aucun` ignore tout réglage local ; côté site, la variable
-`EXCEL_PIPELINE_REGLAGES` fait de même.
+Priorité : variables d'environnement > fichier > valeurs de `config.py`.
+`LLM_ENV` et `BMN_REGLAGES` désignent d'autres fichiers ; `BMN_REGLAGES=aucun`
+ignore les deux (c'est ce que font les tests, côté Python comme côté site).

@@ -3,6 +3,8 @@
 .env
 .env.backup
 .env.production
+# Réglages du LLM (clé d'API) : jamais dans git — modèle : llm.env.example
+/llm.env
 .phpactor.json
 .phpunit.result.cache
 /.fleet

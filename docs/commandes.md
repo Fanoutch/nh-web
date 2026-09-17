@@ -1068,12 +1068,14 @@ Le bloc `LLM` de `bmn/config.py` permet de faire remplir certains champs par un 
   seule la fonction `appeler_modele` de `bmn/llm_client.py` est a reecrire.
 - Service injoignable : la dispo est generee quand meme, colonnes `llm.*` vides.
 
-### Reglages locaux (bmn/reglages.env)
+### Reglages locaux (ignores par git)
 
-Un seul fichier, ignore par git, pour tout ce qui change entre le dev et le bureau : template reel
-(`DISPO_TEMPLATE`), remplissage par blocs (`DISPO_BLOCS_ACTIF`), connexion au LLM (`LLM_*`).
-Copier `bmn/reglages.env.example` en `bmn/reglages.env`. Cote site, `EXCEL_PIPELINE_REGLAGES`
-peut designer un autre fichier, ou `aucun` pour l'ignorer (c'est ce que font les tests).
+- `llm.env` (racine de nh-web, modele `llm.env.example`) : tout ce qui concerne le LLM, partage entre
+  l'envoi des HIL (pipeline `bmn/`) et l'assistant IA (`config/llm.php`). Le `.env` de Laravel n'est pas touche.
+- `bmn/reglages.env` (modele `bmn/reglages.env.example`) : template reel (`DISPO_TEMPLATE`) et remplissage
+  par blocs (`DISPO_BLOCS_ACTIF`).
+- Cote site, `EXCEL_PIPELINE_REGLAGES=aucun` fait ignorer les deux fichiers au script (c'est ce que font les tests).
+- Test du modele : `bmn/.venv/bin/python bmn/llm_client.py --test`.
 
 ### Prerequis serveur
 
