@@ -99,10 +99,14 @@ def main(argv: list[str] | None = None) -> int:
     do_all = not (a.template or a.csv)
 
     if a.template or do_all:
-        if config.TEMPLATE_PATH.exists() and not a.force:
-            print(f"Template déjà présent, non écrasé : {config.TEMPLATE_PATH} (--force pour forcer)")
+        # Toujours le template FACTICE : jamais config.TEMPLATE_PATH, qui peut
+        # désigner le vrai template (reglages.env) et serait écrasé.
+        factice = config.BASE_DIR / "template" / "template.xlsx"
+        if factice.exists() and not a.force:
+            print(f"Template factice déjà présent, non écrasé : {factice} (--force pour forcer)")
         else:
-            print(f"Template factice créé : {make_template(config.TEMPLATE_PATH)}")
+            factice.parent.mkdir(parents=True, exist_ok=True)
+            print(f"Template factice créé : {make_template(factice)}")
     if a.csv or do_all:
         print(f"CSV factice créé : {make_csv(config.INCOMING_DIR, a.date)}")
     return 0

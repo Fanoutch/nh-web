@@ -27,7 +27,6 @@ python -m venv .venv
 | `llm_client.py` | Appel d'un LLM pour l'équipement incriminé -> colonnes `llm.*` (bloc `LLM` de `config.py`) |
 | `check_setup.py` | Autodiagnostic : environnement, template, mapping vs formules, CSV. Ne modifie rien |
 | `inspect_csv.py` | À lancer sur le vrai CSV : détecte séparateur/encodage, propose `CSV_READ_KWARGS` et un squelette de mapping |
-| `scheduling/` | Scripts de lancement cron / Planificateur de tâches + notice |
 
 ## Test de bout en bout avec les fixtures
 
@@ -40,13 +39,12 @@ python -m venv .venv
 
 Options utiles : `daily_report.py --dry-run` (ne pas archiver le CSV),
 `daily_report.py --csv chemin.csv` (traiter un fichier précis),
-`make_release.py` (zip à transporter, sans venv ni sorties),
 `explore_template.py --export inventaire.csv`.
 
 ## Mise en place sur le poste de travail (sans Claude Code)
 
-1. Dézipper le projet, ouvrir le dossier dans VS Code.
-2. Dans le terminal VS Code :
+1. Ouvrir nh-web dans VS Code ; ce dossier est `bmn/`.
+2. Dans le terminal VS Code, depuis `bmn/` :
    ```
    python -m venv .venv
    .venv\Scripts\pip install -r requirements.txt      # Linux/macOS : .venv/bin/pip
@@ -119,7 +117,7 @@ Côté nh-web, renseigner `EXCEL_PIPELINE_PYTHON` (interpréteur de `bmn/.venv`)
 
 `0` succès, `2` aucun CSV (run ignoré), `1` erreur. Chaque run trace
 `RUN START` / `RUN OK` / `RUN SKIPPED` / `RUN FAILED` dans `logs/daily_report.log`
-(rotation automatique). Voir `scheduling/README.md`.
+(rotation automatique).
 
 ## Extraction par un LLM (optionnelle)
 
