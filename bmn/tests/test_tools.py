@@ -87,3 +87,18 @@ def test_scan_sheet_supporte_les_cellules_fusionnees(tmp_path):
     assert not fusionnees.empty
     assert fusionnees.coord.str.match(r"^[A-Z]+\d+$").all()
     assert (fusionnees.col != "").all()
+
+
+def test_make_fixtures_ne_touche_jamais_le_vrai_template(tmp_path, monkeypatch):
+    """Même avec --force, le template factice va dans template/template.xlsx,
+    jamais dans le template réel désigné par reglages.env (config.TEMPLATE_PATH)."""
+    vrai = tmp_path / "template" / "dispo.xlsx"
+    vrai.parent.mkdir(parents=True)
+    vrai.write_bytes(b"vrai template")
+    monkeypatch.setattr(config, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(config, "TEMPLATE_PATH", vrai)
+
+    mf.main(["--template", "--force"])
+
+    assert vrai.read_bytes() == b"vrai template"
+    assert (tmp_path / "template" / "template.xlsx").exists()
