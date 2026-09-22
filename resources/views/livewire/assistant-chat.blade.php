@@ -1,9 +1,13 @@
 {{--
-    Onglet « Assistant IA » : deux colonnes (historique personnel / conversation), sur toute la
-    hauteur disponible. La donnée Alpine du conteneur gère uniquement des états d'affichage
-    éphémères (menu ⋯, défilement, copie) — aucune donnée sensible n'y transite jamais.
+    Onglet « Assistant IA » : deux colonnes (historique personnel / conversation) à partir de md,
+    sur toute la hauteur disponible (le fil défile à l'intérieur). En dessous de md, la mise en
+    page repasse en une seule colonne SANS hauteur imposée : l'historique et la conversation
+    prennent leur hauteur naturelle et suivent le défilement normal de la page, pour que la
+    zone de saisie reste atteignable sans avoir à faire défiler tout l'historique. La donnée
+    Alpine du conteneur gère uniquement des états d'affichage éphémères (menu ⋯, défilement,
+    copie) — aucune donnée sensible n'y transite jamais.
 --}}
-<div class="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4 h-[calc(100vh-220px)] min-h-[560px]"
+<div class="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4 md:h-[calc(100dvh-220px)] md:min-h-[560px]"
      x-data="{
          menuOuvert: null,
          copie: null,
@@ -38,11 +42,18 @@
                 @foreach ($items as $c)
                     <div wire:key="conv-{{ $c->id }}" class="relative">
                         @if ($renommageId === $c->id)
-                            {{-- Renommage en ligne : propriété locale « titreRenomme », validée par renommer() --}}
+                            {{--
+                                Renommage en ligne : propriété locale « titreRenomme », validée par renommer().
+                                « resolu » évite un appel annulerRenommage() inutile sur le blur qui suit
+                                Entrée/Échap (le champ disparaît alors déjà du DOM, l'état est déjà réglé).
+                            --}}
                             <input type="text" wire:model="titreRenomme" maxlength="100" autofocus
+                                   x-data="{ resolu: false }"
                                    wire:keydown.enter="renommer({{ $c->id }}, $event.target.value)"
                                    wire:keydown.escape="annulerRenommage"
-                                   x-on:blur="$wire.annulerRenommage()"
+                                   x-on:keydown.enter="resolu = true"
+                                   x-on:keydown.escape="resolu = true"
+                                   x-on:blur="if (! resolu) $wire.annulerRenommage()"
                                    aria-label="Nouveau titre de la conversation"
                                    class="w-full bg-app-elevated border border-accent rounded px-2 py-1.5 text-[13px] text-ink-primary focus:outline-none" />
                         @else

@@ -9,10 +9,10 @@
         <div class="flex flex-wrap justify-center gap-2 mt-4 max-w-[520px] mx-auto">
             @foreach ([
                 'Quels documents sont disponibles dans ce secteur ?',
-                'Résume les procédures les plus récentes.',
+                'Quelle est la procédure d’entretien la plus récente ?',
                 'Où puis-je trouver les consignes de sécurité ?',
             ] as $suggestion)
-                <button type="button" wire:click="$set('question', '{{ $suggestion }}')"
+                <button type="button" wire:click="$set('question', @js($suggestion))"
                         class="bg-app-card border border-app-border rounded-full px-3 py-1.5 text-[12px] text-ink-secondary hover:border-accent hover:text-ink-primary transition">
                     {{ $suggestion }}
                 </button>

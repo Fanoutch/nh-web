@@ -328,3 +328,45 @@ it('groups conversations by date under the exact expected labels', function () {
     Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
         ->assertSeeInOrder(['Aujourd’hui', 'Du jour', 'Hier', 'D’hier', '7 derniers jours', 'De la semaine', 'Plus ancien', 'Très ancienne']);
 });
+
+it('opens the inline rename field on my own conversation, pre-filled with its title', function () {
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Ancien titre']);
+
+    Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->call('commencerRenommage', $conversation->id)
+        ->assertSet('renommageId', $conversation->id)
+        ->assertSet('titreRenomme', 'Ancien titre');
+});
+
+it('forbids opening the inline rename field on someone else’s conversation', function () {
+    $proprietaire = membreSecteur(secteurBmn(), 'chef');
+    $conversation = AssistantConversation::create(['user_id' => $proprietaire->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Privée']);
+    $intrus = membreSecteur(secteurBmn(), 'utilisateur');
+
+    Livewire::actingAs($intrus)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->call('commencerRenommage', $conversation->id)->assertForbidden();
+});
+
+it('closes the inline rename field without saving anything', function () {
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Titre initial']);
+
+    Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->call('commencerRenommage', $conversation->id)
+        ->set('titreRenomme', 'Brouillon jamais validé')
+        ->call('annulerRenommage')
+        ->assertSet('renommageId', null);
+
+    expect($conversation->fresh()->titre)->toBe('Titre initial');
+});
+
+it('escapes an apostrophe in a welcome suggestion so it cannot break the JavaScript', function () {
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    secteurBmn()->assistantDocuments()->create(['nom' => 'Manuel.pdf', 'chemin' => 'x', 'taille' => 1, 'format' => 'pdf', 'statut' => 'pret']);
+
+    Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->assertSee('Quelle est la procédure d’entretien la plus récente ?')
+        // Le titre @js()-encodé n'expose plus l'apostrophe brute dans l'attribut JS.
+        ->assertDontSeeHtml("\$set('question', 'Quelle est la procédure d’entretien");
+});
