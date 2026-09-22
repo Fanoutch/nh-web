@@ -8,8 +8,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
-beforeEach(fn () => config(['assistant.jeton' => 'secret']));
-
 // --- Bouton Arrêter côté AssistantChat::envoyer() ------------------------------------------
 
 it('conserve le texte déjà reçu avec le statut interrompu quand l’utilisateur arrête, et efface le drapeau', function () {
@@ -22,7 +20,7 @@ it('conserve le texte déjà reçu avec le statut interrompu quand l’utilisate
     capturerFlux(fn () => Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
         ->call('ouvrir', $conversation->id)->set('question', 'Qui lance un vol ?')->call('envoyer'));
 
-    $reponse = $conversation->messages()->where('role', 'assistant')->latest('id')->first();
+    $reponse = $conversation->messages()->where('role', 'assistant')->reorder()->latest('id')->first();
     expect($reponse)->not->toBeNull()
         ->and($reponse->statut)->toBe('interrompu')
         ->and($reponse->contenu)->toBe('Le vol est ordonné ')
@@ -44,6 +42,58 @@ it('n’enregistre aucune réponse quand l’utilisateur arrête avant le moindr
         ->and(Cache::has("assistant.arret.{$conversation->id}"))->toBeFalse();
 });
 
+it('efface le drapeau d’arrêt même si l’appel au service échoue avant la lecture du flux, et laisse la question suivante intacte', function () {
+    // Une seule fausse réponse HTTP, qui distingue les deux questions par leur contenu : Http::fake
+    // ajoute les correspondances dans l'ordre d'enregistrement et retient la PREMIÈRE qui matche
+    // l'URL, donc deux appels successifs à Http::fake(['*/questions' => ...]) ne se remplacent pas
+    // l'un l'autre (le premier gagnerait toujours) — d'où ce fake unique, discriminé sur le corps.
+    Http::fake(function ($requete) {
+        if ($requete['question'] === 'Qui ?') {
+            // 503 avant même d'entrer dans la boucle de lecture du flux : doitArreter() n'est jamais
+            // appelé, donc Cache::pull() ne s'exécute pas — sans le correctif, le drapeau resterait posé.
+            return Http::response('', 503);
+        }
+
+        return Http::response(
+            '{"type":"sources","sources":[]}'."\n".'{"type":"texte","texte":"Réponse normale."}'."\n".'{"type":"fin"}',
+            200,
+            ['Content-Type' => 'application/x-ndjson'],
+        );
+    });
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'T']);
+    Cache::put("assistant.arret.{$conversation->id}", true, 600);
+
+    capturerFlux(fn () => Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->call('ouvrir', $conversation->id)->set('question', 'Qui ?')->call('envoyer'));
+
+    $reponse = $conversation->messages()->where('role', 'assistant')->reorder()->latest('id')->first();
+    expect($reponse->statut)->toBe('erreur')
+        ->and(Cache::has("assistant.arret.{$conversation->id}"))->toBeFalse();
+
+    // Le drapeau n'ayant plus cours, une seconde question dans la même conversation se déroule
+    // normalement (elle ne doit pas être coupée d'emblée).
+    capturerFlux(fn () => Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->call('ouvrir', $conversation->id)->set('question', 'Et ensuite ?')->call('envoyer'));
+
+    $deuxiemeReponse = $conversation->messages()->where('role', 'assistant')->reorder()->latest('id')->first();
+    expect($deuxiemeReponse->statut)->toBe('complet')
+        ->and($deuxiemeReponse->contenu)->toBe('Réponse normale.');
+});
+
+it('remonte la conversation en tête de l’historique même quand l’arrêt survient avant le moindre mot', function () {
+    Http::fake(['*/questions' => Http::response('{"type":"sources","sources":[]}', 200, ['Content-Type' => 'application/x-ndjson'])]);
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'T']);
+    $conversation->forceFill(['updated_at' => now()->subDay()])->saveQuietly();
+    Cache::put("assistant.arret.{$conversation->id}", true, 600);
+
+    capturerFlux(fn () => Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->call('ouvrir', $conversation->id)->set('question', 'Qui ?')->call('envoyer'));
+
+    expect($conversation->fresh()->updated_at->isToday())->toBeTrue();
+});
+
 it('répond normalement (statut complet) quand aucun arrêt n’a été demandé', function () {
     fluxReponse('Réponse complète.');
     $user = membreSecteur(secteurBmn(), 'utilisateur');
@@ -54,6 +104,15 @@ it('répond normalement (statut complet) quand aucun arrêt n’a été demandé
     $conversation = AssistantConversation::sole();
     expect($conversation->messages()->where('role', 'assistant')->sole()->statut)->toBe('complet')
         ->and(Cache::has("assistant.arret.{$conversation->id}"))->toBeFalse();
+});
+
+it('n’envoie rien quand on clique Arrêter avant que l’identifiant de la conversation ne soit connu', function () {
+    // Conversation tout juste créée : conversation-id-en-cours n'a pas encore été diffusé, donc
+    // $refs.conversationIdEnCours est vide. Le clic ne doit rien envoyer (pas d'identifiant vide,
+    // pas de 422 avalé) et laisser le bouton dans son état normal, prêt à réessayer.
+    Livewire::actingAs(membreSecteur(secteurBmn(), 'utilisateur'))->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->assertSeeHtml('const idConversation = $refs.conversationIdEnCours.textContent.trim();')
+        ->assertSeeHtml("if (idConversation === '') return;");
 });
 
 // --- Route POST /secteurs/{secteur}/assistant/arreter ---------------------------------------

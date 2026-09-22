@@ -53,6 +53,12 @@
                     x-bind:disabled="arretEnCours"
                     x-on:click="
                         if (arretEnCours) return;
+                        // Conversation tout juste créée : l'identifiant n'est pas encore arrivé par le
+                        // flux (conversation-id-en-cours). On n'envoie rien plutôt qu'un identifiant vide
+                        // (le serveur répondrait 422) — le bouton reste cliquable normalement, prêt à
+                        // réessayer dès que l'identifiant sera connu, quelques instants plus tard.
+                        const idConversation = $refs.conversationIdEnCours.textContent.trim();
+                        if (idConversation === '') return;
                         arretEnCours = true;
                         fetch('{{ route('secteurs.assistant.arreter', $secteur) }}', {
                             method: 'POST',
@@ -61,8 +67,8 @@
                                 'Content-Type': 'application/json',
                                 'Accept': 'application/json',
                             },
-                            body: JSON.stringify({ conversation_id: $refs.conversationIdEnCours.textContent }),
-                        });
+                            body: JSON.stringify({ conversation_id: idConversation }),
+                        }).then((r) => { if (! r.ok) arretEnCours = false; }).catch(() => { arretEnCours = false; });
                     "
                     class="items-center gap-1.5 !rounded-lg !px-3 !py-2 shrink-0 border border-app-border bg-app-elevated text-ink-primary text-sm font-medium hover:border-accent transition disabled:opacity-60 disabled:cursor-not-allowed">
                 <span aria-hidden="true">■</span>

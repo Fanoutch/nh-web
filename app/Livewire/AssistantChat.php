@@ -342,11 +342,20 @@ class AssistantChat extends Component
         } catch (AssistantIndisponible $e) {
             $erreur = $e->getMessage();
             $detail = $e->detail;
+        } finally {
+            // $doitArreter n'est appelé que depuis la boucle de lecture du flux : si l'appel HTTP
+            // échoue avant (service arrêté, statut non-2xx), Cache::pull() n'a jamais eu lieu et le
+            // drapeau resterait posé jusqu'à 10 minutes, coupant la question suivante d'emblée. On
+            // l'efface donc systématiquement ici, quel que soit le chemin de sortie.
+            Cache::forget("assistant.arret.{$conversation->id}");
         }
 
         // Arrêt demandé sans aucun texte reçu : la conversation reste propre, comme si la
-        // question n'avait pas eu de réponse (pas de message d'erreur enregistré).
+        // question n'avait pas eu de réponse (pas de message d'erreur enregistré), mais elle
+        // remonte quand même en tête de l'historique (un message utilisateur y a été créé).
         if ($arretDemande && $reponse === '') {
+            $conversation->touch();
+
             return;
         }
 
