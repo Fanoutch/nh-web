@@ -143,6 +143,20 @@ def test_supprimer(assistant):
     assert assistant.base.nb_morceaux("bmn", 1) == 0
 
 
+def test_supprimer_piece_jointe_ne_touche_pas_les_autres_pieces_de_la_conversation(assistant, tmp_path):
+    assistant.indexer_piece_jointe(
+        7, 10, str(pdf_texte(tmp_path / "cr1.pdf", ["Le vol de maintenance."])), "CR1.pdf",
+    )
+    assistant.indexer_piece_jointe(
+        7, 11, str(pdf_texte(tmp_path / "cr2.pdf", ["Le compost se retourne."])), "CR2.pdf",
+    )
+
+    assistant.supprimer_piece_jointe(7, 10)
+
+    restants = assistant.base.chercher_conversation(7, faux_vecteur("compost"), top_k=5)
+    assert [m["nom"] for m in restants] == ["CR2.pdf"]
+
+
 def test_erreur_inattendue_de_la_base_donne_un_evenement_erreur(assistant, journal, monkeypatch):
     def en_panne(secteur, vecteur, top_k):
         raise RuntimeError("dimension 4096 != 1024")

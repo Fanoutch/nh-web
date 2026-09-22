@@ -152,6 +152,13 @@ class AssistantClient
         return (int) $reponse->json('nb_morceaux');
     }
 
+    /** Supprime les vecteurs d'UNE SEULE pièce jointe, sans toucher aux autres pièces de la conversation. */
+    public function supprimerPieceJointe(AssistantPieceJointe $piece): void
+    {
+        $this->envoyer(fn () => $this->http(30)
+            ->delete('/pieces-jointes/'.$piece->id.'?conversation_id='.$piece->conversation_id));
+    }
+
     /** Supprime les vecteurs de tous les documents (et pièces jointes) d'une conversation. */
     public function supprimerConversation(int $conversationId): void
     {

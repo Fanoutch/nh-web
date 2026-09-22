@@ -114,9 +114,13 @@ it('bloque l’envoi tant qu’une pièce jointe est en préparation puis rattac
     expect($piece->statut)->toBe('en_attente');
 
     // Pièce encore en préparation : l'envoi n'enregistre rien et affiche le message d'attente.
-    $composant->set('question', 'Une question ?')->call('envoyer')
+    // Texte VOLONTAIREMENT différent de la question réussie ci-dessous : si le renommage du titre
+    // provisoire s'exécutait avant ce contrôle (bug corrigé), le titre porterait ce texte-ci au lieu
+    // de la première question réellement envoyée — une même question aux deux tentatives masquerait ce défaut.
+    $composant->set('question', 'Tentative avortée ?')->call('envoyer')
         ->assertSee('Une pièce jointe est encore en préparation.');
     expect($conversation->messages()->count())->toBe(0);
+    expect($conversation->fresh()->titre)->toBe('Nouvelle conversation');
 
     // Une fois la pièce prête, l'envoi l'attache au message utilisateur.
     $piece->update(['statut' => AssistantPieceJointe::PRET]);
@@ -124,7 +128,8 @@ it('bloque l’envoi tant qu’une pièce jointe est en préparation puis rattac
     capturerFlux(fn () => $composant->set('question', 'Une question ?')->call('envoyer'));
 
     $message = $conversation->messages()->where('role', 'utilisateur')->sole();
-    expect($message->pieces)->toBe([['id' => $piece->id, 'nom' => $piece->nom, 'format' => $piece->format]]);
+    expect($message->pieces)->toBe([['id' => $piece->id, 'nom' => $piece->nom, 'format' => $piece->format]])
+        ->and($conversation->fresh()->titre)->toBe('Une question ?');
 
     // Une deuxième question de la même conversation ne rattache plus la même pièce.
     // reorder() : la relation messages() impose déjà orderBy('id') croissant, que latest('id')
@@ -184,13 +189,45 @@ it('nettoie au chargement de l’onglet les conversations vides de plus de 24 h,
     $vieilleAvecMessage->messages()->create(['role' => 'utilisateur', 'contenu' => 'Q', 'statut' => 'complet']);
     $vieilleAvecMessage->forceFill(['created_at' => now()->subDays(2)])->saveQuietly();
 
+    // File de jobs engorgée plus de 24 h : la pièce est encore en_attente. Ne doit pas disparaître
+    // en cours d'indexation (fichier compris).
+    $vieilleEnAttente = conversation($utilisateur, secteurBmn(), ['titre' => 'Nouvelle conversation']);
+    $vieilleEnAttente->forceFill(['created_at' => now()->subDays(2)])->saveQuietly();
+    $pieceEnAttente = AssistantPieceJointe::create([
+        'conversation_id' => $vieilleEnAttente->id, 'nom' => 'CR2.pdf', 'chemin' => "assistant/pj/{$vieilleEnAttente->id}/2_cr.pdf",
+        'taille' => 10, 'format' => 'pdf', 'statut' => AssistantPieceJointe::EN_ATTENTE,
+    ]);
+    Storage::disk('local')->put($pieceEnAttente->chemin, 'x');
+
     Livewire::actingAs($utilisateur)->test(AssistantChat::class, ['secteur' => secteurBmn()]);
 
     expect(AssistantConversation::find($vieilleVide->id))->toBeNull()
         ->and(AssistantPieceJointe::find($piece->id))->toBeNull()
         ->and(AssistantConversation::find($recenteVide->id))->not->toBeNull()
-        ->and(AssistantConversation::find($vieilleAvecMessage->id))->not->toBeNull();
+        ->and(AssistantConversation::find($vieilleAvecMessage->id))->not->toBeNull()
+        ->and(AssistantConversation::find($vieilleEnAttente->id))->not->toBeNull()
+        ->and(AssistantPieceJointe::find($pieceEnAttente->id))->not->toBeNull();
     Storage::disk('local')->assertMissing($piece->chemin);
+    Storage::disk('local')->assertExists($pieceEnAttente->chemin);
+});
+
+it('nettoie une seule fois par visite de l’onglet (mount), pas à chaque render()', function () {
+    // Important (ronde de correction 1) : appelé depuis render(), nettoyerVides() tournerait toutes
+    // les 3 s pendant qu'une pièce s'indexe (wire:poll.3s). Un espion compte ses appels réels.
+    $utilisateur = membreSecteur(secteurBmn(), 'utilisateur');
+    $conversation = conversation($utilisateur, secteurBmn());
+    $conversation->messages()->create(['role' => 'utilisateur', 'contenu' => 'Q', 'statut' => 'complet']);
+
+    $espion = Mockery::spy(GestionConversationsAssistant::class);
+    app()->instance(GestionConversationsAssistant::class, $espion);
+
+    // mount() (chargement de la page) + trois actions qui redéclenchent chacune render().
+    Livewire::actingAs($utilisateur)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->call('commencerRenommage', $conversation->id)
+        ->call('annulerRenommage')
+        ->call('ouvrir', $conversation->id);
+
+    $espion->shouldHaveReceived('nettoyerVides')->once();
 });
 
 // --- Consultation (AssistantPieceJointeController) ------------------------------------------
@@ -257,12 +294,17 @@ it('marque la pièce jointe illisible en erreur avec le message du service', fun
         ->and($piece->fresh()->detail)->toBe('ValueError: vide');
 });
 
-it('marque la pièce jointe en erreur quand le service est indisponible pendant l’indexation, et tente de retirer les vecteurs', function () {
-    // Pas de suppression par pièce côté service (seulement par conversation entière) : le job
-    // retente « au mieux » un DELETE /conversations/{id}, voir IndexerPieceJointeAssistant.
-    Http::fake(['*/pieces-jointes' => Http::response('', 503), '*/conversations/*' => Http::response(['ok' => true])]);
+it('marque la pièce jointe en erreur quand le service est indisponible pendant l’indexation, et retire ses vecteurs SANS toucher aux autres pièces de la conversation', function () {
+    // Critique (ronde de correction 1) : le job doit cibler uniquement CETTE pièce
+    // (DELETE /pieces-jointes/{id}), jamais DELETE /conversations/{id} qui effacerait aussi
+    // les vecteurs des autres pièces déjà prêtes de la même conversation.
+    Http::fake(['*/pieces-jointes/*' => Http::response(['ok' => true]), '*/pieces-jointes' => Http::response('', 503)]);
     $utilisateur = membreSecteur(secteurBmn(), 'utilisateur');
     $c = conversation($utilisateur, secteurBmn());
+    $autrePiece = AssistantPieceJointe::create([
+        'conversation_id' => $c->id, 'nom' => 'Autre.pdf', 'chemin' => "assistant/pj/{$c->id}/0_autre.pdf",
+        'taille' => 10, 'format' => 'pdf', 'statut' => AssistantPieceJointe::PRET,
+    ]);
     $piece = AssistantPieceJointe::create([
         'conversation_id' => $c->id, 'nom' => 'CR.pdf', 'chemin' => "assistant/pj/{$c->id}/1_cr.pdf",
         'taille' => 10, 'format' => 'pdf', 'statut' => AssistantPieceJointe::EN_ATTENTE,
@@ -270,9 +312,13 @@ it('marque la pièce jointe en erreur quand le service est indisponible pendant 
 
     (new IndexerPieceJointeAssistant($piece->id))->handle(app(AssistantClient::class));
 
-    Http::assertSent(fn ($r) => str_contains($r->url(), "/conversations/{$c->id}") && $r->method() === 'DELETE');
+    Http::assertSent(fn ($r) => $r->method() === 'DELETE'
+        && str_contains($r->url(), "/pieces-jointes/{$piece->id}") && str_contains($r->url(), "conversation_id={$c->id}"));
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), '/conversations/'));
     expect($piece->fresh()->statut)->toBe('erreur')
-        ->and($piece->fresh()->message)->toBe("L'assistant est indisponible pour le moment, réessayez plus tard.");
+        ->and($piece->fresh()->message)->toBe("L'assistant est indisponible pour le moment, réessayez plus tard.")
+        // La pièce jointe déjà prête de la même conversation n'est pas touchée par ce job.
+        ->and($autrePiece->fresh()->statut)->toBe('pret');
 });
 
 it('marque une pièce jointe bloquée en erreur quand le job lui-même échoue', function () {

@@ -137,6 +137,11 @@ def creer_app(reglages: Reglages | None = None, assistant=None) -> FastAPI:
             })
         return {"nb_morceaux": n}
 
+    @app.delete("/pieces-jointes/{piece_id}", dependencies=protege)
+    def supprimer_piece_jointe(piece_id: int, conversation_id: int):
+        moteur.supprimer_piece_jointe(conversation_id, piece_id)
+        return {"ok": True}
+
     @app.delete("/conversations/{conversation_id}", dependencies=protege)
     def supprimer_conversation(conversation_id: int):
         moteur.supprimer_conversation(conversation_id)

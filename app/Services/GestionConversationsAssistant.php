@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AssistantConversation;
+use App\Models\AssistantPieceJointe;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -32,14 +33,19 @@ class GestionConversationsAssistant
     /**
      * Conversations sans aucun message, créées il y a plus de 24 h (une pièce jointe déposée avant la
      * première question crée la conversation — voir AssistantChat::updatedPieces — mais celle-ci ne
-     * doit pas traîner indéfiniment si elle n'est jamais utilisée). Appelée pour l'utilisateur courant
-     * à chaque chargement de l'onglet Assistant IA.
+     * doit pas traîner indéfiniment si elle n'est jamais utilisée). Exclut les conversations dont une
+     * pièce est encore `en_attente`/`en_cours` : une file de jobs engorgée plus de 24 h ne doit pas
+     * faire disparaître silencieusement la conversation, ses pièces et leurs fichiers pendant
+     * l'indexation. Appelée une fois par visite de l'onglet Assistant IA, pour l'utilisateur courant.
      */
     public function nettoyerVides(int $userId, int $secteurId): void
     {
         $conversations = AssistantConversation::where('user_id', $userId)
             ->where('secteur_id', $secteurId)
             ->whereDoesntHave('messages')
+            ->whereDoesntHave('piecesJointes', fn ($q) => $q->whereIn('statut', [
+                AssistantPieceJointe::EN_ATTENTE, AssistantPieceJointe::EN_COURS,
+            ]))
             ->where('created_at', '<', now()->subDay())
             ->get();
 

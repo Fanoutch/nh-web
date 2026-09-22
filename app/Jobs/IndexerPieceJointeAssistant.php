@@ -44,12 +44,8 @@ class IndexerPieceJointeAssistant implements ShouldQueue
             return;
         } catch (AssistantIndisponible $e) {
             // Le service a pu enregistrer une partie des morceaux avant l'échec : on tente de les
-            // retirer au mieux. Contrairement à un document, il n'existe pas de retrait par pièce
-            // jointe (seulement par conversation entière, supprimerConversation) : cet appel efface
-            // aussi les vecteurs des AUTRES pièces déjà prêtes de cette même conversation. C'est le
-            // seul outil disponible ; le risque de collatéral reste faible en pratique (l'échec vient
-            // le plus souvent d'une panne du service, auquel cas cet appel échoue lui aussi et ne fait
-            // rien — voir le catch ci-dessous).
+            // retirer au mieux, SANS toucher aux vecteurs des autres pièces déjà prêtes de la même
+            // conversation (supprimerPieceJointe cible uniquement cette pièce).
             $this->retirerVecteurs($client, $piece);
             $piece->update(['statut' => AssistantPieceJointe::ERREUR, 'message' => $e->getMessage(), 'detail' => $e->detail]);
 
@@ -76,11 +72,11 @@ class IndexerPieceJointeAssistant implements ShouldQueue
         ]);
     }
 
-    /** Suppression « au mieux » de l'espace de recherche de la conversation (le service peut être indisponible). */
+    /** Suppression « au mieux » des vecteurs de CETTE pièce (le service peut être indisponible). */
     private function retirerVecteurs(AssistantClient $client, AssistantPieceJointe $piece): void
     {
         try {
-            $client->supprimerConversation($piece->conversation_id);
+            $client->supprimerPieceJointe($piece);
         } catch (AssistantIndisponible) {
             // Tant pis : rien de plus à faire ici.
         }

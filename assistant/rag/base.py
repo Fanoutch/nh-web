@@ -160,6 +160,16 @@ class BaseVectorielle:
             )
         ]
 
+    def supprimer_piece_jointe(self, conversation_id: int, piece_id: int) -> None:
+        """Retire les vecteurs d'UNE SEULE pièce jointe de la collection de la conversation,
+        sans toucher aux autres pièces déjà indexées. Silencieux si la collection n'existe pas
+        (conversation jamais indexée, ou déjà supprimée) : creer=False, comme chercher_conversation."""
+        with self._verrou:
+            collection = self._collection_conversation(conversation_id, creer=False)
+            if collection is None:
+                return
+            collection.delete(where={"piece_id": piece_id})
+
     def supprimer_conversation(self, conversation_id: int) -> None:
         nom = f"conv_{conversation_id}"
         with self._verrou:

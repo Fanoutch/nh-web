@@ -56,6 +56,9 @@ class Assistant:
         self.base.ajouter_piece_jointe(conversation_id, piece_id, nom, morceaux, vecteurs)
         return len(morceaux)
 
+    def supprimer_piece_jointe(self, conversation_id: int, piece_id: int) -> None:
+        self.base.supprimer_piece_jointe(conversation_id, piece_id)
+
     def supprimer_conversation(self, conversation_id: int) -> None:
         self.base.supprimer_conversation(conversation_id)
 

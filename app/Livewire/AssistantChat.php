@@ -63,6 +63,10 @@ class AssistantChat extends Component
     public function mount(): void
     {
         $this->autoriser();
+        // mount() : une fois par visite de l'onglet (chargement complet de la page), pas à chaque
+        // render() — sinon le nettoyage tournerait toutes les 3 s pendant qu'une pièce s'indexe
+        // (wire:poll.3s, voir render()), pour un résultat qui ne change quasiment jamais.
+        app(GestionConversationsAssistant::class)->nettoyerVides(auth()->id(), $this->secteur->id);
     }
 
     public function hydrate(): void
@@ -263,19 +267,21 @@ class AssistantChat extends Component
             ]);
         $this->conversationId = $conversation->id;
 
+        // Le bouton Envoyer reste normalement indisponible tant qu'une pièce jointe est en
+        // préparation (voir render()) ; ce contrôle serveur reste la protection qui compte. Vérifié
+        // AVANT de renommer la conversation ci-dessous : une tentative avortée ici ne doit pas
+        // remplacer définitivement le titre provisoire.
+        if ($conversation->piecesJointes()->whereIn('statut', [AssistantPieceJointe::EN_ATTENTE, AssistantPieceJointe::EN_COURS])->exists()) {
+            $this->addError('question', 'Une pièce jointe est encore en préparation.');
+
+            return;
+        }
+
         // Une pièce jointe déposée avant toute question a créé la conversation avec le titre
         // provisoire « Nouvelle conversation » (voir updatedPieces) : la première question envoyée
         // le remplace, comme pour une conversation créée normalement.
         if ($conversation->titre === 'Nouvelle conversation' && ! $conversation->messages()->exists()) {
             $conversation->update(['titre' => Str::limit($question, 60)]);
-        }
-
-        // Le bouton Envoyer reste normalement indisponible tant qu'une pièce jointe est en
-        // préparation (voir render()) ; ce contrôle serveur reste la protection qui compte.
-        if ($conversation->piecesJointes()->whereIn('statut', [AssistantPieceJointe::EN_ATTENTE, AssistantPieceJointe::EN_COURS])->exists()) {
-            $this->addError('question', 'Une pièce jointe est encore en préparation.');
-
-            return;
         }
 
         // Propriété Locked non synchronisée avant la fin du flux : l'identifiant est aussi
@@ -464,11 +470,6 @@ class AssistantChat extends Component
 
     public function render()
     {
-        // Conversations abandonnées (pièce jointe déposée puis jamais utilisée) : nettoyées une fois
-        // par chargement, pour l'utilisateur courant dans ce secteur. render() est appelé directement
-        // par Livewire (sans injection de dépendances), d'où la résolution manuelle du service.
-        app(GestionConversationsAssistant::class)->nettoyerVides(auth()->id(), $this->secteur->id);
-
         // Une conversation sans message (pièce jointe déposée puis jamais utilisée, avant que
         // nettoyerVides() ne l'efface après 24 h) n'apparaît pas dans l'historique.
         $conversations = AssistantConversation::where('user_id', auth()->id())

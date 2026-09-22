@@ -41,6 +41,9 @@ class FauxAssistant:
             raise self.erreur
         return 4
 
+    def supprimer_piece_jointe(self, conversation_id, piece_id):
+        self.appels.append(("supprimer_piece_jointe", conversation_id, piece_id))
+
     def supprimer_conversation(self, conversation_id):
         self.appels.append(("supprimer_conversation", conversation_id))
 
@@ -229,3 +232,11 @@ def test_pieces_jointes_erreur_imprevue_503(client, faux):
 def test_route_suppression_conversation(client, moteur):
     assert client.delete("/conversations/7", headers=JETON).json() == {"ok": True}
     assert client.delete("/conversations/7").status_code == 401     # sans jeton
+
+
+def test_route_suppression_piece_jointe(client, moteur):
+    reponse = client.delete("/pieces-jointes/10", params={"conversation_id": 7}, headers=JETON)
+
+    assert reponse.json() == {"ok": True}
+    assert moteur.appels == [("supprimer_piece_jointe", 7, 10)]
+    assert client.delete("/pieces-jointes/10", params={"conversation_id": 7}).status_code == 401  # sans jeton

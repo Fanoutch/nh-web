@@ -231,3 +231,13 @@ it('deletes a conversation', function () {
     Http::assertSent(fn (Request $r) => $r->method() === 'DELETE'
         && $r->url() === 'http://127.0.0.1:8765/conversations/42');
 });
+
+it('deletes a single attachment without touching the rest of the conversation', function () {
+    Http::fake(['*/pieces-jointes/*' => Http::response(['ok' => true])]);
+    $piece = pieceJointeDeTest();
+
+    app(AssistantClient::class)->supprimerPieceJointe($piece);
+
+    Http::assertSent(fn (Request $r) => $r->method() === 'DELETE'
+        && $r->url() === "http://127.0.0.1:8765/pieces-jointes/{$piece->id}?conversation_id={$piece->conversation_id}");
+});

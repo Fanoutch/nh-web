@@ -150,6 +150,21 @@ def test_piece_jointe_dans_une_collection_de_conversation(base):
     base.supprimer_conversation(7)                                      # deux fois : pas d'erreur
 
 
+def test_supprimer_piece_jointe_ne_touche_pas_les_autres_pieces_de_la_conversation(base):
+    base.ajouter_piece_jointe(7, 10, "cr1.pdf", [{"texte": "depose moteur", "page": 1}], [MAINT])
+    base.ajouter_piece_jointe(7, 11, "cr2.pdf", [{"texte": "remplacement pneu", "page": 1}], [COMPOST])
+
+    base.supprimer_piece_jointe(7, 10)
+
+    restants = base.chercher_conversation(7, COMPOST, top_k=5)
+    assert [m["nom"] for m in restants] == ["cr2.pdf"]
+    assert all(not m["id"].startswith("pj10_") for m in restants)
+
+
+def test_supprimer_piece_jointe_collection_absente_sans_erreur(base):
+    base.supprimer_piece_jointe(99, 1)                                  # conversation jamais indexée
+
+
 def test_secteur_et_conversation_de_meme_nom_ne_se_melangent_pas(base):
     # Un secteur nommé "conv_7" ne doit pas partager d'entrée de cache avec la conversation 7 :
     # les noms réels de collection ChromaDB ("secteur_conv_7" vs "conv_7") sont distincts.
