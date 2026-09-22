@@ -539,7 +539,11 @@ class AssistantChat extends Component
         // Pièces jointes de la conversation ouverte (nom => id) : une source « pj » ne porte que le
         // nom du fichier (le service Python ne renvoie pas l'identifiant), on la relie donc ici à sa
         // pièce jointe pour ouvrir la bonne route de consultation (jamais celle des documents).
-        $piecesParNom = $conversation !== null ? $conversation->piecesJointes()->pluck('id', 'nom') : collect();
+        // Triées par identifiant croissant : en cas d'homonymes (rare), pluck() garde la DERNIÈRE
+        // valeur pour une même clé, donc la plus récente — sans ce tri, l'ordre ne serait pas garanti.
+        $piecesParNom = $conversation !== null
+            ? $conversation->piecesJointes()->orderBy('id')->pluck('id', 'nom')
+            : collect();
 
         return view('livewire.assistant-chat', [
             'conversationsGroupees' => $this->conversationsGroupees($conversations),

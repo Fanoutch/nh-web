@@ -33,7 +33,9 @@
 
     <div class="flex flex-wrap items-center gap-2 px-1">
         @if (! empty($m->sources))
-            <div class="flex flex-wrap items-center gap-1.5">
+            {{-- aria-label : seul repère annonçant ce groupe de pastilles pour les lecteurs d'écran
+                 (le préfixe « Sources : » visible a été retiré au profit du style pastille). --}}
+            <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="Sources">
                 @foreach ($m->sources as $j => $s)
                     @php
                         $estPj = ! empty($s['pj']);
@@ -106,9 +108,14 @@
                 if ($extension === 'pdf' && ! empty($s['page'])) {
                     $url .= '#page='.$s['page'];
                 }
-                $libelleBouton = $extension === 'docx'
-                    ? 'Télécharger le document'
-                    : (! empty($s['page']) ? 'Ouvrir le document à la page '.$s['page'] : 'Ouvrir le document');
+                // La mention de la page n'apparaît que pour un PDF (seul format où #page=N est honoré) :
+                // un .txt peut aussi porter un numéro de page (le lecteur Python découpe sur les sauts
+                // de page), mais l'ouvrir ne saute pas dessus — le libellé ne doit pas le promettre.
+                $libelleBouton = match (true) {
+                    $extension === 'docx' => 'Télécharger le document',
+                    $extension === 'pdf' && ! empty($s['page']) => 'Ouvrir le document à la page '.$s['page'],
+                    default => 'Ouvrir le document',
+                };
             @endphp
             <div x-show="sourceOuverte === {{ $j }}" x-cloak
                  class="mt-0.5 rounded-xl border border-app-border border-l-[3px] border-l-accent bg-app-card px-3 py-2.5 text-[13px]">

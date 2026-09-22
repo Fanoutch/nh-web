@@ -300,6 +300,48 @@ it('opens a conversation attachment through its own route, never the documents r
         ->assertSeeHtml('<mark>Panne</mark>');
 });
 
+it('never promises a page jump for a paginated .txt source (only a PDF honours #page=N)', function () {
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $secteur = secteurBmn();
+    // Le lecteur Python découpe aussi un .txt sur les sauts de page : la source peut donc porter un
+    // numéro de page, mais l'ouverture ne saute jamais dessus (seul #page=N sur un PDF est honoré).
+    $doc = $secteur->assistantDocuments()->create(['nom' => 'Notes.txt', 'chemin' => 'x', 'taille' => 1, 'format' => 'txt', 'statut' => 'pret']);
+    $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => $secteur->id, 'titre' => 'T']);
+    $conversation->messages()->create(['role' => 'utilisateur', 'contenu' => 'Question sur la panne ?', 'statut' => 'complet']);
+    $conversation->messages()->create(['role' => 'assistant', 'contenu' => 'R', 'statut' => 'complet', 'sources' => [
+        ['document_id' => $doc->id, 'nom' => 'Notes.txt', 'page' => 4, 'chemin' => '', 'extrait' => 'Panne moteur.', 'pj' => false],
+    ]]);
+
+    $rendu = Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => $secteur])
+        ->call('ouvrir', $conversation->id);
+
+    $rendu->assertSee('Ouvrir le document ↗')
+        ->assertDontSee('Ouvrir le document à la page')
+        ->assertDontSeeHtml(route('secteurs.documents.consulter', [$secteur, $doc]).'#page=4');
+});
+
+it('links a pj source to the most recent attachment when two share the same file name', function () {
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $secteur = secteurBmn();
+    $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => $secteur->id, 'titre' => 'T']);
+    AssistantPieceJointe::create([
+        'conversation_id' => $conversation->id, 'nom' => 'CR.pdf', 'chemin' => 'x', 'taille' => 1,
+        'format' => 'pdf', 'statut' => AssistantPieceJointe::PRET,
+    ]);
+    $recente = AssistantPieceJointe::create([
+        'conversation_id' => $conversation->id, 'nom' => 'CR.pdf', 'chemin' => 'y', 'taille' => 1,
+        'format' => 'pdf', 'statut' => AssistantPieceJointe::PRET,
+    ]);
+    $conversation->messages()->create(['role' => 'utilisateur', 'contenu' => 'Y a-t-il eu une panne ?', 'statut' => 'complet']);
+    $conversation->messages()->create(['role' => 'assistant', 'contenu' => 'R', 'statut' => 'complet', 'sources' => [
+        ['document_id' => null, 'nom' => 'CR.pdf', 'page' => 1, 'chemin' => '', 'extrait' => 'Panne moteur.', 'pj' => true],
+    ]]);
+
+    Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => $secteur])
+        ->call('ouvrir', $conversation->id)
+        ->assertSeeHtml(route('secteurs.assistant.piece', [$secteur, $recente]));
+});
+
 it('ignores an empty question', function () {
     $user = membreSecteur(secteurBmn(), 'utilisateur');
 
