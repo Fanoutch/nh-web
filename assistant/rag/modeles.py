@@ -36,14 +36,27 @@ def _post(url: str, cle: str, charge: dict, timeout: int, stream: bool = False):
     return reponse
 
 
+def _json(reponse, url: str):
+    """Parse JSON response, converting parse errors to ModeleIndisponible."""
+    try:
+        return reponse.json()
+    except ValueError as exc:
+        raise ModeleIndisponible(f"Réponse non JSON de {url} : {exc}") from exc
+
+
 def _embedder_lot(textes: list[str], r: Reglages) -> list[list[float]]:
     if r.embed_format == "hf":
         url, charge = r.embed_base_url, {"inputs": textes}
     else:
         url, charge = r.embed_base_url.rstrip("/") + "/embeddings", {"input": textes, "model": r.embed_modele}
-    donnees = _post(url, r.embed_cle_api, charge, r.llm_timeout).json()
+    donnees = _json(_post(url, r.embed_cle_api, charge, r.llm_timeout), url)
     try:
-        vecteurs = donnees if r.embed_format == "hf" else [d["embedding"] for d in donnees["data"]]
+        if r.embed_format == "hf":
+            if not isinstance(donnees, list):
+                raise TypeError("HF format response must be a list")
+            vecteurs = donnees
+        else:
+            vecteurs = [d["embedding"] for d in donnees["data"]]
     except (KeyError, TypeError) as exc:
         raise ModeleIndisponible("Réponse d'embedding inattendue : " + json.dumps(donnees)[:300]) from exc
     if len(vecteurs) != len(textes):
@@ -76,7 +89,8 @@ def _charge_chat(messages: list[dict], r: Reglages, temperature: float, flux: bo
 
 
 def discuter(messages: list[dict], r: Reglages, temperature: float) -> str:
-    donnees = _post(_url_chat(r), r.llm_cle_api, _charge_chat(messages, r, temperature, False), r.llm_timeout).json()
+    url = _url_chat(r)
+    donnees = _json(_post(url, r.llm_cle_api, _charge_chat(messages, r, temperature, False), r.llm_timeout), url)
     try:
         return donnees["choices"][0]["message"]["content"] or ""
     except (KeyError, IndexError, TypeError) as exc:

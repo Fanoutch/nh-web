@@ -8,7 +8,7 @@ from rag.reglages import Reglages
 
 
 class FausseReponse:
-    def __init__(self, donnees=None, statut=200, lignes=None):
+    def __init__(self, donnees=None, statut=200, lignes=None, erreur_json=False):
         self._donnees = donnees
         self.status_code = statut
         self.ok = statut < 400
@@ -16,8 +16,11 @@ class FausseReponse:
         self._lignes = lignes or []
         self.encoding = None
         self.ferme = False
+        self._erreur_json = erreur_json
 
     def json(self):
+        if self._erreur_json:
+            raise ValueError("Expecting value")
         return self._donnees
 
     def iter_lines(self, decode_unicode=False):
@@ -137,3 +140,24 @@ def test_discuter_en_flux(appels):
 def test_llm_mal_configure():
     with pytest.raises(modeles.ModeleIndisponible, match="LLM_BASE_URL"):
         modeles.discuter([{"role": "user", "content": "?"}], Reglages(), 0)
+
+
+def test_embedding_reponse_non_json(appels):
+    appels["reponses"].append(FausseReponse(erreur_json=True))
+
+    with pytest.raises(modeles.ModeleIndisponible, match="Réponse non JSON"):
+        modeles.embedder(["a"], R_HF)
+
+
+def test_embedding_hf_reponse_inattendue(appels):
+    appels["reponses"].append(FausseReponse({"error": "Model is loading"}))
+
+    with pytest.raises(modeles.ModeleIndisponible, match="Réponse d'embedding inattendue"):
+        modeles.embedder(["a"], R_HF)
+
+
+def test_discuter_reponse_non_json(appels):
+    appels["reponses"].append(FausseReponse(erreur_json=True))
+
+    with pytest.raises(modeles.ModeleIndisponible, match="Réponse non JSON"):
+        modeles.discuter([{"role": "user", "content": "?"}], R_LLM, 0)
