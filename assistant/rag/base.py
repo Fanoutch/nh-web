@@ -21,14 +21,18 @@ class BaseVectorielle:
         self._collections: dict[str, chromadb.Collection] = {}
 
     def _collection(self, secteur: str):
-        if secteur in self._collections:
-            return self._collections[secteur]
+        # Clé de cache = nom réel de la collection ChromaDB (et non le slug de secteur seul), pour ne
+        # jamais collisionner avec une collection de conversation (`conv_{id}`) : un secteur nommé
+        # p. ex. "conv_7" utilise ici la clé "secteur_conv_7", distincte de "conv_7".
+        nom = f"secteur_{secteur}"
+        if nom in self._collections:
+            return self._collections[nom]
         with self._verrou:
-            if secteur in self._collections:
-                return self._collections[secteur]
+            if nom in self._collections:
+                return self._collections[nom]
             # Les vecteurs viennent toujours de nos modèles : pas de fonction d'embedding ChromaDB (pas de téléchargement).
-            collection = self._client.get_or_create_collection(name=f"secteur_{secteur}", embedding_function=None)
-            self._collections[secteur] = collection
+            collection = self._client.get_or_create_collection(name=nom, embedding_function=None)
+            self._collections[nom] = collection
             return collection
 
     def _collection_conversation(self, conversation_id: int, creer: bool):
@@ -158,9 +162,9 @@ class BaseVectorielle:
 
     def supprimer_conversation(self, conversation_id: int) -> None:
         nom = f"conv_{conversation_id}"
-        try:
-            self._client.delete_collection(nom)
-        except Exception:
-            pass
         with self._verrou:
+            try:
+                self._client.delete_collection(nom)
+            except Exception:
+                pass
             self._collections.pop(nom, None)

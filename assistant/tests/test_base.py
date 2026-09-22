@@ -148,3 +148,16 @@ def test_piece_jointe_dans_une_collection_de_conversation(base):
     base.supprimer_conversation(7)
     assert base.chercher_conversation(7, [0.0, 1.0], top_k=3) == []
     base.supprimer_conversation(7)                                      # deux fois : pas d'erreur
+
+
+def test_secteur_et_conversation_de_meme_nom_ne_se_melangent_pas(base):
+    # Un secteur nommé "conv_7" ne doit pas partager d'entrée de cache avec la conversation 7 :
+    # les noms réels de collection ChromaDB ("secteur_conv_7" vs "conv_7") sont distincts.
+    base.ajouter_document("conv_7", 1, "secteur.pdf", [{"texte": "vol de controle", "page": 1}], [MAINT])
+    base.ajouter_piece_jointe(7, 3, "conversation.pdf", [{"texte": "depose moteur", "page": 1}], [COMPOST])
+
+    trouves_secteur = base.chercher("conv_7", MAINT, top_k=5)
+    trouves_conversation = base.chercher_conversation(7, COMPOST, top_k=5)
+
+    assert [m["nom"] for m in trouves_secteur] == ["secteur.pdf"]
+    assert [m["nom"] for m in trouves_conversation] == ["conversation.pdf"]
