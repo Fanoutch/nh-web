@@ -6,6 +6,9 @@
 --}}
 @php
     $retirable = $retirable ?? false;
+    // 'supprimerPieceJointe' pour une pièce déjà déposée (fichier + ligne en base), 'retirerPiece'
+    // pour un fichier encore refusé (mauvais format ou trop gros) qui n'a jamais été déposé.
+    $action = $action ?? 'supprimerPieceJointe';
     $statut = $piece['statut'] ?? 'pret';
     $couleurIcone = match ($piece['format'] ?? '') {
         'pdf' => 'bg-[#c0391a]',
@@ -39,7 +42,7 @@
         </span>
     </span>
     @if ($retirable)
-        <button type="button" wire:click="supprimerPieceJointe({{ $piece['id'] }})"
+        <button type="button" wire:click="{{ $action }}({{ $piece['id'] }})"
                 aria-label="Retirer {{ $piece['nom'] }}" title="Retirer"
                 class="shrink-0 text-ink-muted hover:text-danger px-1 leading-none">✕</button>
     @endif

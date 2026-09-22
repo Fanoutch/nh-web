@@ -1236,8 +1236,9 @@ Modifier `assistant/reglages.env` puis `systemctl restart nh-assistant` :
 - `ASSISTANT_SEUIL_DISTANCE` : plus bas = plus strict (plus de « Je ne trouve pas ») ; plus haut = plus permissif.
 - `ASSISTANT_TOP_K` : nombre de morceaux de documents donnes au LLM, cherches sur **tout le secteur**
   (la recherche ne se limite jamais a un seul dossier, meme si la question en nomme un).
-- `ASSISTANT_TOP_K_DOSSIER` (facultatif, defaut **3**) : morceaux ajoutes en plus depuis le dossier
-  actuellement ouvert dans l'onglet Documents, s'il y en a un. Ces morceaux s'ajoutent a ceux de
+- `ASSISTANT_TOP_K_DOSSIER` (facultatif, defaut **3**) : morceaux ajoutes en plus depuis le ou les
+  dossiers dont le nom est reconnu **dans le texte de la question** (le dossier ouvert dans l'onglet
+  Documents n'a aucune incidence sur la recherche). Ces morceaux s'ajoutent a ceux de
   `ASSISTANT_TOP_K`, ils ne les remplacent pas.
 - `ASSISTANT_TOP_K_PJ` (facultatif, defaut **3**) : morceaux ajoutes en plus depuis les pieces jointes
   de la conversation en cours, s'il y en a.

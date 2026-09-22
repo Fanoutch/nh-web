@@ -125,8 +125,14 @@ class AssistantDocuments extends Component
                 : '';
             $this->notice = "Dossier « {$nom} » supprimé{$detail}.";
             $this->dispatch('action-dossier-reussie');
-        } catch (ActionDossierRefusee|AssistantIndisponible $e) {
+        } catch (ActionDossierRefusee $e) {
             $this->erreur = $e->getMessage();
+        } catch (AssistantIndisponible) {
+            // Message honnête (voir le docblock de GestionDossiersAssistant::supprimer) : contrairement
+            // aux dossiers (protégés tout ou rien), les documents déjà traités avant l'indisponibilité
+            // sont bel et bien supprimés.
+            $this->erreur = 'La suppression a été interrompue : une partie des documents a pu être '
+                ."supprimée. Réessayez quand l'assistant sera de nouveau disponible.";
         }
     }
 

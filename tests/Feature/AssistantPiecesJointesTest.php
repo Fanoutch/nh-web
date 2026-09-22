@@ -151,6 +151,43 @@ it('retire un fichier refusé du dépôt en cours sans toucher aux autres', func
         ->assertSet('pieces', []);
 });
 
+// --- Retrait d'une pièce jointe déjà déposée (AssistantChat::supprimerPieceJointe) ----------
+
+it('retirer une pièce jointe avec ✕ efface aussi ses vecteurs auprès du service', function () {
+    $utilisateur = membreSecteur(secteurBmn(), 'utilisateur');
+    Http::fake(['*/pieces-jointes/*' => Http::response(['ok' => true])]);
+    $c = conversation($utilisateur, secteurBmn());
+    $piece = AssistantPieceJointe::create([
+        'conversation_id' => $c->id, 'nom' => 'CR.pdf', 'chemin' => "assistant/pj/{$c->id}/1_cr.pdf",
+        'taille' => 10, 'format' => 'pdf', 'statut' => AssistantPieceJointe::PRET,
+    ]);
+    Storage::disk('local')->put($piece->chemin, 'x');
+
+    Livewire::actingAs($utilisateur)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->call('supprimerPieceJointe', $piece->id);
+
+    Http::assertSent(fn ($r) => str_contains($r->url(), "/pieces-jointes/{$piece->id}") && $r->method() === 'DELETE');
+    Storage::disk('local')->assertMissing($piece->chemin);
+    expect(AssistantPieceJointe::find($piece->id))->toBeNull();
+});
+
+it('retire quand même le fichier et la ligne si le service est indisponible pendant le retrait', function () {
+    $utilisateur = membreSecteur(secteurBmn(), 'utilisateur');
+    Http::fake(['*/pieces-jointes/*' => Http::response([], 500)]);
+    $c = conversation($utilisateur, secteurBmn());
+    $piece = AssistantPieceJointe::create([
+        'conversation_id' => $c->id, 'nom' => 'CR.pdf', 'chemin' => "assistant/pj/{$c->id}/1_cr.pdf",
+        'taille' => 10, 'format' => 'pdf', 'statut' => AssistantPieceJointe::PRET,
+    ]);
+    Storage::disk('local')->put($piece->chemin, 'x');
+
+    Livewire::actingAs($utilisateur)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->call('supprimerPieceJointe', $piece->id);
+
+    Storage::disk('local')->assertMissing($piece->chemin);
+    expect(AssistantPieceJointe::find($piece->id))->toBeNull();
+});
+
 // --- Suppression (GestionConversationsAssistant) --------------------------------------------
 
 it('supprime les fichiers et la collection avec la conversation', function () {

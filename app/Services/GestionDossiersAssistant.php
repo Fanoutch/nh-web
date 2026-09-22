@@ -80,9 +80,12 @@ class GestionDossiersAssistant
 
     /**
      * Supprime le dossier et tout son sous-arbre : d'abord tous les documents (vecteurs, fichier, ligne),
-     * puis les dossiers du plus profond vers le parent. La première indisponibilité du service interrompt
-     * tout avant qu'un seul dossier ne soit supprimé en base : un secteur ne doit jamais garder de vecteurs
-     * orphelins.
+     * un par un, puis les dossiers du plus profond vers le parent. Si le service devient indisponible en
+     * cours de route, l'opération s'arrête aussitôt SANS retour en arrière : les documents déjà traités
+     * avant l'indisponibilité sont bel et bien supprimés. Seuls les dossiers sont protégés tout ou rien —
+     * aucun dossier n'est supprimé en base tant que tous les documents de son sous-arbre n'ont pas été
+     * traités avec succès — pour qu'un dossier resté visible ne pointe jamais vers des documents dont les
+     * vecteurs auraient disparu.
      *
      * @return array{dossiers: int, documents: int}
      */

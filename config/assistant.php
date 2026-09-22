@@ -30,7 +30,7 @@ return [
     'url' => 'http://'.$lire('ASSISTANT_HOTE', '127.0.0.1').':'.$lire('ASSISTANT_PORT', '8765'),
     'jeton' => (string) $lire('ASSISTANT_JETON', ''),
     'timeout' => 180,             // une question (réponse en flux comprise), en secondes
-    'timeout_indexation' => 570,  // un document de 50 Mo ; < 600 s du job IndexerDocumentAssistant (DB_QUEUE_RETRY_AFTER=660)
+    'timeout_indexation' => 570,  // un document (ou une pièce jointe) de 50 Mo ; < 600 s des jobs IndexerDocumentAssistant et IndexerPieceJointeAssistant (DB_QUEUE_RETRY_AFTER=660)
     'taille_max_mo' => (int) $lire('ASSISTANT_TAILLE_MAX_MO', 50),
     'historique_tours' => (int) $lire('ASSISTANT_HISTORIQUE_TOURS', 3),
 ];

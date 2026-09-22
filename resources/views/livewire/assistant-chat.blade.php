@@ -37,6 +37,11 @@
     <x-card class="p-3 flex flex-col min-h-0">
         <x-section-label class="mb-2">Historique</x-section-label>
 
+        {{-- Suppression d'une conversation avec le service Python indisponible (AssistantChat::supprimerConversation). --}}
+        @error('suppression')
+            <p class="mb-2 px-1 text-[12px] text-danger">{{ $message }}</p>
+        @enderror
+
         <button type="button" wire:click="nouvelle"
                 class="mb-3 flex items-center gap-2 rounded-lg border border-app-border bg-app-elevated px-3 py-2 text-[13px] font-medium text-ink-primary hover:border-accent transition">
             <span class="w-5 h-5 shrink-0 rounded bg-accent text-sidebar-bg grid place-items-center text-xs font-semibold leading-none">＋</span>

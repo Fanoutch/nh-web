@@ -109,7 +109,15 @@ class AssistantChat extends Component
 
     public function supprimerConversation(int $id, GestionConversationsAssistant $gestion): void
     {
-        $gestion->supprimer($this->conversationAutorisee($id));
+        try {
+            $gestion->supprimer($this->conversationAutorisee($id));
+        } catch (AssistantIndisponible $e) {
+            // Comme les autres actions de l'onglet : pas d'erreur 500, message standard, rien n'est
+            // supprimé (voir le docblock de GestionConversationsAssistant::supprimer).
+            $this->addError('suppression', $e->getMessage());
+
+            return;
+        }
         if ($this->conversationId === $id) {
             $this->conversationId = null;
         }
@@ -200,12 +208,13 @@ class AssistantChat extends Component
     }
 
     /**
-     * Retire une pièce jointe déjà déposée (fichier + ligne). Réservée au propriétaire de sa
-     * conversation. Le service ne permet pas de retirer une seule pièce de son index de recherche
-     * (seulement toute la conversation, voir GestionConversationsAssistant::supprimer) : ses vecteurs
-     * éventuels restent jusqu'à la suppression de la conversation entière.
+     * Retire une pièce jointe déjà déposée (fichier + ligne), en retirant AU MIEUX ses vecteurs du
+     * service Python au passage (route DELETE /pieces-jointes/{id}, voir
+     * AssistantClient::supprimerPieceJointe) : un service indisponible ne bloque pas le retrait du
+     * fichier ni de la ligne, comme pour IndexerPieceJointeAssistant, mais ses vecteurs restent alors
+     * jusqu'à la suppression de la conversation entière. Réservée au propriétaire de sa conversation.
      */
-    public function supprimerPieceJointe(int $id): void
+    public function supprimerPieceJointe(int $id, AssistantClient $client): void
     {
         $piece = AssistantPieceJointe::find($id);
         if ($piece === null) {
@@ -218,6 +227,12 @@ class AssistantChat extends Component
                 && $conversation->secteur_id === $this->secteur->id,
             403,
         );
+
+        try {
+            $client->supprimerPieceJointe($piece);
+        } catch (AssistantIndisponible) {
+            // Tant pis : rien de plus à faire ici, voir le docblock ci-dessus.
+        }
 
         Storage::disk('local')->delete($piece->chemin);
         $piece->delete();

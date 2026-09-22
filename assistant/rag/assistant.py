@@ -138,9 +138,14 @@ def _reponse_fixe(texte: str) -> Iterator[dict]:
 
 
 def _sources(morceaux: list[dict]) -> list[dict]:
+    """Une source par morceau cité, dédoublonnée sur `(document_id, page)`. Les pièces jointes ont
+    toutes `document_id = None` : sans le nom dans la clé, deux pièces jointes différentes citées à
+    la même page s'écraseraient l'une l'autre alors qu'elles ont toutes deux servi — on ajoute donc
+    le nom à la clé dans ce cas (jamais nécessaire pour un document du secteur, dont l'identifiant
+    suffit déjà à distinguer deux documents)."""
     vues, sources = set(), []
     for m in morceaux:
-        cle = (m["document_id"], m["page"])
+        cle = (m["document_id"], m["page"], m["nom"]) if m.get("pj", False) else (m["document_id"], m["page"])
         if cle not in vues:
             vues.add(cle)
             sources.append({

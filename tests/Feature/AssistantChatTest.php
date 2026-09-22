@@ -177,6 +177,22 @@ it('deletes my conversation and starts a new one', function () {
     Http::assertSent(fn ($r) => str_contains($r->url(), "/conversations/{$conversation->id}") && $r->method() === 'DELETE');
 });
 
+it('shows the standard unavailable message instead of a 500 when deleting a conversation while the service is down', function () {
+    Http::fake(['*/conversations/*' => Http::response('', 503)]);
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'À supprimer']);
+
+    Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->call('ouvrir', $conversation->id)
+        ->call('supprimerConversation', $conversation->id)
+        ->assertHasErrors('suppression')
+        ->assertSee("L'assistant est indisponible pour le moment, réessayez plus tard.")
+        // Rien n'est supprimé (voir le docblock de GestionConversationsAssistant::supprimer).
+        ->assertSet('conversationId', $conversation->id);
+
+    expect(AssistantConversation::find($conversation->id))->not->toBeNull();
+});
+
 it('shows a clear message when the service is down, keeps the conversation usable and lets me report it', function () {
     Http::fake(['*/questions' => Http::response('', 503)]);
     $user = membreSecteur(secteurBmn(), 'utilisateur');

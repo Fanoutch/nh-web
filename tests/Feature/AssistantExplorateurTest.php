@@ -137,6 +137,28 @@ it('affiche un message de confirmation détaillé puis supprime le dossier avec 
         ->and(AssistantDocument::count())->toBe(0);
 });
 
+it('affiche un message honnête si le service tombe pendant la suppression d’un dossier (des documents ont pu être supprimés)', function () {
+    $secteur = $this->secteur;
+    $chef = $this->chef;
+    $p = dossier($secteur, 'Procédures');
+    $premier = document($secteur, dossier: $p, nom: 'Premier.pdf');
+    $second = document($secteur, dossier: $p, nom: 'Second.pdf');
+
+    Http::fake([
+        '*/documents/'.$premier->id.'*' => Http::response(['ok' => true]),
+        '*/documents/'.$second->id.'*' => Http::response('', 500),
+    ]);
+
+    Livewire::actingAs($chef)->test(AssistantDocuments::class, ['secteur' => $secteur])
+        ->call('supprimerDossier', $p->id)
+        ->assertSee("La suppression a été interrompue : une partie des documents a pu être supprimée. Réessayez quand l'assistant sera de nouveau disponible.");
+
+    // Le dossier reste (protégé tout ou rien), mais le premier document a bel et bien disparu.
+    expect(AssistantDossier::count())->toBe(1)
+        ->and(AssistantDocument::count())->toBe(1)
+        ->and(AssistantDocument::find($second->id))->not->toBeNull();
+});
+
 it('déplace un dossier vers un autre dossier', function () {
     $secteur = $this->secteur;
     $chef = $this->chef;

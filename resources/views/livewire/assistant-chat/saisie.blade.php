@@ -34,9 +34,32 @@
                 @endforeach
             </div>
         @endif
-        @error('pieces.*')
-            <p class="mb-2 text-xs text-danger">{{ $message }}</p>
-        @enderror
+        {{-- Fichiers refusés à la validation (mauvais format ou trop lourd) : jamais déposés, donc
+             absents de $piecesEnAttente ; ils restent dans $pieces tant qu'on ne les retire pas
+             (voir AssistantChat::retirerPiece), sans quoi l'envoi resterait bloqué. --}}
+        @if (count($pieces))
+            <div class="flex flex-wrap gap-2 mb-2">
+                @foreach ($pieces as $index => $fichier)
+                    @error('pieces.'.$index)
+                        <div wire:key="pj-erreur-{{ $index }}">
+                            @include('livewire.assistant-chat.piece-jointe', [
+                                'piece' => ['id' => $index, 'nom' => $fichier->getClientOriginalName(), 'format' => strtolower($fichier->getClientOriginalExtension()), 'statut' => 'erreur', 'message' => $message],
+                                'retirable' => true,
+                                'action' => 'retirerPiece',
+                            ])
+                        </div>
+                    @enderror
+                @endforeach
+            </div>
+        @endif
+        {{-- Erreurs sans fichier associé encore présent (ex. « 5 pièces jointes maximum », posée
+             après que $pieces a déjà été vidé) : les erreurs par fichier sont déjà couvertes par les
+             cartes ci-dessus. --}}
+        @if (count($pieces) === 0)
+            @error('pieces.*')
+                <p class="mb-2 text-xs text-danger">{{ $message }}</p>
+            @enderror
+        @endif
 
         <div class="flex items-end gap-2 bg-app-bg border border-app-border rounded-xl px-3 py-2 focus-within:border-accent transition">
             <button type="button" x-on:click="$refs.pieceJointe.click()"

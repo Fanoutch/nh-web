@@ -34,7 +34,7 @@ class AssistantDossier extends Model
         return $this->hasMany(AssistantDocument::class, 'dossier_id');
     }
 
-    /** Chemin affichable depuis la racine (ex. « Procédures › Vols »), vide à la racine. */
+    /** Chemin affichable depuis la racine (ex. « Procédures › Vols ») ; pour un dossier de premier niveau (sans parent), c'est simplement son propre nom, jamais vide. */
     public function chemin(): string
     {
         $noms = [];

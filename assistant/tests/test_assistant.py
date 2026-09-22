@@ -211,3 +211,29 @@ def test_sources_avec_extrait_et_dedoublonnage(assistant_fabrique):
     assert sources[0]["extrait"]                   # le texte du morceau est renvoyé
     assert len(sources[0]["extrait"]) <= 600
     assert len({(s["document_id"], s["page"]) for s in sources}) == len(sources)
+
+
+def test_sources_deux_pieces_jointes_distinctes_meme_page_pas_ecrasees():
+    """Toutes les pièces jointes ont `document_id = None` : dédoublonner seulement sur
+    `(document_id, page)` ferait disparaître l'une des deux, alors que les deux ont servi."""
+    morceaux = [
+        {"document_id": None, "nom": "Facture.pdf", "page": 1, "texte": "Texte de la facture.", "pj": True},
+        {"document_id": None, "nom": "Devis.pdf", "page": 1, "texte": "Texte du devis.", "pj": True},
+    ]
+
+    sources = module._sources(morceaux)
+
+    assert {s["nom"] for s in sources} == {"Facture.pdf", "Devis.pdf"}
+
+
+def test_sources_documents_du_secteur_toujours_dedoublonnes_par_page():
+    """Un document du secteur, lui, a un `document_id` : la clé (document_id, page) suffit, avec ou
+    sans le nom — deux morceaux de la même page d'un même document restent dédoublonnés."""
+    morceaux = [
+        {"document_id": 1, "nom": "Manuel.pdf", "page": 1, "texte": "Premier morceau.", "pj": False},
+        {"document_id": 1, "nom": "Manuel.pdf", "page": 1, "texte": "Second morceau.", "pj": False},
+    ]
+
+    sources = module._sources(morceaux)
+
+    assert len(sources) == 1

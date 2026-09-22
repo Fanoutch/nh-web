@@ -14,18 +14,18 @@ déposés les documents que l'assistant pourra utiliser pour répondre.
 Vous pouvez organiser ces documents dans des dossiers, comme dans un explorateur de fichiers
 classique :
 
-- **Créer un dossier** : bouton « ＋ Nouveau dossier », depuis la racine ou depuis un dossier déjà
-  ouvert (le nouveau dossier y sera créé).
-- **Renommer un dossier** : bouton « Renommer » sur le dossier concerné.
+- **Créer un dossier** : bouton « ＋ Nouveau dossier », depuis « Documents du secteur » (la racine)
+  ou depuis un dossier déjà ouvert (le nouveau dossier y sera créé).
+- **Renommer un dossier** : icône ✎ sur le dossier concerné.
 - **Déplacer un dossier ou un document** : glissez-le sur le dossier de destination, ou sur
   « Racine » pour le remonter au premier niveau.
-- **Supprimer un dossier** : bouton « Supprimer le dossier ». Une confirmation vous rappelle le
+- **Supprimer un dossier** : icône 🗑 sur le dossier concerné. Une confirmation vous rappelle le
   nombre de sous-dossiers et de documents qui seront supprimés avec lui — vérifiez bien ce nombre
   avant de confirmer, l'opération n'est pas récupérable.
-- **Déposer un document** : il est ajouté dans le dossier actuellement ouvert (à la racine si aucun
-  dossier n'est ouvert). Si un document du même nom existe déjà dans ce dossier, un message vous le
-  signale, avec le nom de la personne qui l'a déposé et la date, pour vous laisser choisir de le
-  remplacer ou non.
+- **Déposer un document** : il est ajouté dans le dossier actuellement ouvert (dans « Documents du
+  secteur », à la racine, si aucun dossier n'est ouvert). Si un document du même nom existe déjà dans
+  ce dossier, un message vous le signale, avec le nom de la personne qui l'a déposé et la date, pour
+  vous laisser choisir de le remplacer ou non.
 
 **Un document mal rangé reste trouvable.** Le classement en dossiers sert surtout à s'y retrouver
 visuellement dans l'onglet Documents : il n'est **jamais nécessaire de bien ranger un document pour
@@ -39,7 +39,7 @@ racine ou dans le mauvais dossier : les réponses de l'assistant ne s'en trouver
 
 Écrivez votre question dans la zone de saisie, en bas de l'onglet, comme vous le feriez à un
 collègue. L'assistant répond en s'appuyant sur les documents du secteur, avec une mise en forme
-lisible (titres, listes, texte en gras...).
+lisible quand c'est utile (listes, texte en gras...) mais sans titres.
 
 Pendant que la réponse s'écrit :
 - le bouton d'envoi devient **« Arrêter »** : utilisez-le si la réponse part dans la mauvaise
@@ -69,9 +69,9 @@ complément de la recherche habituelle sur tout le secteur. Nommer un dossier pe
 l'assistant à préciser sa réponse, mais ce n'est jamais nécessaire : même un document classé dans le
 mauvais dossier, ou resté à la racine, reste parfaitement trouvable.
 
-De la même manière, si vous ouvrez un dossier particulier dans l'onglet Documents puis posez une
-question depuis cet endroit, quelques passages de ce dossier sont mis en avant en plus — mais la
-recherche sur tout le secteur continue également, en parallèle.
+Le dossier ouvert dans l'onglet Documents au moment où vous posez la question n'a, en revanche,
+aucune incidence : seul le nom du dossier **dans le texte de la question** peut ajouter des
+passages, comme décrit ci-dessus.
 
 ---
 
@@ -98,11 +98,11 @@ Sous chaque réponse de l'assistant, des sources cliquables indiquent d'où vien
 utilisées :
 
 - le **chemin du dossier** où se trouve le document, pour le repérer dans l'onglet Documents ;
-- un encart **« Passage utilisé »**, qui affiche l'extrait exact du document sur lequel la réponse
-  s'appuie, avec les mots de votre question **surlignés** dedans pour vous permettre de vérifier
-  rapidement la pertinence du passage ;
-- un clic sur la source ouvre le document original ; pour un PDF, il s'ouvre directement **à la bonne
-  page**.
+- un clic sur la source ouvre d'abord l'encart **« Passage utilisé »**, qui affiche l'extrait exact
+  du document sur lequel la réponse s'appuie, avec les mots de votre question **surlignés** dedans
+  pour vous permettre de vérifier rapidement la pertinence du passage ;
+- dans cet encart, un second bouton **« Ouvrir le document »** ouvre le document original ; pour un
+  PDF, il s'ouvre directement **à la bonne page**.
 
 Cela vous permet de toujours vérifier une réponse en revenant au document source, plutôt que de vous
 fier uniquement au texte généré par l'assistant.
