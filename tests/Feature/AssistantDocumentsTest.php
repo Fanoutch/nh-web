@@ -47,7 +47,7 @@ it('shows the Documents tab only to chefs and admins', function () {
     $this->actingAs($utilisateur)->get(route('secteurs.documents', $bmn))->assertForbidden();
     $this->actingAs($chef)->get(route('secteurs.documents', $bmn))->assertOk()
         ->assertSeeLivewire(AssistantDocuments::class)->assertSee('Documents du secteur BMN')
-        ->assertSee('Déposez les documents du secteur (PDF, Word, TXT)');
+        ->assertSee('⤒ Déposer des fichiers');
 });
 
 it('uploads a document and indexes it', function () {
@@ -118,7 +118,7 @@ it('asks what to do when the name already exists', function () {
 
     Livewire::actingAs($chef)->test(AssistantDocuments::class, ['secteur' => secteurBmn()])
         ->set('fichiers', [UploadedFile::fake()->create('Manuel.pdf', 10, 'application/pdf')])
-        ->assertSee('existe déjà dans le secteur BMN')
+        ->assertSee('existe déjà ici')
         ->assertSee('Remplacer')->assertSee('Ajouter quand même')->assertSee('Annuler')
         ->call('annuler', 0)
         ->assertDontSee('existe déjà');
