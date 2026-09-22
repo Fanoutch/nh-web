@@ -1209,6 +1209,7 @@ ou `nh-assistant` tourne deja :
 ```bash
 git pull                                              # ou deploiement habituel du depot
 php artisan migrate                                   # nouvelles migrations assistant_* le cas echeant
+npm run build                                         # OBLIGATOIRE : nouvelles classes Tailwind (chat, explorateur)
 php artisan config:clear && php artisan route:clear && php artisan view:clear
 #   (si les caches sont utilises : php artisan config:cache && php artisan route:cache, en tant qu'utilisateur web)
 # code Python modifie (assistant/) et/ou requirements.lock modifie :
@@ -1216,6 +1217,10 @@ cd assistant && .venv/bin/python -m pip install -r requirements.lock && cd ..
 systemctl restart nh-assistant nh-laravel nh-queue
 systemctl is-active nh-assistant nh-laravel nh-queue  # attendu : active x3
 ```
+Sans `npm run build`, les nouveaux ecrans (chat refondu, explorateur de dossiers) s'affichent mal :
+les classes Tailwind ajoutees n'existent pas dans le CSS compile de `public/build/`, qui n'est pas
+suivi par git. Si `node_modules/` est absent : `npm ci` avant `npm run build`.
+
 Reinstaller les dependances Python (`pip install -r requirements.lock`) n'est necessaire que si
 `requirements.lock` a change ; sinon un simple `systemctl restart nh-assistant` suffit pour charger
 le nouveau code Python. Aucun nouveau service systemd, aucune nouvelle bibliotheque et aucun port
