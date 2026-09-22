@@ -6,8 +6,14 @@
     zone de saisie reste atteignable sans avoir à faire défiler tout l'historique. La donnée
     Alpine du conteneur gère uniquement des états d'affichage éphémères (menu ⋯, défilement,
     copie) — aucune donnée sensible n'y transite jamais.
+
+    wire:poll : tant qu'une pièce jointe de la conversation ouverte est en préparation (indexation
+    en tâche de fond, voir IndexerPieceJointeAssistant), on revérifie son état toutes les 3 s pour
+    débloquer le bouton Envoyer dès qu'elle est prête (ou signaler une erreur), sans action de
+    l'utilisateur — même mécanisme que l'onglet Documents (AssistantDocuments).
 --}}
 <div class="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4 md:h-[calc(100dvh-220px)] md:min-h-[560px]"
+     @if ($piecesEnPreparation) wire:poll.3s @endif
      x-data="{
          menuOuvert: null,
          copie: null,
@@ -94,7 +100,12 @@
     </x-card>
 
     {{-- Conversation --}}
-    <x-card class="flex flex-col min-h-0 relative overflow-hidden">
+    <x-card class="flex flex-col min-h-0 relative overflow-hidden"
+            x-data="{ profondeur: 0, survole: false }"
+            x-on:dragenter.prevent="profondeur++; survole = true"
+            x-on:dragover.prevent
+            x-on:dragleave.prevent="profondeur = Math.max(0, profondeur - 1); if (profondeur === 0) survole = false"
+            x-on:drop.prevent="profondeur = 0; survole = false; $refs.pieceJointe.files = $event.dataTransfer.files; $refs.pieceJointe.dispatchEvent(new Event('change'))">
         {{-- Fil des messages : le défilement automatique s'arrête si l'utilisateur remonte de plus de 80 px --}}
         <div class="flex-1 overflow-y-auto px-4 py-5" x-ref="fil"
              x-on:scroll="collePresDuBas = ($el.scrollHeight - $el.scrollTop - $el.clientHeight) <= 80"
@@ -134,5 +145,14 @@
         </div>
 
         @include('livewire.assistant-chat.saisie')
+
+        {{-- Voile affiché pendant un glisser-déposer de fichier(s) sur la conversation --}}
+        <div x-show="survole" x-cloak
+             class="absolute inset-2 z-20 rounded-xl border-2 border-dashed border-accent bg-accent-soft/95 grid place-items-center text-center pointer-events-none">
+            <div>
+                <p class="text-base font-semibold text-ink-primary">Déposez vos fichiers ici</p>
+                <p class="text-sm text-ink-secondary mt-1">PDF, Word ou TXT — 20 Mo maximum, 5 par conversation</p>
+            </div>
+        </div>
     </x-card>
 </div>

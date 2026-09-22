@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AssistantArretController;
 use App\Http\Controllers\AssistantDocumentController;
+use App\Http\Controllers\AssistantPieceJointeController;
 use App\Http\Controllers\ExcelReportController;
 use App\Http\Controllers\FlightController;
 use App\Http\Controllers\MachineController;
@@ -53,6 +54,10 @@ Route::middleware(['auth'])->group(function () {
         ->name('secteurs.assistant')->can('interrogerAssistant', 'secteur');
     Route::post('/secteurs/{secteur}/assistant/arreter', AssistantArretController::class)
         ->name('secteurs.assistant.arreter')->can('interrogerAssistant', 'secteur');
+    // La propriété de la pièce jointe (réservée à sa conversation) est vérifiée dans le contrôleur :
+    // aucune règle de SecteurPolicy ne peut en juger (elle ne connaît que le secteur, pas la conversation).
+    Route::get('/secteurs/{secteur}/assistant/pieces-jointes/{piece}', [AssistantPieceJointeController::class, 'consulter'])
+        ->name('secteurs.assistant.piece')->can('interrogerAssistant', 'secteur');
     Route::get('/secteurs/{secteur}/documents', [SecteurController::class, 'documents'])
         ->name('secteurs.documents')->can('gererDocuments', 'secteur');
     Route::get('/secteurs/{secteur}/documents/{document}', [AssistantDocumentController::class, 'consulter'])

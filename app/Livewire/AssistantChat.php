@@ -2,25 +2,40 @@
 
 namespace App\Livewire;
 
+use App\Jobs\IndexerPieceJointeAssistant;
 use App\Models\AssistantConversation;
 use App\Models\AssistantDocument;
 use App\Models\AssistantMessage;
+use App\Models\AssistantPieceJointe;
 use App\Models\Secteur;
 use App\Services\AssistantClient;
 use App\Services\AssistantIndisponible;
 use App\Services\AssistantSignalement;
+use App\Services\GestionConversationsAssistant;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Livewire\WithFileUploads;
 
 /**
- * Onglet « Assistant IA » : chat, historique PERSONNEL des conversations, réponses en flux.
+ * Onglet « Assistant IA » : chat, historique PERSONNEL des conversations, réponses en flux,
+ * pièces jointes privées à chaque conversation.
  */
 class AssistantChat extends Component
 {
+    use WithFileUploads;
+
+    /** Nombre maximum de pièces jointes par conversation (fixe, indépendant des documents du secteur). */
+    private const MAX_PIECES = 5;
+
+    /** Taille maximum d'une pièce jointe, en Ko (fixe, 20 Mo — indépendant de la config des documents du secteur). */
+    private const TAILLE_MAX_KO = 20 * 1024;
+
     public Secteur $secteur;
 
     /** Verrouillée : seul le serveur la modifie (ouvrir / nouvelle / envoyer), jamais le navigateur. */
@@ -34,6 +49,16 @@ class AssistantChat extends Component
 
     /** Titre en cours de saisie pour le renommage — propriété locale, distincte du titre enregistré. */
     public string $titreRenomme = '';
+
+    /**
+     * Fichiers temporaires Livewire déposés (glisser-déposer ou bouton 📎) : traités et convertis en
+     * pièces jointes dans updatedPieces(), qui vide ensuite ce tableau. Une erreur de validation le
+     * laisse en l'état (fichier(s) toujours présent(s), avec leur message d'erreur), pour permettre de
+     * retirer seulement le fichier fautif (retirerPiece).
+     *
+     * @var array<int, TemporaryUploadedFile>
+     */
+    public array $pieces = [];
 
     public function mount(): void
     {
@@ -68,6 +93,7 @@ class AssistantChat extends Component
     {
         $this->conversationId = null;
         $this->question = '';
+        $this->pieces = [];
     }
 
     public function ouvrir(int $id): void
@@ -75,15 +101,120 @@ class AssistantChat extends Component
         $this->conversationId = $this->conversationAutorisee($id)->id;
     }
 
-    public function supprimerConversation(int $id): void
+    public function supprimerConversation(int $id, GestionConversationsAssistant $gestion): void
     {
-        $this->conversationAutorisee($id)->delete();
+        $gestion->supprimer($this->conversationAutorisee($id));
         if ($this->conversationId === $id) {
             $this->conversationId = null;
         }
         if ($this->renommageId === $id) {
             $this->renommageId = null;
         }
+    }
+
+    /**
+     * Valide et dépose les fichiers glissés dans la conversation (bouton 📎 ou glisser-déposer) : un
+     * fichier trop lourd ou d'un format non accepté échoue sans rien enregistrer (voir retirerPiece
+     * pour le retirer et réessayer avec le reste). La conversation est créée si besoin (une pièce
+     * jointe déposée avant le premier message crée une conversation « Nouvelle conversation »).
+     */
+    public function updatedPieces(): void
+    {
+        if ($this->pieces === []) {
+            return;
+        }
+
+        try {
+            $formats = app(AssistantClient::class)->formats();
+        } catch (AssistantIndisponible $e) {
+            $this->pieces = [];
+            $this->addError('pieces.0', $e->getMessage());
+
+            return;
+        }
+
+        $this->validate([
+            'pieces.*' => ['file', 'max:'.self::TAILLE_MAX_KO, 'extensions:'.implode(',', $formats)],
+        ], [
+            'pieces.*.max' => 'Une pièce jointe dépasse 20 Mo.',
+            'pieces.*.extensions' => 'Format non accepté. Formats acceptés : '.implode(', ', $formats)
+                .'. Un ancien .doc doit être enregistré en .docx.',
+        ]);
+
+        $conversation = $this->conversationId !== null
+            ? $this->conversationAutorisee($this->conversationId)
+            : AssistantConversation::create([
+                'user_id' => auth()->id(),
+                'secteur_id' => $this->secteur->id,
+                'titre' => 'Nouvelle conversation',
+            ]);
+        $this->conversationId = $conversation->id;
+
+        $restantes = self::MAX_PIECES - $conversation->piecesJointes()->count();
+        foreach ($this->pieces as $index => $fichier) {
+            if ($restantes <= 0) {
+                $this->addError('pieces.'.$index, self::MAX_PIECES.' pièces jointes maximum par conversation.');
+
+                continue;
+            }
+            $this->deposerPiece($conversation, $fichier);
+            $restantes--;
+        }
+
+        $this->pieces = [];
+    }
+
+    private function deposerPiece(AssistantConversation $conversation, TemporaryUploadedFile $fichier): void
+    {
+        $nom = $fichier->getClientOriginalName();
+        $format = strtolower($fichier->getClientOriginalExtension());
+        $piece = AssistantPieceJointe::create([
+            'conversation_id' => $conversation->id,
+            'nom' => $nom,
+            'chemin' => '',
+            'taille' => $fichier->getSize(),
+            'format' => $format,
+            'statut' => AssistantPieceJointe::EN_ATTENTE,
+        ]);
+        $chemin = $fichier->storeAs(
+            'assistant/pj/'.$conversation->id,
+            $piece->id.'_'.Str::slug(pathinfo($nom, PATHINFO_FILENAME)).'.'.$format,
+            'local',
+        );
+        $piece->update(['chemin' => $chemin]);
+
+        IndexerPieceJointeAssistant::dispatch($piece->id);
+    }
+
+    /** Retire un fichier encore invalidé (n'a pas passé updatedPieces) du dépôt en cours, sans toucher aux autres. */
+    public function retirerPiece(int $index): void
+    {
+        unset($this->pieces[$index]);
+        $this->pieces = array_values($this->pieces);
+    }
+
+    /**
+     * Retire une pièce jointe déjà déposée (fichier + ligne). Réservée au propriétaire de sa
+     * conversation. Le service ne permet pas de retirer une seule pièce de son index de recherche
+     * (seulement toute la conversation, voir GestionConversationsAssistant::supprimer) : ses vecteurs
+     * éventuels restent jusqu'à la suppression de la conversation entière.
+     */
+    public function supprimerPieceJointe(int $id): void
+    {
+        $piece = AssistantPieceJointe::find($id);
+        if ($piece === null) {
+            return;
+        }
+        $conversation = $piece->conversation;
+        abort_unless(
+            $conversation !== null
+                && $conversation->user_id === auth()->id()
+                && $conversation->secteur_id === $this->secteur->id,
+            403,
+        );
+
+        Storage::disk('local')->delete($piece->chemin);
+        $piece->delete();
     }
 
     /** Ouvre le champ de renommage en ligne, pré-rempli avec le titre actuel. */
@@ -131,6 +262,22 @@ class AssistantChat extends Component
                 'titre' => Str::limit($question, 60),
             ]);
         $this->conversationId = $conversation->id;
+
+        // Une pièce jointe déposée avant toute question a créé la conversation avec le titre
+        // provisoire « Nouvelle conversation » (voir updatedPieces) : la première question envoyée
+        // le remplace, comme pour une conversation créée normalement.
+        if ($conversation->titre === 'Nouvelle conversation' && ! $conversation->messages()->exists()) {
+            $conversation->update(['titre' => Str::limit($question, 60)]);
+        }
+
+        // Le bouton Envoyer reste normalement indisponible tant qu'une pièce jointe est en
+        // préparation (voir render()) ; ce contrôle serveur reste la protection qui compte.
+        if ($conversation->piecesJointes()->whereIn('statut', [AssistantPieceJointe::EN_ATTENTE, AssistantPieceJointe::EN_COURS])->exists()) {
+            $this->addError('question', 'Une pièce jointe est encore en préparation.');
+
+            return;
+        }
+
         // Propriété Locked non synchronisée avant la fin du flux : l'identifiant est aussi
         // diffusé ici pour que le bouton Arrêter connaisse la conversation dès la première
         // question (conversation tout juste créée), sans attendre la fin de la requête.
@@ -138,8 +285,20 @@ class AssistantChat extends Component
 
         $historique = $this->historique($conversation);
 
+        // Pièces prêtes de la conversation pas encore rattachées à un message envoyé (une pièce
+        // jointe déposée en cours de conversation ne doit être « annoncée » qu'une seule fois).
+        $idsDejaJoints = $conversation->messages()->whereNotNull('pieces')->get()
+            ->flatMap(fn ($m) => array_column($m->pieces ?? [], 'id'))->all();
+        $piecesAJoindre = $conversation->piecesJointes()
+            ->where('statut', AssistantPieceJointe::PRET)
+            ->whereNotIn('id', $idsDejaJoints)
+            ->orderBy('id')->get(['id', 'nom', 'format'])
+            ->map(fn (AssistantPieceJointe $p) => ['id' => $p->id, 'nom' => $p->nom, 'format' => $p->format])
+            ->all();
+
         $conversation->messages()->create([
             'role' => AssistantMessage::UTILISATEUR, 'contenu' => $question, 'statut' => AssistantMessage::COMPLET,
+            'pieces' => $piecesAJoindre !== [] ? $piecesAJoindre : null,
         ]);
         $this->question = '';
         $this->stream(to: 'question-en-cours', content: e($question), replace: true);
@@ -177,6 +336,7 @@ class AssistantChat extends Component
                         $detail = (string) ($evenement['detail'] ?? '');
                     }
                 },
+                conversationId: $conversation->id,
                 doitArreter: $doitArreter,
             );
         } catch (AssistantIndisponible $e) {
@@ -295,12 +455,26 @@ class AssistantChat extends Component
 
     public function render()
     {
+        // Conversations abandonnées (pièce jointe déposée puis jamais utilisée) : nettoyées une fois
+        // par chargement, pour l'utilisateur courant dans ce secteur. render() est appelé directement
+        // par Livewire (sans injection de dépendances), d'où la résolution manuelle du service.
+        app(GestionConversationsAssistant::class)->nettoyerVides(auth()->id(), $this->secteur->id);
+
+        // Une conversation sans message (pièce jointe déposée puis jamais utilisée, avant que
+        // nettoyerVides() ne l'efface après 24 h) n'apparaît pas dans l'historique.
         $conversations = AssistantConversation::where('user_id', auth()->id())
             ->where('secteur_id', $this->secteur->id)
+            ->whereHas('messages')
             ->latest('updated_at')->latest('id')->get();
 
-        // Défense en profondeur : on n'affiche que les messages d'une conversation qui m'appartient dans ce secteur.
-        $conversation = $this->conversationId !== null ? $conversations->firstWhere('id', $this->conversationId) : null;
+        // Défense en profondeur : on n'affiche que les messages d'une conversation qui m'appartient
+        // dans ce secteur. Vérifiée séparément de $conversations (qui exclut les conversations sans
+        // message) : la conversation ouverte peut très bien être encore vide (pièce jointe déposée
+        // avant la première question), elle doit rester consultable tant qu'elle m'appartient.
+        $conversation = $this->conversationId !== null
+            ? AssistantConversation::where('id', $this->conversationId)
+                ->where('user_id', auth()->id())->where('secteur_id', $this->secteur->id)->first()
+            : null;
         if ($conversation === null) {
             $this->conversationId = null;
         }
@@ -312,12 +486,23 @@ class AssistantChat extends Component
         $documentsExistants = AssistantDocument::whereIn('id', $idsCites)
             ->where('secteur_id', $this->secteur->id)->pluck('id')->all();
 
+        // Pièces jointes de la conversation ouverte pas encore rattachées à un message envoyé
+        // (« en cours de dépôt ») : cartes affichées au-dessus de la zone de saisie, avec ✕.
+        $idsDejaJoints = $messages->flatMap(fn ($m) => array_column($m->pieces ?? [], 'id'))->all();
+        $piecesEnAttente = $conversation !== null
+            ? $conversation->piecesJointes()->orderBy('id')->get()->reject(fn ($p) => in_array($p->id, $idsDejaJoints, true))->values()
+            : collect();
+        $piecesEnPreparation = $piecesEnAttente
+            ->contains(fn ($p) => in_array($p->statut, [AssistantPieceJointe::EN_ATTENTE, AssistantPieceJointe::EN_COURS], true));
+
         return view('livewire.assistant-chat', [
             'conversationsGroupees' => $this->conversationsGroupees($conversations),
             'messages' => $messages,
             'documentsExistants' => $documentsExistants,
             'prenom' => Str::before(auth()->user()->name, ' '),
             'aucunDocumentPret' => ! $this->secteur->assistantDocuments()->where('statut', AssistantDocument::PRET)->exists(),
+            'piecesEnAttente' => $piecesEnAttente,
+            'piecesEnPreparation' => $piecesEnPreparation,
         ]);
     }
 }

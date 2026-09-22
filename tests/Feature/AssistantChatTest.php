@@ -118,16 +118,31 @@ it('sends only complete question/answer pairs as history, newest pairs, oldest f
 });
 
 it('lists only my own conversations, newest first', function () {
+    // Une conversation n'apparaît dans l'historique qu'une fois son premier message envoyé.
     $moi = membreSecteur(secteurBmn(), 'utilisateur');
     $autre = membreSecteur(secteurBmn(), 'chef');
-    AssistantConversation::create(['user_id' => $autre->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Conversation du chef']);
+    $duChef = AssistantConversation::create(['user_id' => $autre->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Conversation du chef']);
+    $duChef->messages()->create(['role' => 'utilisateur', 'contenu' => 'Q', 'statut' => 'complet']);
     $ancienne = AssistantConversation::create(['user_id' => $moi->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Ancienne']);
+    $ancienne->messages()->create(['role' => 'utilisateur', 'contenu' => 'Q', 'statut' => 'complet']);
     $ancienne->forceFill(['updated_at' => now()->subDay()])->saveQuietly();
-    AssistantConversation::create(['user_id' => $moi->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Récente']);
+    $recente = AssistantConversation::create(['user_id' => $moi->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Récente']);
+    $recente->messages()->create(['role' => 'utilisateur', 'contenu' => 'Q', 'statut' => 'complet']);
 
     Livewire::actingAs($moi)->test(AssistantChat::class, ['secteur' => secteurBmn()])
         ->assertSeeInOrder(['Récente', 'Ancienne'])
         ->assertDontSee('Conversation du chef');
+});
+
+it('hides a conversation with no message yet from the history', function () {
+    // Le bouton « + Nouvelle conversation » porte le même libellé que le titre provisoire d'une
+    // conversation encore vide : on vérifie donc l'absence de SON entrée dans la liste (wire:key),
+    // pas juste l'absence du texte (qui, lui, apparaît toujours via ce bouton).
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Nouvelle conversation']);
+
+    Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->assertDontSeeHtml('wire:key="conv-'.$conversation->id.'"');
 });
 
 it('forbids opening or deleting the conversation of someone else, even for an admin', function () {
@@ -144,6 +159,9 @@ it('forbids opening or deleting the conversation of someone else, even for an ad
 });
 
 it('deletes my conversation and starts a new one', function () {
+    // supprimerConversation() délègue désormais à GestionConversationsAssistant::supprimer(), qui
+    // efface aussi l'espace de recherche de la conversation (DELETE /conversations/{id}).
+    Http::fake();
     $user = membreSecteur(secteurBmn(), 'utilisateur');
     $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'À supprimer']);
 
@@ -154,6 +172,7 @@ it('deletes my conversation and starts a new one', function () {
         ->assertSee('Bonjour');
 
     expect(AssistantConversation::count())->toBe(0);
+    Http::assertSent(fn ($r) => str_contains($r->url(), "/conversations/{$conversation->id}") && $r->method() === 'DELETE');
 });
 
 it('shows a clear message when the service is down, keeps the conversation usable and lets me report it', function () {
@@ -318,11 +337,15 @@ it('forbids renaming the conversation of someone else', function () {
 it('groups conversations by date under the exact expected labels', function () {
     $user = membreSecteur(secteurBmn(), 'utilisateur');
     $aujourdhui = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Du jour']);
+    $aujourdhui->messages()->create(['role' => 'utilisateur', 'contenu' => 'Q', 'statut' => 'complet']);
     $hier = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'D’hier']);
+    $hier->messages()->create(['role' => 'utilisateur', 'contenu' => 'Q', 'statut' => 'complet']);
     $hier->forceFill(['updated_at' => now()->subDay()])->saveQuietly();
     $semaine = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'De la semaine']);
+    $semaine->messages()->create(['role' => 'utilisateur', 'contenu' => 'Q', 'statut' => 'complet']);
     $semaine->forceFill(['updated_at' => now()->subDays(3)])->saveQuietly();
     $ancienne = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Très ancienne']);
+    $ancienne->messages()->create(['role' => 'utilisateur', 'contenu' => 'Q', 'statut' => 'complet']);
     $ancienne->forceFill(['updated_at' => now()->subDays(30)])->saveQuietly();
 
     Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
