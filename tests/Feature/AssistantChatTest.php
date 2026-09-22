@@ -261,3 +261,70 @@ it('sends on Enter but lets Shift+Enter insert a new line', function () {
         ->assertSeeHtml('x-on:keydown.enter="if (! $event.shiftKey) { $event.preventDefault(); $el.form.requestSubmit() }"')
         ->assertDontSeeHtml('keydown.enter.prevent');
 });
+
+it('vide la zone de saisie après envoi', function () {
+    fluxReponse('Réponse.');
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+
+    capturerFlux(fn () => Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->set('question', 'Qu’est-ce qu’un vol de contrôle ?')
+        ->call('envoyer')
+        ->assertSet('question', ''));
+});
+
+it('rend le Markdown de la réponse sans laisser passer de HTML', function () {
+    fluxReponse("- point **important**\n<script>alert(1)</script>");
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $composant = Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()]);
+
+    capturerFlux(fn () => $composant->set('question', 'q')->call('envoyer'));
+
+    $composant->assertSee('<li>', false)->assertSee('<strong>', false)
+        ->assertDontSee('<script>', false);
+});
+
+it('renomme une conversation et refuse un titre trop long', function () {
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Ancien titre']);
+
+    Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->call('renommer', $conversation->id, 'Vols de maintenance')
+        ->call('renommer', $conversation->id, str_repeat('a', 101));
+
+    expect($conversation->fresh()->titre)->toBe('Vols de maintenance');
+});
+
+it('ignores a blank title when renaming, without error', function () {
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Titre initial']);
+
+    Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->call('renommer', $conversation->id, '   ');
+
+    expect($conversation->fresh()->titre)->toBe('Titre initial');
+});
+
+it('forbids renaming the conversation of someone else', function () {
+    $proprietaire = membreSecteur(secteurBmn(), 'chef');
+    $conversation = AssistantConversation::create(['user_id' => $proprietaire->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Privée']);
+    $intrus = membreSecteur(secteurBmn(), 'utilisateur');
+
+    Livewire::actingAs($intrus)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->call('renommer', $conversation->id, 'Piratée')->assertForbidden();
+
+    expect($conversation->fresh()->titre)->toBe('Privée');
+});
+
+it('groups conversations by date under the exact expected labels', function () {
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $aujourdhui = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Du jour']);
+    $hier = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'D’hier']);
+    $hier->forceFill(['updated_at' => now()->subDay()])->saveQuietly();
+    $semaine = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'De la semaine']);
+    $semaine->forceFill(['updated_at' => now()->subDays(3)])->saveQuietly();
+    $ancienne = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Très ancienne']);
+    $ancienne->forceFill(['updated_at' => now()->subDays(30)])->saveQuietly();
+
+    Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->assertSeeInOrder(['Aujourd’hui', 'Du jour', 'Hier', 'D’hier', '7 derniers jours', 'De la semaine', 'Plus ancien', 'Très ancienne']);
+});

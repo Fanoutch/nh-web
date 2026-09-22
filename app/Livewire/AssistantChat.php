@@ -9,6 +9,8 @@ use App\Models\Secteur;
 use App\Services\AssistantClient;
 use App\Services\AssistantIndisponible;
 use App\Services\AssistantSignalement;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -25,6 +27,12 @@ class AssistantChat extends Component
     public ?int $conversationId = null;
 
     public string $question = '';
+
+    /** Conversation en cours de renommage (champ en ligne dans l'historique), ou aucune. */
+    public ?int $renommageId = null;
+
+    /** Titre en cours de saisie pour le renommage — propriété locale, distincte du titre enregistré. */
+    public string $titreRenomme = '';
 
     public function mount(): void
     {
@@ -71,6 +79,36 @@ class AssistantChat extends Component
         $this->conversationAutorisee($id)->delete();
         if ($this->conversationId === $id) {
             $this->conversationId = null;
+        }
+        if ($this->renommageId === $id) {
+            $this->renommageId = null;
+        }
+    }
+
+    /** Ouvre le champ de renommage en ligne, pré-rempli avec le titre actuel. */
+    public function commencerRenommage(int $id): void
+    {
+        $conversation = $this->conversationAutorisee($id);
+        $this->renommageId = $id;
+        $this->titreRenomme = $conversation->titre;
+    }
+
+    public function annulerRenommage(): void
+    {
+        $this->renommageId = null;
+    }
+
+    /** Renomme une conversation ; un titre vide ou de plus de 100 caractères est ignoré sans erreur. */
+    public function renommer(int $id, string $titre): void
+    {
+        $conversation = $this->conversationAutorisee($id);
+        $titre = trim($titre);
+        if ($titre === '' || mb_strlen($titre) > 100) {
+            return;
+        }
+        $conversation->update(['titre' => $titre]);
+        if ($this->renommageId === $id) {
+            $this->renommageId = null;
         }
     }
 
@@ -169,6 +207,50 @@ class AssistantChat extends Component
         return array_merge(...array_slice($paires, count($paires) - min($tours, count($paires))));
     }
 
+    /**
+     * Convertit le Markdown d'une réponse enregistrée en HTML sûr (échappement du HTML source,
+     * liens dangereux désactivés) : utilisé uniquement pour les messages déjà enregistrés, pas
+     * pendant le flux où le texte reste échappé au fur et à mesure de sa réception.
+     */
+    private function rendu(string $texte): string
+    {
+        return Str::markdown($texte, ['html_input' => 'escape', 'allow_unsafe_links' => false]);
+    }
+
+    /**
+     * Groupe les conversations (déjà triées, plus récentes d'abord) par date de dernière activité.
+     * Les groupes vides sont omis ; l'ordre des clés restantes est toujours le même.
+     *
+     * @param  Collection<int, AssistantConversation>  $conversations
+     * @return array<string, Collection<int, AssistantConversation>>
+     */
+    private function conversationsGroupees(Collection $conversations): array
+    {
+        $aujourdhui = Carbon::today();
+        $hier = $aujourdhui->copy()->subDay();
+        $semaine = $aujourdhui->copy()->subDays(7);
+
+        $groupes = [
+            'Aujourd’hui' => collect(),
+            'Hier' => collect(),
+            '7 derniers jours' => collect(),
+            'Plus ancien' => collect(),
+        ];
+
+        foreach ($conversations as $conversation) {
+            $maj = $conversation->updated_at;
+            $cle = match (true) {
+                $maj->greaterThanOrEqualTo($aujourdhui) => 'Aujourd’hui',
+                $maj->greaterThanOrEqualTo($hier) => 'Hier',
+                $maj->greaterThanOrEqualTo($semaine) => '7 derniers jours',
+                default => 'Plus ancien',
+            };
+            $groupes[$cle]->push($conversation);
+        }
+
+        return array_filter($groupes, fn (Collection $g) => $g->isNotEmpty());
+    }
+
     public function signaler(int $messageId, AssistantSignalement $signalement): void
     {
         $message = AssistantMessage::find($messageId);
@@ -201,7 +283,7 @@ class AssistantChat extends Component
             ->where('secteur_id', $this->secteur->id)->pluck('id')->all();
 
         return view('livewire.assistant-chat', [
-            'conversations' => $conversations,
+            'conversationsGroupees' => $this->conversationsGroupees($conversations),
             'messages' => $messages,
             'documentsExistants' => $documentsExistants,
             'prenom' => Str::before(auth()->user()->name, ' '),
