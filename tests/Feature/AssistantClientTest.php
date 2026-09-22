@@ -117,3 +117,23 @@ it('reports an unavailable service for a question', function () {
 
     app(AssistantClient::class)->poserQuestion(secteurBmn(), 'Qui ?', [], fn () => null);
 })->throws(AssistantIndisponible::class);
+
+it('reports a stream that ends without its final event', function () {
+    Http::fake(['*/questions' => Http::response(
+        '{"type":"sources","sources":[]}'."\n"
+        .'{"type":"texte","texte":"Début "}'."\n"
+        .'{"type":"tex',
+        200,
+    )]);
+    $evenements = [];
+
+    try {
+        app(AssistantClient::class)->poserQuestion(secteurBmn(), 'Qui ?', [],
+            function (array $e) use (&$evenements) { $evenements[] = $e; });
+        $this->fail('AssistantIndisponible attendue');
+    } catch (AssistantIndisponible $e) {
+        expect($e->detail)->toContain('fin de réponse manquante');
+    }
+
+    expect(array_column($evenements, 'type'))->toBe(['sources', 'texte']);
+});

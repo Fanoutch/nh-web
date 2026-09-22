@@ -72,19 +72,31 @@ class AssistantClient
                 'historique' => $historique,
             ]));
 
+        $terminee = false;
+        $surEvenementSuivi = function (array $evenement) use ($surEvenement, &$terminee) {
+            if (in_array($evenement['type'] ?? null, ['fin', 'erreur'], true)) {
+                $terminee = true;
+            }
+            $surEvenement($evenement);
+        };
+
         try {
             $corps = $reponse->toPsrResponse()->getBody();
             $tampon = '';
             while (! $corps->eof()) {
                 $tampon .= $corps->read(1024);
                 while (($fin = strpos($tampon, "\n")) !== false) {
-                    $this->transmettre(substr($tampon, 0, $fin), $surEvenement);
+                    $this->transmettre(substr($tampon, 0, $fin), $surEvenementSuivi);
                     $tampon = substr($tampon, $fin + 1);
                 }
             }
-            $this->transmettre($tampon, $surEvenement);
+            $this->transmettre($tampon, $surEvenementSuivi);
         } catch (Throwable $e) {
             throw new AssistantIndisponible(self::INDISPONIBLE, 'Flux interrompu : '.$e->getMessage());
+        }
+
+        if (! $terminee) {
+            throw new AssistantIndisponible(self::INDISPONIBLE, 'Flux interrompu : fin de réponse manquante');
         }
     }
 
