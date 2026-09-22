@@ -77,3 +77,10 @@ def test_fichier_endommage(tmp_path):
 def test_fichier_absent(tmp_path):
     with pytest.raises(lecteurs.LectureImpossible, match="introuvable"):
         lecteurs.lire(tmp_path / "absent.pdf")
+
+
+def test_lit_un_txt_windows_cp1252(tmp_path):
+    chemin = tmp_path / "ancien.txt"
+    chemin.write_bytes("Procédure : contrôle du bordereau".encode("cp1252"))
+
+    assert lecteurs.lire(chemin) == [{"page": None, "texte": "Procédure : contrôle du bordereau"}]

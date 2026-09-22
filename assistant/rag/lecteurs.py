@@ -56,8 +56,17 @@ def _lire_docx(chemin: Path) -> list[dict]:
     return [{"page": None, "texte": nettoyer("\n\n".join(blocs))}]
 
 
+def _decoder(octets: bytes) -> str:
+    """Decode bytes as UTF-8-SIG, falling back to cp1252 on error."""
+    try:
+        return octets.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return octets.decode("cp1252")
+
+
 def _lire_txt(chemin: Path) -> list[dict]:
-    texte = chemin.read_text(encoding="utf-8", errors="replace")
+    octets = chemin.read_bytes()
+    texte = _decoder(octets)
     if "\f" not in texte:
         return [{"page": None, "texte": nettoyer(texte)}]
     return [
