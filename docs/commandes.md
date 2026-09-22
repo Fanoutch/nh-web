@@ -1163,18 +1163,28 @@ Modeles commentes : `llm.env.example`, `assistant/reglages.env.example`.
 
 ### Installation / mise a jour
 
+Prerequis : **Python 3.12** (teste avec 3.12.3). `requirements.lock` fixe toutes les versions
+(dependances indirectes comprises) ; `requirements.txt` ne liste que les dependances directes.
+
 ```bash
 php artisan migrate                                   # tables assistant_documents / _conversations / _messages
 cp assistant/reglages.env.example assistant/reglages.env
 php -r 'echo bin2hex(random_bytes(24)), PHP_EOL;'     # coller dans ASSISTANT_JETON
+chown root:www-data assistant/reglages.env && chmod 640 assistant/reglages.env   # groupe = utilisateur web
 # llm.env : ajouter les 4 lignes EMBED_* (voir llm.env.example)
-cd assistant && python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt && cd ..
+# Laravel lit aussi assistant/reglages.env : reconstruire ses caches APRES l'avoir cree
+php artisan config:clear && php artisan route:clear && php artisan view:clear
+#   (si les caches sont utilises : php artisan config:cache && php artisan route:cache, en tant qu'utilisateur web)
+php artisan queue:restart
+cd assistant && python3.12 -m venv .venv && .venv/bin/python -m pip install -r requirements.lock && cd ..
 sed "s#/CHEMIN/nh-web#$PWD#g" assistant/nh-assistant.service.example > /etc/systemd/system/nh-assistant.service
 systemctl daemon-reload && systemctl enable --now nh-assistant
 ```
 
 Plusieurs utilisateurs en meme temps : dans `nh-laravel.service`, section `[Service]`, ajouter
-`Environment=PHP_CLI_SERVER_WORKERS=4`, puis `systemctl daemon-reload && systemctl restart nh-laravel`.
+`Environment=PHP_CLI_SERVER_WORKERS=8`, puis `systemctl daemon-reload && systemctl restart nh-laravel`.
+Chaque reponse en cours d'ecriture occupe un worker pendant toute sa duree : au maximum
+(workers - 1) reponses simultanees ; chaque worker coute environ 30 a 50 Mo de RAM.
 
 Documents jusqu'a 50 Mo : creer `/etc/php/<version>/cli/conf.d/99-nh-web.ini` avec
 ```
@@ -1182,6 +1192,9 @@ upload_max_filesize = 64M
 post_max_size = 64M
 ```
 puis `systemctl restart nh-laravel`.
+Selectionner les gros fichiers un par un : le total d'une selection de plusieurs fichiers doit rester
+sous `post_max_size`. Si nginx est devant l'application, ajouter aussi `client_max_body_size 64m;`
+dans le bloc `server` du site (voir aussi `proxy_buffering` plus bas).
 
 Jobs longs (indexation) : dans le `.env` de Laravel, `DB_QUEUE_RETRY_AFTER=660`, puis `php artisan queue:restart`.
 
@@ -1204,6 +1217,12 @@ Modifier `assistant/reglages.env` puis `systemctl restart nh-assistant` :
 - `ASSISTANT_TOP_K` : nombre de morceaux de documents donnes au LLM.
 - `ASSISTANT_TEMPERATURE` : 0 = reponses stables, 0.3 = plus naturelles.
 - `ASSISTANT_HISTORIQUE_TOURS` : echanges precedents pris en compte pour une question de suite.
+
+`ASSISTANT_JETON`, `ASSISTANT_TAILLE_MAX_MO`, `ASSISTANT_HISTORIQUE_TOURS`, `ASSISTANT_HOTE` et `ASSISTANT_PORT`
+sont aussi lus par Laravel : apres les avoir modifies, en plus de `systemctl restart nh-assistant`, lancer
+`php artisan config:clear` (ou `php artisan config:cache` si les caches sont utilises) puis `php artisan queue:restart`.
+Augmenter `ASSISTANT_TAILLE_MAX_MO` demande aussi d'augmenter la regle `max` (en Ko) de `config/livewire.php`
+(`temporary_file_upload`), `upload_max_filesize` / `post_max_size` de PHP et, avec nginx, `client_max_body_size`.
 
 ### Tests
 

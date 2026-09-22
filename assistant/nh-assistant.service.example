@@ -8,7 +8,11 @@ Description=cAIman - service de l'assistant IA (nh-assistant)
 After=network.target
 
 [Service]
+# L'utilisateur du service doit pouvoir lire llm.env, assistant/reglages.env et storage/app/private,
+# et écrire dans ASSISTANT_CHROMA_DIR (sinon laisser root, par défaut).
+# User=www-data
 WorkingDirectory=/CHEMIN/nh-web/assistant
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/CHEMIN/nh-web/assistant/.venv/bin/uvicorn service:creer_app --factory --host 127.0.0.1 --port 8765
 Restart=always
 RestartSec=3
