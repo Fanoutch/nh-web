@@ -11,7 +11,7 @@ from tests.fabrique import pdf_texte, pdf_vide
 
 def faux_vecteur(texte: str) -> list[float]:
     texte = texte.lower()
-    if "maintenance" in texte:
+    if "maintenance" in texte or "vol" in texte:
         return [1.0, 0.0, 0.0]
     if "compost" in texte:
         return [0.0, 1.0, 0.0]
@@ -60,7 +60,9 @@ def test_repondre_sources_puis_texte_en_flux(assistant, journal):
     evenements = list(assistant.repondre("bmn", "BMN", "Qui lance un vol de maintenance ?", []))
 
     assert evenements == [
-        {"type": "sources", "sources": [{"document_id": 1, "nom": "Manuel.pdf", "page": 1}]},
+        {"type": "sources", "sources": [{"document_id": 1, "nom": "Manuel.pdf", "page": 1,
+                                        "extrait": "Le vol de maintenance est ordonne par le chef BMN.",
+                                        "pj": False}]},
         {"type": "texte", "texte": "Le vol "},
         {"type": "texte", "texte": "est ordonné par le chef."},
         {"type": "fin"},
@@ -92,7 +94,9 @@ def test_question_de_suite_reformulee_pour_la_recherche(assistant, journal):
 
     evenements = list(assistant.repondre("bmn", "BMN", "et pour un vol de contrôle ?", historique))
 
-    assert evenements[0]["sources"] == [{"document_id": 1, "nom": "Manuel.pdf", "page": 1}]
+    assert evenements[0]["sources"] == [{"document_id": 1, "nom": "Manuel.pdf", "page": 1,
+                                         "extrait": "Le vol de maintenance est ordonne par le chef BMN.",
+                                         "pj": False}]
     assert journal["discuter"][0]["temperature"] == 0
     assert "et pour un vol de contrôle ?" in journal["discuter"][0]["messages"][0]["content"]
     messages = journal["flux"][0]["messages"]
@@ -151,3 +155,45 @@ def test_erreur_inattendue_de_la_base_donne_un_evenement_erreur(assistant, journ
         {"type": "erreur", "message": "L'assistant est indisponible pour le moment, réessayez plus tard.",
          "detail": "RuntimeError: dimension 4096 != 1024"},
     ]
+
+
+@pytest.fixture
+def assistant_fabrique(tmp_path, journal):
+    """Assistant + base espionne : `base.appels_chercher` enregistre chaque
+    appel à `chercher` sous la forme (document_ids, top_k)."""
+    r = Reglages(llm_actif=True, top_k=6, top_k_dossier=3, top_k_pj=3,
+                 seuil_distance=1.0, temperature=0.3, historique_tours=3)
+    base = BaseVectorielle(tmp_path / "chroma")
+    base.appels_chercher = []
+    origine = base.chercher
+
+    def chercher_espion(secteur, vecteur, top_k, document_ids=None):
+        base.appels_chercher.append((document_ids, top_k))
+        return origine(secteur, vecteur, top_k, document_ids=document_ids)
+
+    base.chercher = chercher_espion
+    a = Assistant(r, base)
+    a.indexer("bmn", 1, str(pdf_texte(tmp_path / "manuel.pdf",
+              ["Le vol de maintenance est ordonne par le chef BMN."])), "Manuel.pdf")
+    a.indexer("bmn", 9, str(pdf_texte(tmp_path / "prioritaire.pdf",
+              ["Tolerances dimensionnelles strictes pour le secteur."])), "Prioritaire.pdf")
+    return a, base
+
+
+def test_les_documents_prioritaires_ajoutent_sans_exclure(assistant_fabrique):
+    assistant, base = assistant_fabrique
+    list(assistant.repondre("bmn", "BMN", "tolerances ?", [], documents_prioritaires=[9]))
+
+    appels = base.appels_chercher                  # [(document_ids, top_k), ...]
+    assert appels[0][0] is None                    # 1re recherche : tout le secteur
+    assert appels[1][0] == [9]                     # 2e : les documents prioritaires, en plus
+
+
+def test_sources_avec_extrait_et_dedoublonnage(assistant_fabrique):
+    assistant, base = assistant_fabrique
+    evenements = list(assistant.repondre("bmn", "BMN", "vol ?", []))
+    sources = next(e for e in evenements if e["type"] == "sources")["sources"]
+
+    assert sources[0]["extrait"]                   # le texte du morceau est renvoyé
+    assert len(sources[0]["extrait"]) <= 600
+    assert len({(s["document_id"], s["page"]) for s in sources}) == len(sources)

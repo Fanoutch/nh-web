@@ -46,6 +46,8 @@ class Reglages:
     jeton: str = ""
     chroma_dir: Path = RACINE_NH_WEB / "storage" / "app" / "assistant" / "chroma"
     top_k: int = 6
+    top_k_dossier: int = 3
+    top_k_pj: int = 3
     seuil_distance: float = 1.0
     temperature: float = 0.3
     historique_tours: int = 3
@@ -66,6 +68,8 @@ _CLES = {  # variable -> (champ de Reglages, conversion)
     "ASSISTANT_JETON": ("jeton", str),
     "ASSISTANT_CHROMA_DIR": ("chroma_dir", _chemin),
     "ASSISTANT_TOP_K": ("top_k", int),
+    "ASSISTANT_TOP_K_DOSSIER": ("top_k_dossier", int),
+    "ASSISTANT_TOP_K_PJ": ("top_k_pj", int),
     "ASSISTANT_SEUIL_DISTANCE": ("seuil_distance", float),
     "ASSISTANT_TEMPERATURE": ("temperature", float),
     "ASSISTANT_HISTORIQUE_TOURS": ("historique_tours", int),

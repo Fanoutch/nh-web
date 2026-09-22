@@ -16,7 +16,8 @@ PROMPT_SYSTEME = """Tu es l'assistant IA du secteur {secteur}. Tu réponds en fr
 Règles :
 1. Appuie-toi seulement sur ces extraits ; n'utilise jamais tes connaissances générales.
 2. Si la réponse n'est pas dans les extraits, réponds exactement : « Je ne trouve pas cette information dans les documents du secteur {secteur}. »
-3. Réponds clairement, en quelques phrases, sans recopier les en-têtes des extraits et sans citer les sources : elles sont affichées à part."""
+3. Réponds clairement, en quelques phrases, sans recopier les en-têtes des extraits et sans citer les sources : elles sont affichées à part.
+4. Structure ta réponse en Markdown simple quand c'est utile : listes à puces ou numérotées, **gras** pour les points importants. Pas de titres, pas de tableaux."""
 
 PROMPT_QUESTION = """EXTRAITS :
 {extraits}
@@ -41,11 +42,7 @@ class Assistant:
         self.base = base
 
     def indexer(self, secteur: str, document_id: int, chemin: str, nom: str) -> int:
-        pages = lecteurs.lire(chemin)
-        docs = [{"source": nom, "page": p["page"], "text": p["texte"]} for p in pages]
-        morceaux = [{"texte": m["text"], "page": m["page"]} for m in chunk_documents(docs)]
-        if not morceaux:
-            raise lecteurs.LectureImpossible("Aucun texte trouvé dans ce document.")
+        morceaux = self._decouper(chemin, nom)
         vecteurs = modeles.embedder([m["texte"] for m in morceaux], self.r)
         self.base.ajouter_document(secteur, document_id, nom, morceaux, vecteurs)
         return len(morceaux)
@@ -53,8 +50,26 @@ class Assistant:
     def supprimer(self, secteur: str, document_id: int) -> None:
         self.base.supprimer_document(secteur, document_id)
 
-    def repondre(self, secteur: str, nom_secteur: str, question: str,
-                 historique: list[dict]) -> Iterator[dict]:
+    def indexer_piece_jointe(self, conversation_id: int, piece_id: int, chemin: str, nom: str) -> int:
+        morceaux = self._decouper(chemin, nom)
+        vecteurs = modeles.embedder([m["texte"] for m in morceaux], self.r)
+        self.base.ajouter_piece_jointe(conversation_id, piece_id, nom, morceaux, vecteurs)
+        return len(morceaux)
+
+    def supprimer_conversation(self, conversation_id: int) -> None:
+        self.base.supprimer_conversation(conversation_id)
+
+    def _decouper(self, chemin: str, nom: str) -> list[dict]:
+        pages = lecteurs.lire(chemin)
+        docs = [{"source": nom, "page": p["page"], "text": p["texte"]} for p in pages]
+        morceaux = [{"texte": m["text"], "page": m["page"]} for m in chunk_documents(docs)]
+        if not morceaux:
+            raise lecteurs.LectureImpossible("Aucun texte trouvé dans ce document.")
+        return morceaux
+
+    def repondre(self, secteur: str, nom_secteur: str, question: str, historique: list[dict],
+                 documents_prioritaires: list[int] | None = None,
+                 conversation: int | None = None) -> Iterator[dict]:
         historique = historique[-2 * self.r.historique_tours:] if self.r.historique_tours > 0 else []
         try:
             if not self.r.llm_actif:
@@ -62,8 +77,7 @@ class Assistant:
                 return
             recherche = self._reformuler(question, historique) if historique else question
             vecteur = modeles.embedder([recherche], self.r)[0]
-            trouves = [m for m in self.base.chercher(secteur, vecteur, self.r.top_k)
-                       if m["distance"] <= self.r.seuil_distance]
+            trouves = self._rassembler(secteur, vecteur, documents_prioritaires, conversation)
             if not trouves:
                 yield from _reponse_fixe(REPONSE_INTROUVABLE.format(secteur=nom_secteur))
                 return
@@ -81,6 +95,29 @@ class Assistant:
         except Exception as exc:
             yield {"type": "erreur", "message": MESSAGE_INDISPONIBLE,
                    "detail": f"{type(exc).__name__}: {exc}"}
+
+    def _rassembler(self, secteur: str, vecteur: list[float], documents_prioritaires: list[int] | None,
+                     conversation: int | None) -> list[dict]:
+        """Recherche fusionnée : la recherche principale porte toujours sur tout le
+        secteur ; les documents prioritaires et la pièce jointe de conversation ne
+        font qu'AJOUTER des passages, jamais restreindre la recherche principale.
+        Dédoublonnage sur `id` (identifiant ChromaDB du morceau), pas sur
+        `(document_id, page)` : deux morceaux différents d'une même page peuvent
+        coexister ici (le dédoublonnage par page reste celui de `_sources()`).
+        """
+        trouves = self.base.chercher(secteur, vecteur, self.r.top_k)
+        if documents_prioritaires:
+            trouves += self.base.chercher(secteur, vecteur, self.r.top_k_dossier,
+                                          document_ids=documents_prioritaires)
+        if conversation is not None:
+            trouves += self.base.chercher_conversation(conversation, vecteur, self.r.top_k_pj)
+        vus, fusion = set(), []
+        for m in sorted(trouves, key=lambda m: m["distance"]):
+            if m["id"] in vus or m["distance"] > self.r.seuil_distance:
+                continue
+            vus.add(m["id"])
+            fusion.append(m)
+        return fusion[:self.r.top_k + self.r.top_k_dossier + self.r.top_k_pj]
 
     def _reformuler(self, question: str, historique: list[dict]) -> str:
         texte = "\n".join(
@@ -103,8 +140,22 @@ def _sources(morceaux: list[dict]) -> list[dict]:
         cle = (m["document_id"], m["page"])
         if cle not in vues:
             vues.add(cle)
-            sources.append({"document_id": m["document_id"], "nom": m["nom"], "page": m["page"]})
+            sources.append({
+                "document_id": m["document_id"], "nom": m["nom"], "page": m["page"],
+                "extrait": _couper(m["texte"], 600), "pj": m.get("pj", False),
+            })
     return sources
+
+
+def _couper(texte: str, longueur: int) -> str:
+    """Coupe `texte` sur la dernière espace avant `longueur` caractères et ajoute « … »."""
+    if len(texte) <= longueur:
+        return texte
+    coupe = texte[:longueur]
+    espace = coupe.rfind(" ")
+    if espace > 0:
+        coupe = coupe[:espace]
+    return coupe + "…"
 
 
 def _extraits(morceaux: list[dict]) -> str:

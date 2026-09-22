@@ -39,6 +39,15 @@ class QuestionEntrante(BaseModel):
     nom_secteur: str
     question: str
     historique: list[MessageHistorique] = []
+    documents_prioritaires: list[int] = []
+    conversation: int | None = None
+
+
+class PieceJointeEntrante(BaseModel):
+    conversation_id: int
+    piece_id: int
+    chemin: str
+    nom: str
 
 
 def creer_app(reglages: Reglages | None = None, assistant=None) -> FastAPI:
@@ -102,9 +111,35 @@ def creer_app(reglages: Reglages | None = None, assistant=None) -> FastAPI:
         historique = [m.model_dump() for m in q.historique]
 
         def flux():
-            for evenement in moteur.repondre(q.secteur, q.nom_secteur, q.question, historique):
+            for evenement in moteur.repondre(q.secteur, q.nom_secteur, q.question, historique,
+                                             q.documents_prioritaires, q.conversation):
                 yield json.dumps(evenement, ensure_ascii=False) + "\n"
 
         return StreamingResponse(flux(), media_type="application/x-ndjson")
+
+    @app.post("/pieces-jointes", dependencies=protege)
+    def pieces_jointes(piece: PieceJointeEntrante):
+        try:
+            n = moteur.indexer_piece_jointe(piece.conversation_id, piece.piece_id, piece.chemin, piece.nom)
+        except lecteurs.LectureImpossible as exc:
+            cause = exc.__cause__
+            raise HTTPException(status_code=422, detail={
+                "code": "lecture", "message": str(exc),
+                "detail": f"{type(cause).__name__}: {cause}" if cause else str(exc),
+            })
+        except modeles.ModeleIndisponible as exc:
+            raise HTTPException(status_code=503, detail={
+                "code": "modele", "message": MESSAGE_INDISPONIBLE, "detail": str(exc),
+            })
+        except Exception as exc:  # erreur imprévue (base, disque…) : réponse JSON lisible par Laravel
+            raise HTTPException(status_code=503, detail={
+                "code": "interne", "message": MESSAGE_INDISPONIBLE, "detail": f"{type(exc).__name__}: {exc}",
+            })
+        return {"nb_morceaux": n}
+
+    @app.delete("/conversations/{conversation_id}", dependencies=protege)
+    def supprimer_conversation(conversation_id: int):
+        moteur.supprimer_conversation(conversation_id)
+        return {"ok": True}
 
     return app

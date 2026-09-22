@@ -25,17 +25,34 @@ class FauxAssistant:
     def supprimer(self, secteur, document_id):
         self.appels.append(("supprimer", secteur, document_id))
 
-    def repondre(self, secteur, nom_secteur, question, historique):
-        self.appels.append(("repondre", secteur, nom_secteur, question, historique))
-        yield {"type": "sources", "sources": [{"document_id": 1, "nom": "Manuel.pdf", "page": 2}]}
+    def repondre(self, secteur, nom_secteur, question, historique,
+                 documents_prioritaires=None, conversation=None):
+        self.appels.append(("repondre", secteur, nom_secteur, question, historique,
+                            documents_prioritaires, conversation))
+        yield {"type": "sources", "sources": [{"document_id": 1, "nom": "Manuel.pdf", "page": 2,
+                                               "extrait": "Extrait.", "pj": False}]}
         yield {"type": "texte", "texte": "Réponse "}
         yield {"type": "texte", "texte": "complète."}
         yield {"type": "fin"}
+
+    def indexer_piece_jointe(self, conversation_id, piece_id, chemin, nom):
+        self.appels.append(("indexer_piece_jointe", conversation_id, piece_id, chemin, nom))
+        if self.erreur:
+            raise self.erreur
+        return 4
+
+    def supprimer_conversation(self, conversation_id):
+        self.appels.append(("supprimer_conversation", conversation_id))
 
 
 @pytest.fixture
 def faux():
     return FauxAssistant()
+
+
+@pytest.fixture
+def moteur(faux):
+    return faux
 
 
 @pytest.fixture
@@ -111,7 +128,7 @@ def test_question_en_flux_ndjson(client, faux):
 
     assert [e["type"] for e in lignes] == ["sources", "texte", "texte", "fin"]
     assert lignes[1]["texte"] == "Réponse "
-    assert faux.appels == [("repondre", "bmn", "BMN", "Q2", historique)]
+    assert faux.appels == [("repondre", "bmn", "BMN", "Q2", historique, [], None)]
 
 
 def test_sante(client, monkeypatch):
@@ -158,3 +175,57 @@ def test_jeton_non_ascii_refuse_sans_planter(client):
     reponse = client.get("/formats", headers={"X-Assistant-Jeton": "s\xe9cret".encode("latin-1")})
 
     assert reponse.status_code == 401
+
+
+def test_question_transmet_documents_prioritaires_et_conversation(client, faux):
+    client.post("/questions", headers=JETON, json={
+        "secteur": "bmn", "nom_secteur": "BMN", "question": "Q2",
+        "documents_prioritaires": [9], "conversation": 7,
+    })
+
+    assert faux.appels == [("repondre", "bmn", "BMN", "Q2", [], [9], 7)]
+
+
+def test_route_pieces_jointes(client, moteur):
+    r = client.post("/pieces-jointes", json={"conversation_id": 7, "piece_id": 3,
+                                             "chemin": "/tmp/cr.pdf", "nom": "cr.pdf"},
+                    headers=JETON)
+    assert r.status_code == 200 and r.json() == {"nb_morceaux": 4}
+
+
+def test_pieces_jointes_illisible_422(client, faux):
+    try:
+        raise LectureImpossible("Aucun texte trouvé dans ce PDF (document scanné ?).") from ValueError("page vide")
+    except LectureImpossible as exc:
+        faux.erreur = exc
+
+    reponse = client.post("/pieces-jointes", headers=JETON,
+                          json={"conversation_id": 7, "piece_id": 3, "chemin": "/x", "nom": "Scan.pdf"})
+
+    assert reponse.status_code == 422
+    assert reponse.json()["detail"]["code"] == "lecture"
+
+
+def test_pieces_jointes_modele_indisponible_503(client, faux):
+    faux.erreur = modeles.ModeleIndisponible("HF a répondu 503")
+
+    reponse = client.post("/pieces-jointes", headers=JETON,
+                          json={"conversation_id": 7, "piece_id": 3, "chemin": "/x", "nom": "M.pdf"})
+
+    assert reponse.status_code == 503
+    assert reponse.json()["detail"]["code"] == "modele"
+
+
+def test_pieces_jointes_erreur_imprevue_503(client, faux):
+    faux.erreur = RuntimeError("disque plein")
+
+    reponse = client.post("/pieces-jointes", headers=JETON,
+                          json={"conversation_id": 7, "piece_id": 3, "chemin": "/x", "nom": "M.pdf"})
+
+    assert reponse.status_code == 503
+    assert reponse.json()["detail"]["code"] == "interne"
+
+
+def test_route_suppression_conversation(client, moteur):
+    assert client.delete("/conversations/7", headers=JETON).json() == {"ok": True}
+    assert client.delete("/conversations/7").status_code == 401     # sans jeton

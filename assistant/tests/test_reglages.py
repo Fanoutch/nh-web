@@ -14,6 +14,8 @@ def test_defauts_sans_fichiers():
 
     assert r.llm_actif is False
     assert r.top_k == 6
+    assert r.top_k_dossier == 3
+    assert r.top_k_pj == 3
     assert r.seuil_distance == 1.0
     assert r.temperature == 0.3
     assert r.historique_tours == 3
@@ -35,6 +37,8 @@ def test_lit_llm_env_et_reglages_env(tmp_path):
     ))
     reg = ecrire(tmp_path, "reglages.env", (
         "ASSISTANT_TOP_K=4\n"
+        "ASSISTANT_TOP_K_DOSSIER=2\n"
+        "ASSISTANT_TOP_K_PJ=1\n"
         "ASSISTANT_JETON='secret'\n"
         "ASSISTANT_CHROMA_DIR=/tmp/chroma-test\n"
     ))
@@ -47,6 +51,8 @@ def test_lit_llm_env_et_reglages_env(tmp_path):
     assert r.embed_base_url == "https://hf.example/bge"
     assert r.embed_format == "hf"
     assert r.top_k == 4
+    assert r.top_k_dossier == 2
+    assert r.top_k_pj == 1
     assert r.jeton == "secret"
     assert r.chroma_dir == Path("/tmp/chroma-test")
     assert r.temperature == 0.3  # LLM_TEMPERATURE (HIL) n'est pas lue
