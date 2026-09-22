@@ -18,7 +18,7 @@ class GestionDossiersAssistant
 
     public function creer(Secteur $secteur, ?int $parentId, string $nom): AssistantDossier
     {
-        $this->validerNom($nom);
+        $nom = $this->validerNom($nom);
         $parent = $this->resoudreDossier($secteur, $parentId);
 
         $profondeur = $parent !== null ? $parent->profondeur() + 1 : 1;
@@ -37,7 +37,7 @@ class GestionDossiersAssistant
 
     public function renommer(AssistantDossier $dossier, string $nom): void
     {
-        $this->validerNom($nom);
+        $nom = $this->validerNom($nom);
         $this->verifierDoublonDossier($dossier->secteur_id, $dossier->parent_id, $nom, ignorerDossierId: $dossier->id);
 
         $dossier->update(['nom' => $nom]);
@@ -128,8 +128,11 @@ class GestionDossiersAssistant
         ];
     }
 
-    private function validerNom(string $nom): void
+    /** Coupe les espaces superflus puis valide le nom ; renvoie le nom coupé, à utiliser pour la création/le renommage. */
+    private function validerNom(string $nom): string
     {
+        $nom = trim($nom);
+
         if (mb_strlen($nom) < 1 || mb_strlen($nom) > 100) {
             throw new ActionDossierRefusee('Le nom du dossier doit faire entre 1 et 100 caractères.');
         }
@@ -137,6 +140,8 @@ class GestionDossiersAssistant
         if (str_contains($nom, '›')) {
             throw new ActionDossierRefusee('Le nom du dossier ne peut pas contenir le caractère « › ».');
         }
+
+        return $nom;
     }
 
     private function verifierDoublonDossier(int $secteurId, ?int $parentId, string $nom, ?int $ignorerDossierId = null): void

@@ -78,6 +78,22 @@ it('refuse un nom de dossier vide ou trop long', function () {
         ->toThrow(ActionDossierRefusee::class, 'Le nom du dossier doit faire entre 1 et 100 caractères.');
 });
 
+it("refuse un nom de dossier composé uniquement d'espaces", function () {
+    expect(fn () => $this->gestion->creer($this->secteur, null, '   '))
+        ->toThrow(ActionDossierRefusee::class, 'Le nom du dossier doit faire entre 1 et 100 caractères.');
+});
+
+it('coupe les espaces superflus autour du nom, à la création comme au renommage', function () {
+    $gestion = $this->gestion;
+    $secteur = $this->secteur;
+
+    $dossier = $gestion->creer($secteur, null, '  Procédures  ');
+    expect($dossier->nom)->toBe('Procédures');
+
+    $gestion->renommer($dossier, '  Vols  ');
+    expect($dossier->fresh()->nom)->toBe('Vols');
+});
+
 it('refuse le caractère « › » dans un nom de dossier, à la création comme au renommage', function () {
     $gestion = $this->gestion;
     $secteur = $this->secteur;
@@ -222,6 +238,19 @@ it('refuse de déplacer un dossier si cela dépasse 10 niveaux', function () {
 
     expect(fn () => $gestion->deplacerDossier($aDeplacer, $dossier->id))
         ->toThrow(ActionDossierRefusee::class, 'Arborescence trop profonde (10 niveaux maximum).');
+});
+
+it('refuse de déplacer un dossier vers un dossier qui contient déjà ce nom', function () {
+    $gestion = $this->gestion;
+    $secteur = $this->secteur;
+    $procedures = $gestion->creer($secteur, null, 'Procédures');
+    $volsRacine = $gestion->creer($secteur, null, 'Vols');
+    $gestion->creer($secteur, $procedures->id, 'Vols');
+
+    expect(fn () => $gestion->deplacerDossier($volsRacine, $procedures->id))
+        ->toThrow(ActionDossierRefusee::class, 'Un dossier « Vols » existe déjà ici.');
+
+    expect($volsRacine->fresh()->parent_id)->toBeNull();
 });
 
 it("refuse de déplacer un dossier vers un dossier introuvable ou d'un autre secteur", function () {
