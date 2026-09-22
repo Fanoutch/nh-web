@@ -3,9 +3,11 @@
 use App\Livewire\AssistantChat;
 use App\Models\AssistantConversation;
 use App\Models\AssistantMessage;
+use App\Models\AssistantPieceJointe;
 use App\Models\User;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Spatie\Activitylog\Models\Activity;
@@ -70,7 +72,7 @@ it('creates a conversation, streams the answer and saves it with its sources', f
     expect($messages->pluck('role')->all())->toBe(['utilisateur', 'assistant'])
         ->and($messages[1]->contenu)->toBe('Le vol est ordonné par le chef.')
         ->and($messages[1]->statut)->toBe('complet')
-        ->and($messages[1]->sources)->toBe([['document_id' => 1, 'nom' => 'Manuel.pdf', 'page' => 3]]);
+        ->and($messages[1]->sources)->toBe([['document_id' => 1, 'nom' => 'Manuel.pdf', 'page' => 3, 'chemin' => '']]);
     $composant->assertSet('conversationId', $conversation->id)
         ->assertSee('Le vol est ordonné par le chef.')
         ->assertSee('Qui lance un vol de maintenance ?');
@@ -225,6 +227,77 @@ it('links sources to the document and marks deleted ones', function () {
         ->assertSeeHtml(route('secteurs.documents.consulter', [secteurBmn(), $doc]).'#page=3')
         ->assertSee('Manuel.pdf p.3')
         ->assertSee('Ancien.pdf (document supprimé)');
+});
+
+it('sends the priority documents of a folder named in the question, without ever filtering the search', function () {
+    // Principe validé : documents_prioritaires n'est qu'une PRIORITÉ pour le service, la recherche
+    // porte toujours sur tout le secteur (voir DomaineAssistant).
+    Storage::fake('local');
+    fluxReponse('Réponse.');
+    $secteur = secteurBmn();
+    $entretien = dossier($secteur, 'Entretien');
+    $doc = document($secteur, dossier: $entretien, nom: 'Tolerances.pdf', statut: 'pret');
+    $user = membreSecteur($secteur, 'utilisateur');
+
+    capturerFlux(fn () => Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => $secteur])
+        ->set('question', "Dans le dossier d'entretien, quelle tolérance ?")->call('envoyer'));
+
+    Http::assertSent(fn (Request $r) => ($r['documents_prioritaires'] ?? null) === [$doc->id]);
+});
+
+it('shows the folder path and the highlighted excerpt of an enriched source', function () {
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $secteur = secteurBmn();
+    $doc = secteurBmn()->assistantDocuments()->create(['nom' => 'Manuel.pdf', 'chemin' => 'x', 'taille' => 1, 'format' => 'pdf', 'statut' => 'pret']);
+    $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => $secteur->id, 'titre' => 'T']);
+    $conversation->messages()->create(['role' => 'utilisateur', 'contenu' => "Quelle est l'usure tolérée des plaquettes ?", 'statut' => 'complet']);
+    $conversation->messages()->create(['role' => 'assistant', 'contenu' => 'R', 'statut' => 'complet', 'sources' => [
+        ['document_id' => $doc->id, 'nom' => 'Manuel.pdf', 'page' => 3, 'chemin' => 'Procédures › Entretien',
+            'extrait' => "L'usure des plaquettes est tolérée jusqu'à 2 mm.", 'pj' => false],
+    ]]);
+
+    Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => $secteur])
+        ->call('ouvrir', $conversation->id)
+        ->assertSee('Entretien › Manuel p.3')
+        ->assertSeeHtml('<mark>usure</mark>')
+        ->assertSeeHtml('<mark>plaquettes</mark>')
+        ->assertSeeHtml(route('secteurs.documents.consulter', [$secteur, $doc]).'#page=3');
+});
+
+it('keeps an old source without excerpt as a simple link, without a "passage utilisé" panel', function () {
+    // Réponse enregistrée AVANT cette version (task 10) : pas d'« extrait » dans la source.
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $secteur = secteurBmn();
+    $doc = secteurBmn()->assistantDocuments()->create(['nom' => 'Manuel.pdf', 'chemin' => 'x', 'taille' => 1, 'format' => 'pdf', 'statut' => 'pret']);
+    $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => $secteur->id, 'titre' => 'T']);
+    $conversation->messages()->create(['role' => 'utilisateur', 'contenu' => 'Q', 'statut' => 'complet']);
+    $conversation->messages()->create(['role' => 'assistant', 'contenu' => 'R', 'statut' => 'complet', 'sources' => [
+        ['document_id' => $doc->id, 'nom' => 'Manuel.pdf', 'page' => 3],
+    ]]);
+
+    Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => $secteur])
+        ->call('ouvrir', $conversation->id)
+        ->assertDontSeeHtml('Passage utilisé')
+        ->assertDontSeeHtml('sourceOuverte ===');
+});
+
+it('opens a conversation attachment through its own route, never the documents route', function () {
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $secteur = secteurBmn();
+    $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => $secteur->id, 'titre' => 'T']);
+    $piece = AssistantPieceJointe::create([
+        'conversation_id' => $conversation->id, 'nom' => 'CR.pdf', 'chemin' => 'x', 'taille' => 1,
+        'format' => 'pdf', 'statut' => AssistantPieceJointe::PRET,
+    ]);
+    $conversation->messages()->create(['role' => 'utilisateur', 'contenu' => 'Y a-t-il eu une panne ?', 'statut' => 'complet']);
+    $conversation->messages()->create(['role' => 'assistant', 'contenu' => 'R', 'statut' => 'complet', 'sources' => [
+        ['document_id' => null, 'nom' => 'CR.pdf', 'page' => 2, 'chemin' => '', 'extrait' => 'Panne moteur.', 'pj' => true],
+    ]]);
+
+    Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => $secteur])
+        ->call('ouvrir', $conversation->id)
+        ->assertSeeHtml(route('secteurs.assistant.piece', [$secteur, $piece]))
+        ->assertSeeHtml('<mark>Panne</mark>');
 });
 
 it('ignores an empty question', function () {

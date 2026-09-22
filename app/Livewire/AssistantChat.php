@@ -11,7 +11,9 @@ use App\Models\Secteur;
 use App\Services\AssistantClient;
 use App\Services\AssistantIndisponible;
 use App\Services\AssistantSignalement;
+use App\Services\DomaineAssistant;
 use App\Services\GestionConversationsAssistant;
+use App\Services\SourcesAssistant;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -248,7 +250,7 @@ class AssistantChat extends Component
         }
     }
 
-    public function envoyer(AssistantClient $client): void
+    public function envoyer(AssistantClient $client, DomaineAssistant $domaine, SourcesAssistant $sourcesAssistant): void
     {
         $question = trim($this->question);
         if ($question === '') {
@@ -309,6 +311,11 @@ class AssistantChat extends Component
         $this->question = '';
         $this->stream(to: 'question-en-cours', content: e($question), replace: true);
 
+        // Dossiers reconnus dans la question (ex. « procédures d'entretien ») : leurs documents sont
+        // seulement PRIORISÉS auprès du service, jamais un filtre — la recherche porte toujours sur
+        // tout le secteur, pour qu'un document mal rangé reste trouvable (principe validé).
+        $documentsPrioritaires = $domaine->documentsPrioritaires($this->secteur, $question);
+
         $reponse = '';
         $sources = [];
         $erreur = null;
@@ -342,6 +349,7 @@ class AssistantChat extends Component
                         $detail = (string) ($evenement['detail'] ?? '');
                     }
                 },
+                documentsPrioritaires: $documentsPrioritaires,
                 conversationId: $conversation->id,
                 doitArreter: $doitArreter,
             );
@@ -376,10 +384,12 @@ class AssistantChat extends Component
             $contenu = $reponse;
         }
 
+        // Le chemin de dossier d'une source est FIGÉ ici, au moment d'enregistrer le message :
+        // renommer ou déplacer un dossier plus tard ne réécrit pas les anciennes réponses.
         $conversation->messages()->create([
             'role' => AssistantMessage::ASSISTANT,
             'contenu' => $contenu,
-            'sources' => $sources,
+            'sources' => $sourcesAssistant->enrichir($this->secteur, $sources),
             'statut' => $statut,
             'detail' => $detail,
         ]);
@@ -420,6 +430,15 @@ class AssistantChat extends Component
     private function rendu(string $texte): string
     {
         return Str::markdown($texte, ['html_input' => 'escape', 'allow_unsafe_links' => false]);
+    }
+
+    /**
+     * Extrait d'une source, échappé et surligné (balises <mark>) sur les mots de la question qui a
+     * amené cette réponse — voir SourcesAssistant::surligner.
+     */
+    private function surligner(string $extrait, string $question): string
+    {
+        return app(SourcesAssistant::class)->surligner($extrait, $question);
     }
 
     /**
@@ -505,6 +524,23 @@ class AssistantChat extends Component
         $piecesEnPreparation = $piecesEnAttente
             ->contains(fn ($p) => in_array($p->statut, [AssistantPieceJointe::EN_ATTENTE, AssistantPieceJointe::EN_COURS], true));
 
+        // Question ayant amené chaque réponse (message qui la précède immédiatement), pour surligner
+        // ses mots dans l'extrait affiché en source (voir SourcesAssistant::surligner).
+        $questionsPrecedentes = [];
+        $precedente = null;
+        foreach ($messages as $message) {
+            if ($message->role === AssistantMessage::ASSISTANT) {
+                $questionsPrecedentes[$message->id] = $precedente?->contenu ?? '';
+            } else {
+                $precedente = $message;
+            }
+        }
+
+        // Pièces jointes de la conversation ouverte (nom => id) : une source « pj » ne porte que le
+        // nom du fichier (le service Python ne renvoie pas l'identifiant), on la relie donc ici à sa
+        // pièce jointe pour ouvrir la bonne route de consultation (jamais celle des documents).
+        $piecesParNom = $conversation !== null ? $conversation->piecesJointes()->pluck('id', 'nom') : collect();
+
         return view('livewire.assistant-chat', [
             'conversationsGroupees' => $this->conversationsGroupees($conversations),
             'messages' => $messages,
@@ -513,6 +549,8 @@ class AssistantChat extends Component
             'aucunDocumentPret' => ! $this->secteur->assistantDocuments()->where('statut', AssistantDocument::PRET)->exists(),
             'piecesEnAttente' => $piecesEnAttente,
             'piecesEnPreparation' => $piecesEnPreparation,
+            'questionsPrecedentes' => $questionsPrecedentes,
+            'piecesParNom' => $piecesParNom,
         ]);
     }
 }

@@ -31,8 +31,12 @@ beforeEach(function () {
     $this->gestion = app(GestionDossiersAssistant::class);
 });
 
-/** Crée un document de test dans le secteur (et éventuellement le dossier) donné — helper local à ce fichier. */
-function document(Secteur $secteur, ?AssistantDossier $dossier = null, string $nom = 'Doc.pdf'): AssistantDocument
+/**
+ * Crée un document de test dans le secteur (et éventuellement le dossier) donné — helper partagé
+ * par les autres fichiers de tests (voir leurs commentaires). `statut` par défaut à « pret »,
+ * comme avant l'ajout de ce paramètre (task 10, pour tester la priorisation par dossier).
+ */
+function document(Secteur $secteur, ?AssistantDossier $dossier = null, string $nom = 'Doc.pdf', string $statut = AssistantDocument::PRET): AssistantDocument
 {
     $chemin = "assistant/documents/{$secteur->slug}/x_{$nom}";
     Storage::disk('local')->put($chemin, 'contenu');
@@ -44,7 +48,7 @@ function document(Secteur $secteur, ?AssistantDossier $dossier = null, string $n
         'chemin' => $chemin,
         'taille' => 7,
         'format' => 'pdf',
-        'statut' => AssistantDocument::PRET,
+        'statut' => $statut,
     ]);
 }
 
