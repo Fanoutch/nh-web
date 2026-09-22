@@ -27,4 +27,22 @@ class SecteurPolicy
     {
         return $user->isAdmin() || $user->roleDans($secteur) === Secteur::ROLE_CHEF;
     }
+
+    /** Onglet Documents : déposer, supprimer, remplacer, signaler une erreur de document. */
+    public function gererDocuments(User $user, Secteur $secteur): bool
+    {
+        return $user->isAdmin() || $user->roleDans($secteur) === Secteur::ROLE_CHEF;
+    }
+
+    /** Onglet Assistant IA : conversations et questions (conversations personnelles, voir AssistantChat). */
+    public function interrogerAssistant(User $user, Secteur $secteur): bool
+    {
+        return $this->view($user, $secteur);
+    }
+
+    /** Ouvrir un document cité en source d'une réponse. */
+    public function consulterDocument(User $user, Secteur $secteur): bool
+    {
+        return $this->view($user, $secteur);
+    }
 }

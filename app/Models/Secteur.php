@@ -31,4 +31,14 @@ class Secteur extends Model
     {
         return $this->hasMany(ExcelReport::class);
     }
+
+    public function assistantDocuments(): HasMany
+    {
+        return $this->hasMany(AssistantDocument::class);
+    }
+
+    public function assistantConversations(): HasMany
+    {
+        return $this->hasMany(AssistantConversation::class);
+    }
 }
