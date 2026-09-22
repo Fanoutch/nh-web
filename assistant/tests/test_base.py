@@ -20,7 +20,8 @@ def test_ajouter_et_chercher(base):
     resultats = base.chercher("bmn", MAINT, top_k=6)
 
     assert resultats[0] == {"document_id": 1, "nom": "Manuel.pdf", "page": 3,
-                            "texte": "vol de maintenance", "distance": pytest.approx(0.0, abs=1e-6)}
+                            "texte": "vol de maintenance", "distance": pytest.approx(0.0, abs=1e-6),
+                            "id": "doc1_m0", "pj": False}
     assert resultats[1]["document_id"] == 2
     assert resultats[1]["page"] is None
 
@@ -115,3 +116,35 @@ def test_chercher_avec_top_k_nul_renvoie_au_moins_un_resultat(base):
     base.ajouter_document("bmn", 1, "Manuel.pdf", [{"texte": "vol", "page": 1}], [MAINT])
 
     assert len(base.chercher("bmn", MAINT, top_k=0)) == 1
+
+
+def test_chercher_filtre_sur_les_documents_demandes(base):
+    base.ajouter_document("bmn", 1, "a.pdf", [{"texte": "vol de controle", "page": 1}], [[1.0, 0.0]])
+    base.ajouter_document("bmn", 2, "b.pdf", [{"texte": "vol de controle", "page": 1}], [[1.0, 0.0]])
+
+    trouves = base.chercher("bmn", [1.0, 0.0], top_k=5, document_ids=[2])
+
+    assert [m["document_id"] for m in trouves] == [2]
+    assert trouves[0]["id"]                      # identifiant de morceau présent
+
+
+def test_chercher_avec_document_ids_vide_ne_filtre_pas(base):
+    base.ajouter_document("bmn", 1, "a.pdf", [{"texte": "vol de controle", "page": 1}], [[1.0, 0.0]])
+    base.ajouter_document("bmn", 2, "b.pdf", [{"texte": "vol de controle", "page": 1}], [[1.0, 0.0]])
+
+    trouves = base.chercher("bmn", [1.0, 0.0], top_k=5, document_ids=[])
+
+    assert {m["document_id"] for m in trouves} == {1, 2}
+
+
+def test_piece_jointe_dans_une_collection_de_conversation(base):
+    base.ajouter_piece_jointe(7, 3, "cr.pdf", [{"texte": "depose moteur", "page": 1}], [[0.0, 1.0]])
+
+    trouves = base.chercher_conversation(7, [0.0, 1.0], top_k=3)
+
+    assert trouves[0]["nom"] == "cr.pdf" and trouves[0]["pj"] is True
+    assert base.chercher_conversation(99, [0.0, 1.0], top_k=3) == []   # collection absente
+
+    base.supprimer_conversation(7)
+    assert base.chercher_conversation(7, [0.0, 1.0], top_k=3) == []
+    base.supprimer_conversation(7)                                      # deux fois : pas d'erreur
