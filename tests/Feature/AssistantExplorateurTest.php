@@ -227,3 +227,36 @@ it('ignore les actions de dossier ciblant un dossier d’un autre secteur', func
     expect($dossierAutre->fresh()->nom)->toBe('Ailleurs')
         ->and($dossierAutre->fresh()->parent_id)->toBeNull();
 });
+
+// --- Ronde de correction 1 ---------------------------------------------------
+
+it('donne à chaque nœud de l’arbre une clé stable basée sur l’identifiant du dossier', function () {
+    $secteur = $this->secteur;
+    $chef = $this->chef;
+    $a = dossier($secteur, 'Alpha');
+    $b = dossier($secteur, 'Beta');
+    $enfant = dossier($secteur, 'Enfant', $a);
+
+    // Racine et enfant utilisent le même composant récursif : la clé doit être présente aux
+    // deux niveaux, pour que renommer un dossier (donc changer son rang alphabétique entre
+    // frères) ne fasse pas glisser l'état plié/déplié ou le glisser-déposer d'un nœud vers un
+    // autre lors du re-rendu (Livewire réconcilierait sinon par position).
+    Livewire::actingAs($chef)->test(AssistantDocuments::class, ['secteur' => $secteur])
+        ->assertSeeHtml("wire:key=\"dossier-noeud-{$a->id}\"")
+        ->assertSeeHtml("wire:key=\"dossier-noeud-{$b->id}\"")
+        ->assertSeeHtml("wire:key=\"dossier-noeud-{$enfant->id}\"");
+});
+
+it('ne prétend pas avoir réussi quand deplacer() reçoit un type inconnu', function () {
+    $secteur = $this->secteur;
+    $chef = $this->chef;
+    $doc = document($secteur);
+
+    Livewire::actingAs($chef)->test(AssistantDocuments::class, ['secteur' => $secteur])
+        ->call('deplacer', 'autre-chose', $doc->id, null)
+        ->assertNotDispatched('action-dossier-reussie')
+        ->assertSet('notice', null)
+        ->assertSet('erreur', null);
+
+    expect($doc->fresh()->dossier_id)->toBeNull();
+});

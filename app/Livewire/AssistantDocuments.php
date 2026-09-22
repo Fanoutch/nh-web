@@ -117,9 +117,7 @@ class AssistantDocuments extends Component
         $nom = $dossier->nom;
 
         try {
-            // Le contenu du sous-arbre n'existe plus une fois supprimer() passé : on le compte avant.
-            $compte = $gestion->compter($dossier);
-            $gestion->supprimer($dossier);
+            $compte = $gestion->supprimer($dossier);
             $detail = $compte['dossiers'] || $compte['documents']
                 ? sprintf(' (%d sous-dossier%s, %d document%s)',
                     $compte['dossiers'], $compte['dossiers'] > 1 ? 's' : '',
@@ -155,6 +153,9 @@ class AssistantDocuments extends Component
                     return;
                 }
                 $gestion->deplacerDossier($dossier, $destinationId);
+            } else {
+                // Type inconnu (jamais envoyé par la vue) : rien à faire, surtout pas annoncer une réussite.
+                return;
             }
             $this->dispatch('action-dossier-reussie');
         } catch (ActionDossierRefusee $e) {

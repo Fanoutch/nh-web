@@ -8,7 +8,7 @@
     $ouvertParDefaut = in_array($dossier->id, $idsOuverts, true);
 @endphp
 
-<div x-data="{ ouvert: {{ $ouvertParDefaut ? 'true' : 'false' }} }">
+<div wire:key="dossier-noeud-{{ $dossier->id }}" x-data="{ ouvert: {{ $ouvertParDefaut ? 'true' : 'false' }} }">
     <button type="button" wire:click="ouvrirDossier({{ $dossier->id }})"
             style="padding-left: {{ 8 + $profondeur * 12 }}px"
             x-on:dragover.prevent="if (glisseType) $el.classList.add('bg-accent-soft')"
