@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AssistantDocumentController;
 use App\Http\Controllers\FlightController;
 use App\Http\Controllers\ExcelReportController;
 use App\Http\Controllers\MachineController;
@@ -48,7 +49,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/secteurs/{secteur}/disponibilites', [SecteurController::class, 'disponibilites'])
         ->name('secteurs.disponibilites')->can('consulterDispos', 'secteur');
     Route::get('/secteurs/{secteur}/assistant', [SecteurController::class, 'assistant'])
-        ->name('secteurs.assistant')->can('view', 'secteur');
+        ->name('secteurs.assistant')->can('interrogerAssistant', 'secteur');
+    Route::get('/secteurs/{secteur}/documents', [SecteurController::class, 'documents'])
+        ->name('secteurs.documents')->can('gererDocuments', 'secteur');
+    Route::get('/secteurs/{secteur}/documents/{document}', [AssistantDocumentController::class, 'consulter'])
+        ->name('secteurs.documents.consulter')->can('consulterDocument', 'secteur');
     Route::get('/secteurs/{secteur}/disponibilites/{report}/telecharger', [ExcelReportController::class, 'download'])
         ->name('secteurs.disponibilites.download')->can('consulterDispos', 'secteur');
 

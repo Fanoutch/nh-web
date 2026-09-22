@@ -42,4 +42,9 @@ class SecteurController extends Controller
     {
         return view('secteurs.assistant', compact('secteur'));
     }
+
+    public function documents(Secteur $secteur): View
+    {
+        return view('secteurs.documents', compact('secteur'));
+    }
 }

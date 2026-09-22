@@ -6,6 +6,9 @@
         'disponibilites' => ['label' => 'Disponibilités', 'route' => 'secteurs.disponibilites'],
         'assistant' => ['label' => 'Assistant IA', 'route' => 'secteurs.assistant'],
     ];
+    if (auth()->user()?->can('gererDocuments', $secteur)) {
+        $onglets['documents'] = ['label' => 'Documents', 'route' => 'secteurs.documents'];
+    }
 @endphp
 
 <div class="mb-6">
