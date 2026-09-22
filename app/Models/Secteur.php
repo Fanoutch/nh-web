@@ -41,4 +41,9 @@ class Secteur extends Model
     {
         return $this->hasMany(AssistantConversation::class);
     }
+
+    public function assistantDossiers(): HasMany
+    {
+        return $this->hasMany(AssistantDossier::class);
+    }
 }

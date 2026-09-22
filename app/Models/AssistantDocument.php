@@ -17,7 +17,7 @@ class AssistantDocument extends Model
     public const ERREUR = 'erreur';
 
     protected $fillable = [
-        'secteur_id', 'user_id', 'nom', 'chemin', 'taille', 'format',
+        'secteur_id', 'dossier_id', 'user_id', 'nom', 'chemin', 'taille', 'format',
         'statut', 'message', 'detail', 'nb_morceaux', 'signale_at',
     ];
 
@@ -29,6 +29,11 @@ class AssistantDocument extends Model
     public function secteur(): BelongsTo
     {
         return $this->belongsTo(Secteur::class);
+    }
+
+    public function dossier(): BelongsTo
+    {
+        return $this->belongsTo(AssistantDossier::class, 'dossier_id');
     }
 
     public function user(): BelongsTo

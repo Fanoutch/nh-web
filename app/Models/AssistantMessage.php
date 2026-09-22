@@ -14,11 +14,11 @@ class AssistantMessage extends Model
     public const ERREUR = 'erreur';
     public const INTERROMPU = 'interrompu';
 
-    protected $fillable = ['conversation_id', 'role', 'contenu', 'sources', 'statut', 'detail', 'signale_at'];
+    protected $fillable = ['conversation_id', 'role', 'contenu', 'sources', 'pieces', 'statut', 'detail', 'signale_at'];
 
     protected function casts(): array
     {
-        return ['sources' => 'array', 'signale_at' => 'datetime'];
+        return ['sources' => 'array', 'pieces' => 'array', 'signale_at' => 'datetime'];
     }
 
     public function conversation(): BelongsTo

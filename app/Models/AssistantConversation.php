@@ -27,4 +27,9 @@ class AssistantConversation extends Model
     {
         return $this->hasMany(AssistantMessage::class, 'conversation_id')->orderBy('id');
     }
+
+    public function piecesJointes(): HasMany
+    {
+        return $this->hasMany(AssistantPieceJointe::class, 'conversation_id');
+    }
 }
