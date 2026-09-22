@@ -68,3 +68,34 @@ def test_ecritures_concurrentes(base):
         fil.join()
 
     assert len(base.chercher("bmn", MAINT, 20)) == 8
+
+
+def test_premier_acces_concurrent_a_un_nouveau_secteur(tmp_path):
+    base = BaseVectorielle(tmp_path / "chroma")
+    exceptions: list = []
+
+    def lecteur():
+        try:
+            base.chercher("neuf", MAINT, 6)
+        except Exception as e:
+            exceptions.append(e)
+
+    def redacteur(i):
+        try:
+            base.ajouter_document("neuf", i, f"d{i}.pdf", [{"texte": "t", "page": 1}], [MAINT])
+        except Exception as e:
+            exceptions.append(e)
+
+    fils = []
+    for i in range(1, 5):
+        fils.append(threading.Thread(target=redacteur, args=(i,)))
+    for _ in range(4):
+        fils.append(threading.Thread(target=lecteur))
+
+    for fil in fils:
+        fil.start()
+    for fil in fils:
+        fil.join()
+
+    assert exceptions == []
+    assert len(base.chercher("neuf", MAINT, 20)) == 4

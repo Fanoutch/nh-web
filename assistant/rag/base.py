@@ -15,10 +15,18 @@ class BaseVectorielle:
     def __init__(self, dossier: Path):
         Path(dossier).mkdir(parents=True, exist_ok=True)
         self._client = chromadb.PersistentClient(path=str(dossier))
-        self._verrou = threading.Lock()
+        self._verrou = threading.RLock()
+        self._collections: dict[str, chromadb.Collection] = {}
 
     def _collection(self, secteur: str):
-        return self._client.get_or_create_collection(name=f"secteur_{secteur}")
+        if secteur in self._collections:
+            return self._collections[secteur]
+        with self._verrou:
+            if secteur in self._collections:
+                return self._collections[secteur]
+            collection = self._client.get_or_create_collection(name=f"secteur_{secteur}")
+            self._collections[secteur] = collection
+            return collection
 
     def ajouter_document(self, secteur: str, document_id: int, nom: str,
                          morceaux: list[dict], vecteurs: list[list[float]]) -> None:
