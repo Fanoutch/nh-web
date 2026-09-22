@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+.pytest_cache/
+
+# Réglages locaux (jeton du service) : jamais dans git — modèle : reglages.env.example
+reglages.env
