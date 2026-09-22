@@ -1,8 +1,9 @@
 <?php
 
+use App\Http\Controllers\AssistantArretController;
 use App\Http\Controllers\AssistantDocumentController;
-use App\Http\Controllers\FlightController;
 use App\Http\Controllers\ExcelReportController;
+use App\Http\Controllers\FlightController;
 use App\Http\Controllers\MachineController;
 use App\Http\Controllers\NonVolController;
 use App\Http\Controllers\PersonnelNavigantController;
@@ -50,6 +51,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('secteurs.disponibilites')->can('consulterDispos', 'secteur');
     Route::get('/secteurs/{secteur}/assistant', [SecteurController::class, 'assistant'])
         ->name('secteurs.assistant')->can('interrogerAssistant', 'secteur');
+    Route::post('/secteurs/{secteur}/assistant/arreter', AssistantArretController::class)
+        ->name('secteurs.assistant.arreter')->can('interrogerAssistant', 'secteur');
     Route::get('/secteurs/{secteur}/documents', [SecteurController::class, 'documents'])
         ->name('secteurs.documents')->can('gererDocuments', 'secteur');
     Route::get('/secteurs/{secteur}/documents/{document}', [AssistantDocumentController::class, 'consulter'])

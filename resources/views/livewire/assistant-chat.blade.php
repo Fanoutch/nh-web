@@ -12,6 +12,7 @@
          menuOuvert: null,
          copie: null,
          collePresDuBas: true,
+         arretEnCours: false,
          copier(texte, id) {
              const succes = () => { this.copie = id; setTimeout(() => { if (this.copie === id) this.copie = null; }, 1500); };
              const repli = () => {
@@ -121,6 +122,14 @@
                     <div class="self-start max-w-[85%] rounded-2xl rounded-bl-sm px-3.5 py-2.5 border border-app-border bg-app-bg text-sm text-ink-primary leading-relaxed"
                          wire:stream="reponse-en-cours"><span class="text-ink-muted animate-pulse">L'assistant réfléchit…</span></div>
                 </div>
+
+                {{--
+                    Identifiant de la conversation en cours, diffusé dès le début de envoyer() (voir
+                    AssistantChat::envoyer) : $wire.conversationId n'est synchronisé qu'à la fin de la
+                    requête, donc le bouton Arrêter ne peut pas s'y fier pour une conversation tout juste
+                    créée. Élément caché, lu par le bouton Arrêter (saisie.blade.php) via $refs.
+                --}}
+                <span x-ref="conversationIdEnCours" wire:stream="conversation-id-en-cours" class="hidden" aria-hidden="true">{{ $conversationId }}</span>
             </div>
         </div>
 

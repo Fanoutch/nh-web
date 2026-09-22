@@ -11,6 +11,7 @@ use App\Services\AssistantIndisponible;
 use App\Services\AssistantSignalement;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -130,6 +131,10 @@ class AssistantChat extends Component
                 'titre' => Str::limit($question, 60),
             ]);
         $this->conversationId = $conversation->id;
+        // Propriété Locked non synchronisée avant la fin du flux : l'identifiant est aussi
+        // diffusé ici pour que le bouton Arrêter connaisse la conversation dès la première
+        // question (conversation tout juste créée), sans attendre la fin de la requête.
+        $this->stream(to: 'conversation-id-en-cours', content: (string) $conversation->id, replace: true);
 
         $historique = $this->historique($conversation);
 
@@ -143,6 +148,20 @@ class AssistantChat extends Component
         $sources = [];
         $erreur = null;
         $detail = null;
+        $arretDemande = false;
+
+        // Interroge le cache à CHAQUE appel (pas une fn() qui capturerait une valeur figée) :
+        // Cache::pull efface le drapeau dès qu'il est lu, pour qu'un arrêt ne déborde jamais
+        // sur la question suivante.
+        $doitArreter = function () use ($conversation, &$arretDemande) {
+            if (Cache::pull("assistant.arret.{$conversation->id}") === true) {
+                $arretDemande = true;
+
+                return true;
+            }
+
+            return false;
+        };
 
         try {
             $client->poserQuestion($this->secteur, $question, $historique,
@@ -157,13 +176,24 @@ class AssistantChat extends Component
                         $erreur = (string) ($evenement['message'] ?? AssistantClient::INDISPONIBLE);
                         $detail = (string) ($evenement['detail'] ?? '');
                     }
-                });
+                },
+                doitArreter: $doitArreter,
+            );
         } catch (AssistantIndisponible $e) {
             $erreur = $e->getMessage();
             $detail = $e->detail;
         }
 
-        if ($erreur !== null) {
+        // Arrêt demandé sans aucun texte reçu : la conversation reste propre, comme si la
+        // question n'avait pas eu de réponse (pas de message d'erreur enregistré).
+        if ($arretDemande && $reponse === '') {
+            return;
+        }
+
+        if ($arretDemande) {
+            $statut = AssistantMessage::INTERROMPU;
+            $contenu = $reponse;
+        } elseif ($erreur !== null) {
             $statut = $reponse === '' ? AssistantMessage::ERREUR : AssistantMessage::INTERROMPU;
             $contenu = $reponse === '' ? $erreur : $reponse;
         } else {
