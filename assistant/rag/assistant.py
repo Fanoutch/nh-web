@@ -78,6 +78,9 @@ class Assistant:
             yield {"type": "fin"}
         except modeles.ModeleIndisponible as exc:
             yield {"type": "erreur", "message": MESSAGE_INDISPONIBLE, "detail": str(exc)}
+        except Exception as exc:
+            yield {"type": "erreur", "message": MESSAGE_INDISPONIBLE,
+                   "detail": f"{type(exc).__name__}: {exc}"}
 
     def _reformuler(self, question: str, historique: list[dict]) -> str:
         texte = "\n".join(

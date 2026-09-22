@@ -137,3 +137,17 @@ def test_supprimer(assistant):
     assistant.supprimer("bmn", 1)
 
     assert assistant.base.nb_morceaux("bmn", 1) == 0
+
+
+def test_erreur_inattendue_de_la_base_donne_un_evenement_erreur(assistant, journal, monkeypatch):
+    def en_panne(secteur, vecteur, top_k):
+        raise RuntimeError("dimension 4096 != 1024")
+
+    monkeypatch.setattr(assistant.base, "chercher", en_panne)
+
+    evenements = list(assistant.repondre("bmn", "BMN", "maintenance ?", []))
+
+    assert evenements == [
+        {"type": "erreur", "message": "L'assistant est indisponible pour le moment, réessayez plus tard.",
+         "detail": "RuntimeError: dimension 4096 != 1024"},
+    ]
