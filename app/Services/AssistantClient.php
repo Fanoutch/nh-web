@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AssistantDocument;
+use App\Models\AssistantPieceJointe;
 use App\Models\Secteur;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
@@ -58,19 +59,40 @@ class AssistantClient
      * Pose une question ; $surEvenement reçoit chaque événement du flux
      * (sources, texte, fin ou erreur) dès qu'il arrive.
      *
+     * Si $doitArreter est fourni et renvoie true (juste après un événement transmis),
+     * la lecture du flux s'arrête, le corps de la réponse est fermé et la méthode sort
+     * immédiatement, sans lever d'exception (utilisé par le bouton « Arrêter »).
+     *
      * @param  list<array{role: string, content: string}>  $historique
      * @param  callable(array): void  $surEvenement
+     * @param  list<int>  $documentsPrioritaires  identifiants de documents à privilégier dans la recherche
+     * @param  ?callable(): bool  $doitArreter
      */
-    public function poserQuestion(Secteur $secteur, string $question, array $historique, callable $surEvenement): void
-    {
+    public function poserQuestion(
+        Secteur $secteur,
+        string $question,
+        array $historique,
+        callable $surEvenement,
+        array $documentsPrioritaires = [],
+        ?int $conversationId = null,
+        ?callable $doitArreter = null,
+    ): void {
+        $corpsRequete = [
+            'secteur' => $secteur->slug,
+            'nom_secteur' => $secteur->nom,
+            'question' => $question,
+            'historique' => $historique,
+        ];
+        if ($documentsPrioritaires !== []) {
+            $corpsRequete['documents_prioritaires'] = $documentsPrioritaires;
+        }
+        if ($conversationId !== null) {
+            $corpsRequete['conversation'] = $conversationId;
+        }
+
         $reponse = $this->envoyer(fn () => $this->http(config('assistant.timeout'))
             ->withOptions(['stream' => true])
-            ->post('/questions', [
-                'secteur' => $secteur->slug,
-                'nom_secteur' => $secteur->nom,
-                'question' => $question,
-                'historique' => $historique,
-            ]));
+            ->post('/questions', $corpsRequete));
 
         $terminee = false;
         $surEvenementSuivi = function (array $evenement) use ($surEvenement, &$terminee) {
@@ -88,9 +110,19 @@ class AssistantClient
                 while (($fin = strpos($tampon, "\n")) !== false) {
                     $this->transmettre(substr($tampon, 0, $fin), $surEvenementSuivi);
                     $tampon = substr($tampon, $fin + 1);
+                    if ($doitArreter !== null && $doitArreter()) {
+                        $corps->close();
+
+                        return;
+                    }
                 }
             }
             $this->transmettre($tampon, $surEvenementSuivi);
+            if ($doitArreter !== null && $doitArreter()) {
+                $corps->close();
+
+                return;
+            }
         } catch (Throwable $e) {
             throw new AssistantIndisponible(self::INDISPONIBLE, 'Flux interrompu : '.$e->getMessage());
         }
@@ -98,6 +130,32 @@ class AssistantClient
         if (! $terminee) {
             throw new AssistantIndisponible(self::INDISPONIBLE, 'Flux interrompu : fin de réponse manquante');
         }
+    }
+
+    /** Indexe une pièce jointe déposée dans une conversation ; retourne le nombre de morceaux créés. */
+    public function indexerPieceJointe(AssistantPieceJointe $piece): int
+    {
+        $reponse = $this->envoyer(fn () => $this->http(config('assistant.timeout_indexation'))->post('/pieces-jointes', [
+            'conversation_id' => $piece->conversation_id,
+            'piece_id' => $piece->id,
+            'chemin' => $piece->cheminAbsolu(),
+            'nom' => $piece->nom,
+        ]), accepter422: true);
+
+        if ($reponse->status() === 422) {
+            throw new DocumentIllisible(
+                (string) $reponse->json('detail.message', 'Le document est illisible.'),
+                (string) $reponse->json('detail.detail', ''),
+            );
+        }
+
+        return (int) $reponse->json('nb_morceaux');
+    }
+
+    /** Supprime les vecteurs de tous les documents (et pièces jointes) d'une conversation. */
+    public function supprimerConversation(int $conversationId): void
+    {
+        $this->envoyer(fn () => $this->http(30)->delete('/conversations/'.$conversationId));
     }
 
     private function transmettre(string $ligne, callable $surEvenement): void

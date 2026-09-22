@@ -1,6 +1,9 @@
 <?php
 
+use App\Models\AssistantConversation;
 use App\Models\AssistantDocument;
+use App\Models\AssistantPieceJointe;
+use App\Models\User;
 use App\Services\AssistantClient;
 use App\Services\AssistantIndisponible;
 use App\Services\DocumentIllisible;
@@ -13,6 +16,19 @@ function documentDeTest(): AssistantDocument
 {
     return secteurBmn()->assistantDocuments()->create([
         'nom' => 'Manuel.pdf', 'chemin' => 'assistant/documents/bmn/7_manuel.pdf', 'taille' => 10, 'format' => 'pdf', 'statut' => 'en_attente',
+    ]);
+}
+
+function pieceJointeDeTest(): AssistantPieceJointe
+{
+    $conversation = AssistantConversation::create([
+        'user_id' => User::factory()->create()->id,
+        'secteur_id' => secteurBmn()->id,
+        'titre' => 'Question test',
+    ]);
+
+    return $conversation->piecesJointes()->create([
+        'nom' => 'Photo.pdf', 'chemin' => 'assistant/pieces-jointes/1_photo.pdf', 'taille' => 10, 'format' => 'pdf', 'statut' => 'en_attente',
     ]);
 }
 
@@ -104,7 +120,9 @@ it('streams the answer events line by line', function () {
     $evenements = [];
 
     app(AssistantClient::class)->poserQuestion(secteurBmn(), 'Qui ?', [['role' => 'user', 'content' => 'Avant']],
-        function (array $e) use (&$evenements) { $evenements[] = $e; });
+        function (array $e) use (&$evenements) {
+            $evenements[] = $e;
+        });
 
     expect(array_column($evenements, 'type'))->toBe(['sources', 'texte', 'texte', 'fin'])
         ->and($evenements[2]['texte'])->toBe('est ordonné.');
@@ -129,11 +147,87 @@ it('reports a stream that ends without its final event', function () {
 
     try {
         app(AssistantClient::class)->poserQuestion(secteurBmn(), 'Qui ?', [],
-            function (array $e) use (&$evenements) { $evenements[] = $e; });
+            function (array $e) use (&$evenements) {
+                $evenements[] = $e;
+            });
         $this->fail('AssistantIndisponible attendue');
     } catch (AssistantIndisponible $e) {
         expect($e->detail)->toContain('fin de réponse manquante');
     }
 
     expect(array_column($evenements, 'type'))->toBe(['sources', 'texte']);
+});
+
+it('does not send the new fields when they are empty (retrocompatibilite)', function () {
+    Http::fake(['*/questions' => Http::response("{\"type\":\"fin\"}\n")]);
+
+    app(AssistantClient::class)->poserQuestion(secteurBmn(), 'Qui ?', [], fn () => null);
+
+    Http::assertSent(fn (Request $r) => ! array_key_exists('documents_prioritaires', $r->data())
+        && ! array_key_exists('conversation', $r->data()));
+});
+
+it('envoie les documents prioritaires et la conversation au service', function () {
+    Http::fake(['*/questions' => Http::response("{\"type\":\"fin\"}\n")]);
+
+    app(AssistantClient::class)->poserQuestion(secteurBmn(), 'tolerances ?', [], fn () => null, [9, 10], 7);
+
+    Http::assertSent(fn (Request $r) => $r['documents_prioritaires'] === [9, 10] && $r['conversation'] === 7);
+});
+
+it('arrete la lecture du flux quand le drapeau est posé', function () {
+    Http::fake(['*/questions' => Http::response(
+        "{\"type\":\"texte\",\"texte\":\"un\"}\n{\"type\":\"texte\",\"texte\":\"deux\"}\n{\"type\":\"fin\"}\n")]);
+    $recus = [];
+
+    app(AssistantClient::class)->poserQuestion(secteurBmn(), 'q', [], function ($e) use (&$recus) {
+        $recus[] = $e;
+    }, [], null, function () use (&$recus) {
+        // Une fonction fléchée fn() capture $recus PAR VALEUR au moment de sa création (avant le
+        // premier événement) : elle ne verrait donc jamais les éléments ajoutés ensuite. D'où une
+        // closure classique avec capture explicite par référence.
+        return count($recus) >= 1;
+    });
+
+    expect($recus)->toHaveCount(1);          // arrêt après le premier événement, sans exception
+});
+
+it('indexe une pièce jointe et retourne le nombre de morceaux', function () {
+    Http::fake(['*/pieces-jointes' => Http::response(['nb_morceaux' => 4])]);
+    $piece = pieceJointeDeTest();
+
+    expect(app(AssistantClient::class)->indexerPieceJointe($piece))->toBe(4);
+
+    Http::assertSent(fn (Request $r) => $r->method() === 'POST'
+        && $r['conversation_id'] === $piece->conversation_id && $r['piece_id'] === $piece->id
+        && $r['nom'] === 'Photo.pdf' && str_ends_with($r['chemin'], 'assistant/pieces-jointes/1_photo.pdf'));
+});
+
+it('turns a 422 into a readable DocumentIllisible for an attachment', function () {
+    Http::fake(['*/pieces-jointes' => Http::response(['detail' => [
+        'code' => 'lecture', 'message' => 'Aucun texte trouvé dans ce PDF (document scanné ?).', 'detail' => 'ValueError: vide',
+    ]], 422)]);
+
+    try {
+        app(AssistantClient::class)->indexerPieceJointe(pieceJointeDeTest());
+        $this->fail('DocumentIllisible attendue');
+    } catch (DocumentIllisible $e) {
+        expect($e->getMessage())->toBe('Aucun texte trouvé dans ce PDF (document scanné ?).')
+            ->and($e->detail)->toBe('ValueError: vide');
+    }
+});
+
+it('reports the service as unavailable when indexing an attachment fails', function () {
+    Http::fake(['*/pieces-jointes' => Http::response([], 503)]);
+
+    app(AssistantClient::class)->indexerPieceJointe(pieceJointeDeTest());
+})->throws(AssistantIndisponible::class);
+
+it('deletes a conversation', function () {
+    Http::fake(['*/conversations/*' => Http::response(['ok' => true])]);
+
+    app(AssistantClient::class)->supprimerConversation(42);
+
+    Http::assertSent(fn (Request $r) => $r->method() === 'DELETE'
+        && $r->url() === 'http://127.0.0.1:8765/conversations/42');
 });
