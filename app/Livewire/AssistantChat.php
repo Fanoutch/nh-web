@@ -10,6 +10,7 @@ use App\Services\AssistantClient;
 use App\Services\AssistantIndisponible;
 use App\Services\AssistantSignalement;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
@@ -19,6 +20,8 @@ class AssistantChat extends Component
 {
     public Secteur $secteur;
 
+    /** Verrouillée : seul le serveur la modifie (ouvrir / nouvelle / envoyer), jamais le navigateur. */
+    #[Locked]
     public ?int $conversationId = null;
 
     public string $question = '';
@@ -78,6 +81,8 @@ class AssistantChat extends Component
             return;
         }
         $this->validate(['question' => 'max:2000'], ['question.max' => 'La question est trop longue (2000 caractères maximum).']);
+        // La réponse doit être enregistrée même si le navigateur se déconnecte pendant le flux.
+        ignore_user_abort(true);
 
         $conversation = $this->conversationId !== null
             ? $this->conversationAutorisee($this->conversationId)
@@ -88,14 +93,7 @@ class AssistantChat extends Component
             ]);
         $this->conversationId = $conversation->id;
 
-        $historique = $conversation->messages()->reorder()
-            ->where('statut', AssistantMessage::COMPLET)
-            ->latest('id')->take(2 * (int) config('assistant.historique_tours'))->get()
-            ->reverse()->values()
-            ->map(fn (AssistantMessage $m) => [
-                'role' => $m->role === AssistantMessage::UTILISATEUR ? 'user' : 'assistant',
-                'content' => $m->contenu,
-            ])->all();
+        $historique = $this->historique($conversation);
 
         $conversation->messages()->create([
             'role' => AssistantMessage::UTILISATEUR, 'contenu' => $question, 'statut' => AssistantMessage::COMPLET,
@@ -145,6 +143,32 @@ class AssistantChat extends Component
         $conversation->touch();
     }
 
+    /**
+     * Derniers échanges COMPLETS (une question suivie immédiatement d'une réponse complète),
+     * les N plus récents, du plus ancien au plus récent.
+     *
+     * @return list<array{role: string, content: string}>
+     */
+    private function historique(AssistantConversation $conversation): array
+    {
+        $messages = $conversation->messages()->reorder()->orderBy('id')->get()->values();
+        $paires = [];
+        foreach ($messages as $i => $m) {
+            $suivant = $messages[$i + 1] ?? null;
+            if ($m->role === AssistantMessage::UTILISATEUR && $suivant !== null
+                && $suivant->role === AssistantMessage::ASSISTANT && $suivant->statut === AssistantMessage::COMPLET) {
+                $paires[] = [
+                    ['role' => 'user', 'content' => $m->contenu],
+                    ['role' => 'assistant', 'content' => $suivant->contenu],
+                ];
+            }
+        }
+
+        $tours = max(0, (int) config('assistant.historique_tours'));
+
+        return array_merge(...array_slice($paires, count($paires) - min($tours, count($paires))));
+    }
+
     public function signaler(int $messageId, AssistantSignalement $signalement): void
     {
         $message = AssistantMessage::find($messageId);
@@ -163,8 +187,13 @@ class AssistantChat extends Component
             ->where('secteur_id', $this->secteur->id)
             ->latest('updated_at')->latest('id')->get();
 
-        $messages = $this->conversationId !== null
-            ? AssistantMessage::where('conversation_id', $this->conversationId)->orderBy('id')->get()
+        // Défense en profondeur : on n'affiche que les messages d'une conversation qui m'appartient dans ce secteur.
+        $conversation = $this->conversationId !== null ? $conversations->firstWhere('id', $this->conversationId) : null;
+        if ($conversation === null) {
+            $this->conversationId = null;
+        }
+        $messages = $conversation !== null
+            ? AssistantMessage::where('conversation_id', $conversation->id)->orderBy('id')->get()
             : collect();
 
         $idsCites = $messages->flatMap(fn ($m) => array_column($m->sources ?? [], 'document_id'))->unique()->values();

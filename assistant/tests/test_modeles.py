@@ -161,3 +161,11 @@ def test_discuter_reponse_non_json(appels):
 
     with pytest.raises(modeles.ModeleIndisponible, match="Réponse non JSON"):
         modeles.discuter([{"role": "user", "content": "?"}], R_LLM, 0)
+
+
+def test_embedding_format_openai_trie_par_index(appels):
+    appels["reponses"].append(FausseReponse({"data": [
+        {"index": 2, "embedding": [3.0]}, {"index": 0, "embedding": [1.0]}, {"index": 1, "embedding": [2.0]},
+    ]}))
+
+    assert modeles.embedder(["a", "b", "c"], R_OPENAI) == [[1.0], [2.0], [3.0]]

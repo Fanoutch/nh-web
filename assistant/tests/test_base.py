@@ -99,3 +99,19 @@ def test_premier_acces_concurrent_a_un_nouveau_secteur(tmp_path):
 
     assert exceptions == []
     assert len(base.chercher("neuf", MAINT, 20)) == 4
+
+
+def test_telemetrie_chromadb_desactivee(base):
+    # Réseau fermé : ChromaDB ne doit rien envoyer à l'extérieur.
+    assert base._client.get_settings().anonymized_telemetry is False
+
+
+def test_aucune_fonction_d_embedding_chromadb(base):
+    # Les vecteurs viennent toujours de nos modèles : ChromaDB ne doit pas charger son modèle par défaut.
+    assert base._collection("bmn")._embedding_function is None
+
+
+def test_chercher_avec_top_k_nul_renvoie_au_moins_un_resultat(base):
+    base.ajouter_document("bmn", 1, "Manuel.pdf", [{"texte": "vol", "page": 1}], [MAINT])
+
+    assert len(base.chercher("bmn", MAINT, top_k=0)) == 1

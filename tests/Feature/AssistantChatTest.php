@@ -6,6 +6,7 @@ use App\Models\AssistantMessage;
 use App\Models\User;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Spatie\Activitylog\Models\Activity;
 
@@ -90,6 +91,30 @@ it('sends the last exchanges of the conversation for a follow-up question', func
     Http::assertSent(fn (Request $r) => $r['historique'] === [
         ['role' => 'user', 'content' => 'Q2'], ['role' => 'assistant', 'content' => 'R2'],
     ] && $r['question'] === 'et ensuite ?');
+});
+
+it('sends only complete question/answer pairs as history, newest pairs, oldest first', function () {
+    config(['assistant.historique_tours' => 2]);
+    fluxReponse('Réponse.');
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'T']);
+    foreach ([
+        ['utilisateur', 'Q1', 'complet'], ['assistant', 'R1', 'complet'],
+        ['utilisateur', 'Q2', 'complet'], ['assistant', 'R2', 'complet'],
+        ['utilisateur', 'Q3', 'complet'], ['assistant', 'Indisponible', 'erreur'],
+        ['utilisateur', 'Q4', 'complet'], ['assistant', 'Début', 'interrompu'],
+        ['utilisateur', 'Q5', 'complet'], ['assistant', 'R5', 'complet'],
+    ] as [$role, $texte, $statut]) {
+        $conversation->messages()->create(['role' => $role, 'contenu' => $texte, 'statut' => $statut]);
+    }
+
+    capturerFlux(fn () => Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->call('ouvrir', $conversation->id)->set('question', 'et ensuite ?')->call('envoyer'));
+
+    Http::assertSent(fn (Request $r) => $r['historique'] === [
+        ['role' => 'user', 'content' => 'Q2'], ['role' => 'assistant', 'content' => 'R2'],
+        ['role' => 'user', 'content' => 'Q5'], ['role' => 'assistant', 'content' => 'R5'],
+    ]);
 });
 
 it('lists only my own conversations, newest first', function () {
@@ -190,4 +215,49 @@ it('ignores an empty question', function () {
         ->set('question', '   ')->call('envoyer');
 
     expect(AssistantConversation::count())->toBe(0);
+});
+
+it('refuses a conversation id pushed by the client (locked property)', function () {
+    $proprietaire = membreSecteur(secteurBmn(), 'chef');
+    $conversation = AssistantConversation::create(['user_id' => $proprietaire->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'Privée']);
+    $conversation->messages()->create(['role' => 'utilisateur', 'contenu' => 'Question confidentielle du chef', 'statut' => 'complet']);
+    $intrus = membreSecteur(secteurBmn(), 'utilisateur');
+
+    Livewire::actingAs($intrus)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->set('conversationId', $conversation->id);
+})->throws(CannotUpdateLockedPropertyException::class, 'Cannot update locked property: [conversationId]');
+
+it('never renders the messages of a conversation I do not own', function () {
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+    $autre = membreSecteur(secteurBmn(), 'chef');
+    $conversation = AssistantConversation::create(['user_id' => $user->id, 'secteur_id' => secteurBmn()->id, 'titre' => 'T']);
+    $conversation->messages()->create(['role' => 'utilisateur', 'contenu' => 'Texte secret', 'statut' => 'complet']);
+
+    $composant = Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->call('ouvrir', $conversation->id)->assertSee('Texte secret');
+
+    $conversation->forceFill(['user_id' => $autre->id])->saveQuietly();
+
+    $composant->call('$refresh')->assertDontSee('Texte secret')->assertSet('conversationId', null);
+});
+
+it('keeps saving the answer even if the browser disconnects during the stream', function () {
+    fluxReponse('Réponse.');
+    $avant = ignore_user_abort(false);
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+
+    try {
+        capturerFlux(fn () => Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+            ->set('question', 'Qui ?')->call('envoyer'));
+
+        expect(ignore_user_abort())->toBe(1);
+    } finally {
+        ignore_user_abort((bool) $avant);
+    }
+});
+
+it('sends on Enter but lets Shift+Enter insert a new line', function () {
+    Livewire::actingAs(membreSecteur(secteurBmn(), 'utilisateur'))->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->assertSeeHtml('x-on:keydown.enter="if (! $event.shiftKey) { $event.preventDefault(); $el.form.requestSubmit() }"')
+        ->assertDontSeeHtml('keydown.enter.prevent');
 });

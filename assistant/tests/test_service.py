@@ -123,3 +123,38 @@ def test_sante(client, monkeypatch):
     monkeypatch.setattr(modeles, "discuter", llm_en_panne)
 
     assert client.get("/sante", headers=JETON).json() == {"service": "ok", "embedding": "ok", "llm": "LLM injoignable"}
+
+
+def test_erreur_imprevue_a_l_indexation_503(client, faux):
+    faux.erreur = RuntimeError("disque plein")
+
+    reponse = client.post("/documents", headers=JETON,
+                          json={"secteur": "bmn", "document_id": 4, "chemin": "/x", "nom": "M.pdf"})
+
+    assert reponse.status_code == 503
+    assert reponse.json()["detail"] == {
+        "code": "interne",
+        "message": "L'assistant est indisponible pour le moment, réessayez plus tard.",
+        "detail": "RuntimeError: disque plein",
+    }
+
+
+def test_jeton_compare_en_temps_constant(client, monkeypatch):
+    appels = []
+    original = service.hmac.compare_digest
+
+    def espion(a, b):
+        appels.append((a, b))
+        return original(a, b)
+
+    monkeypatch.setattr(service.hmac, "compare_digest", espion)
+
+    assert client.get("/formats", headers=JETON).status_code == 200
+    assert client.get("/formats", headers={"X-Assistant-Jeton": "faux"}).status_code == 401
+    assert len(appels) == 2
+
+
+def test_jeton_non_ascii_refuse_sans_planter(client):
+    reponse = client.get("/formats", headers={"X-Assistant-Jeton": "s\xe9cret".encode("latin-1")})
+
+    assert reponse.status_code == 401

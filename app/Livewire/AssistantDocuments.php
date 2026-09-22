@@ -10,6 +10,7 @@ use App\Services\AssistantIndisponible;
 use App\Services\AssistantSignalement;
 use App\Services\GestionDocumentsAssistant;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\WithFileUploads;
@@ -27,7 +28,8 @@ class AssistantDocuments extends Component
     /** @var array<int, TemporaryUploadedFile> */
     public array $fichiers = [];
 
-    /** Fichiers dont le nom existe déjà : [index => [nom, depose_par, depose_le, existant_id]] */
+    /** Fichiers dont le nom existe déjà : [index => [nom, depose_par, depose_le, existant_id]] (verrouillé : calculé côté serveur) */
+    #[Locked]
     public array $conflits = [];
 
     public ?string $notice = null;

@@ -9,12 +9,14 @@ import threading
 from pathlib import Path
 
 import chromadb
+from chromadb.config import Settings
 
 
 class BaseVectorielle:
     def __init__(self, dossier: Path):
         Path(dossier).mkdir(parents=True, exist_ok=True)
-        self._client = chromadb.PersistentClient(path=str(dossier))
+        # Réseau fermé : aucune télémétrie envoyée par ChromaDB.
+        self._client = chromadb.PersistentClient(path=str(dossier), settings=Settings(anonymized_telemetry=False))
         self._verrou = threading.RLock()
         self._collections: dict[str, chromadb.Collection] = {}
 
@@ -24,7 +26,8 @@ class BaseVectorielle:
         with self._verrou:
             if secteur in self._collections:
                 return self._collections[secteur]
-            collection = self._client.get_or_create_collection(name=f"secteur_{secteur}")
+            # Les vecteurs viennent toujours de nos modèles : pas de fonction d'embedding ChromaDB (pas de téléchargement).
+            collection = self._client.get_or_create_collection(name=f"secteur_{secteur}", embedding_function=None)
             self._collections[secteur] = collection
             return collection
 
@@ -57,7 +60,7 @@ class BaseVectorielle:
         total = collection.count()
         if total == 0:
             return []
-        resultat = collection.query(query_embeddings=[vecteur], n_results=min(top_k, total))
+        resultat = collection.query(query_embeddings=[vecteur], n_results=max(1, min(top_k, total)))
         return [
             {
                 "document_id": meta["document_id"],

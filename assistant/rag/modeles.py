@@ -56,7 +56,10 @@ def _embedder_lot(textes: list[str], r: Reglages) -> list[list[float]]:
                 raise TypeError("HF format response must be a list")
             vecteurs = donnees
         else:
-            vecteurs = [d["embedding"] for d in donnees["data"]]
+            data = donnees["data"]
+            if all(isinstance(d, dict) and "index" in d for d in data):
+                data = sorted(data, key=lambda d: d["index"])  # l'ordre de la liste n'est pas garanti
+            vecteurs = [d["embedding"] for d in data]
     except (KeyError, TypeError) as exc:
         raise ModeleIndisponible("Réponse d'embedding inattendue : " + json.dumps(donnees)[:300]) from exc
     if len(vecteurs) != len(textes):

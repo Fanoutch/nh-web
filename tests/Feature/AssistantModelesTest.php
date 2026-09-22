@@ -73,5 +73,5 @@ it('exposes the assistant configuration with defaults', function () {
         ->and(config('assistant.taille_max_mo'))->toBe(50)
         ->and(config('assistant.historique_tours'))->toBe(3)
         ->and(config('assistant.timeout'))->toBe(180)
-        ->and(config('assistant.timeout_indexation'))->toBe(600);
+        ->and(config('assistant.timeout_indexation'))->toBe(570);
 });

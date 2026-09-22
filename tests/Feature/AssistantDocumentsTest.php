@@ -46,7 +46,8 @@ it('shows the Documents tab only to chefs and admins', function () {
     $this->actingAs($utilisateur)->get(route('secteurs.disponibilites', $bmn))->assertDontSee(route('secteurs.documents', $bmn));
     $this->actingAs($utilisateur)->get(route('secteurs.documents', $bmn))->assertForbidden();
     $this->actingAs($chef)->get(route('secteurs.documents', $bmn))->assertOk()
-        ->assertSeeLivewire(AssistantDocuments::class)->assertSee('Documents du secteur BMN');
+        ->assertSeeLivewire(AssistantDocuments::class)->assertSee('Documents du secteur BMN')
+        ->assertSee('Déposez les documents du secteur (PDF, Word, TXT)');
 });
 
 it('uploads a document and indexes it', function () {
@@ -224,6 +225,40 @@ it('opens a cited document for members only, inside its secteur', function () {
         ->get(route('secteurs.documents.consulter', [$autre, $doc]))->assertNotFound();
 });
 
+it('serves a .txt document as plain text, never as HTML (no stored XSS)', function () {
+    $bmn = secteurBmn();
+    Storage::disk('local')->put('assistant/documents/bmn/x_piege.txt', '<html><script>alert(1)</script></html>');
+    $doc = $bmn->assistantDocuments()->create([
+        'nom' => 'Piège.txt', 'chemin' => 'assistant/documents/bmn/x_piege.txt', 'taille' => 38, 'format' => 'txt', 'statut' => 'pret',
+    ]);
+
+    $reponse = $this->actingAs(membreSecteur($bmn, 'utilisateur'))->get(route('secteurs.documents.consulter', [$bmn, $doc]));
+
+    $reponse->assertOk()
+        ->assertHeader('Content-Type', 'text/plain; charset=utf-8')
+        ->assertHeader('X-Content-Type-Options', 'nosniff');
+    expect($reponse->headers->get('Content-Disposition'))->toBe("inline; filename=Piege.txt; filename*=utf-8''Pi%C3%A8ge.txt");
+});
+
+it('serves a pdf inline and a docx as a download', function () {
+    $bmn = secteurBmn();
+    $membre = membreSecteur($bmn, 'utilisateur');
+    $pdf = docExistant('Manuel.pdf');
+    Storage::disk('local')->put('assistant/documents/bmn/x_note.docx', 'PK');
+    $docx = $bmn->assistantDocuments()->create([
+        'nom' => 'Note.docx', 'chemin' => 'assistant/documents/bmn/x_note.docx', 'taille' => 2, 'format' => 'docx', 'statut' => 'pret',
+    ]);
+
+    $this->actingAs($membre)->get(route('secteurs.documents.consulter', [$bmn, $pdf]))
+        ->assertHeader('Content-Type', 'application/pdf')
+        ->assertHeader('X-Content-Type-Options', 'nosniff')
+        ->assertHeader('Content-Disposition', 'inline; filename=Manuel.pdf');
+    $this->actingAs($membre)->get(route('secteurs.documents.consulter', [$bmn, $docx]))
+        ->assertHeader('Content-Type', 'application/octet-stream')
+        ->assertHeader('X-Content-Type-Options', 'nosniff')
+        ->assertHeader('Content-Disposition', 'attachment; filename=Note.docx');
+});
+
 it('marks the document as failed when the service is down during indexing', function () {
     Http::fake(['*/documents' => Http::response('', 502)]);
     $doc = docExistant('Manuel.pdf', 'en_attente');
@@ -232,4 +267,67 @@ it('marks the document as failed when the service is down during indexing', func
 
     expect($doc->fresh()->statut)->toBe('erreur')
         ->and($doc->fresh()->message)->toBe("L'assistant est indisponible pour le moment, réessayez plus tard.");
+});
+
+it('marks a document stuck in progress as failed when the job itself fails (timeout, crash)', function () {
+    $doc = docExistant('Manuel.pdf', 'en_cours');
+
+    (new IndexerDocumentAssistant($doc->id))->failed(new RuntimeException('boom'));
+
+    expect($doc->fresh()->statut)->toBe('erreur')
+        ->and($doc->fresh()->message)->toBe("L'assistant est indisponible pour le moment, réessayez plus tard.")
+        ->and($doc->fresh()->detail)->toBe('RuntimeException: boom');
+    // Le délai HTTP d'indexation expire avant que le worker ne tue le job.
+    expect(config('assistant.timeout_indexation'))->toBe(570)
+        ->and((new IndexerDocumentAssistant($doc->id))->timeout)->toBe(600);
+});
+
+it('ignores a job failure when the document no longer exists', function () {
+    $doc = docExistant('Manuel.pdf', 'en_cours');
+    $doc->delete();
+
+    (new IndexerDocumentAssistant($doc->id))->failed(new RuntimeException('boom'));
+
+    expect(AssistantDocument::count())->toBe(0);
+});
+
+it('tries to remove partial vectors when indexing fails', function () {
+    Http::fake([
+        '*/documents/*' => Http::response(['ok' => true]),
+        '*/documents' => Http::response('', 503),
+    ]);
+    $doc = docExistant('Manuel.pdf', 'en_attente');
+
+    (new IndexerDocumentAssistant($doc->id))->handle(app(\App\Services\AssistantClient::class), app(\App\Services\GestionDocumentsAssistant::class));
+
+    Http::assertSent(fn ($r) => $r->method() === 'DELETE' && str_contains($r->url(), '/documents/'.$doc->id.'?secteur=bmn'));
+    expect($doc->fresh()->statut)->toBe('erreur')
+        ->and($doc->fresh()->message)->toBe("L'assistant est indisponible pour le moment, réessayez plus tard.");
+});
+
+it('still marks the document as failed when removing partial vectors fails too', function () {
+    Http::fake(['*' => Http::response('', 503)]);
+    $doc = docExistant('Manuel.pdf', 'en_attente');
+
+    (new IndexerDocumentAssistant($doc->id))->handle(app(\App\Services\AssistantClient::class), app(\App\Services\GestionDocumentsAssistant::class));
+
+    expect($doc->fresh()->statut)->toBe('erreur');
+});
+
+it('removes the vectors of a document deleted while it was being indexed', function () {
+    $doc = docExistant('Manuel.pdf', 'en_attente');
+    Http::fake(function ($r) use ($doc) {
+        if ($r->method() === 'POST') {
+            AssistantDocument::whereKey($doc->id)->delete();
+
+            return Http::response(['nb_morceaux' => 4]);
+        }
+
+        return Http::response(['ok' => true]);
+    });
+
+    (new IndexerDocumentAssistant($doc->id))->handle(app(\App\Services\AssistantClient::class), app(\App\Services\GestionDocumentsAssistant::class));
+
+    Http::assertSent(fn ($r) => $r->method() === 'DELETE' && str_contains($r->url(), '/documents/'.$doc->id.'?secteur=bmn'));
+    expect(AssistantDocument::find($doc->id))->toBeNull();
 });

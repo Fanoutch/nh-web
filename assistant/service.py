@@ -9,6 +9,7 @@ Toutes les routes exigent l'en-tête X-Assistant-Jeton = ASSISTANT_JETON.
 """
 from __future__ import annotations
 
+import hmac
 import json
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -46,7 +47,9 @@ def creer_app(reglages: Reglages | None = None, assistant=None) -> FastAPI:
     app = FastAPI(title="nh-assistant")
 
     def verifier_jeton(x_assistant_jeton: str | None = Header(default=None)) -> None:
-        if not r.jeton or x_assistant_jeton != r.jeton:
+        # Comparaison en temps constant ; jeton configuré vide = tout refusé.
+        if not r.jeton or x_assistant_jeton is None or not hmac.compare_digest(
+                x_assistant_jeton.encode("utf-8", "surrogateescape"), r.jeton.encode("utf-8")):
             raise HTTPException(status_code=401, detail="Jeton invalide")
 
     protege = [Depends(verifier_jeton)]
@@ -82,6 +85,10 @@ def creer_app(reglages: Reglages | None = None, assistant=None) -> FastAPI:
         except modeles.ModeleIndisponible as exc:
             raise HTTPException(status_code=503, detail={
                 "code": "modele", "message": MESSAGE_INDISPONIBLE, "detail": str(exc),
+            })
+        except Exception as exc:  # erreur imprévue (base, disque…) : réponse JSON lisible par Laravel
+            raise HTTPException(status_code=503, detail={
+                "code": "interne", "message": MESSAGE_INDISPONIBLE, "detail": f"{type(exc).__name__}: {exc}",
             })
         return {"nb_morceaux": n}
 

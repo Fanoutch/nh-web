@@ -85,7 +85,7 @@
         <form wire:submit="envoyer" class="mt-4">
             <div class="flex gap-2">
                 <textarea wire:model="question" rows="2" placeholder="Posez votre question…"
-                          x-on:keydown.enter.prevent="if (! $event.shiftKey) $el.form.requestSubmit()"
+                          x-on:keydown.enter="if (! $event.shiftKey) { $event.preventDefault(); $el.form.requestSubmit() }"
                           class="flex-1 bg-app-elevated border border-app-border rounded-md px-3 py-2 text-sm text-ink-primary focus:outline-none focus:border-accent"></textarea>
                 <x-primary-button wire:loading.attr="disabled" wire:target="envoyer">➤</x-primary-button>
             </div>

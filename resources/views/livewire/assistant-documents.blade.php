@@ -2,7 +2,7 @@
     {{-- Dépôt --}}
     <label for="fichiersAssistant"
            class="block bg-app-card border-2 border-dashed border-app-border rounded-xl p-10 text-center cursor-pointer hover:border-accent hover:bg-accent-soft transition-colors">
-        <p class="text-[15px] font-medium text-ink-primary mb-1">Déposez les documents du secteur (PDF, Word)</p>
+        <p class="text-[15px] font-medium text-ink-primary mb-1">Déposez les documents du secteur (PDF, Word, TXT)</p>
         <p class="text-sm text-ink-muted">ou cliquez pour les sélectionner — jusqu'à {{ $tailleMax }} Mo par fichier</p>
         <input type="file" id="fichiersAssistant" multiple wire:model="fichiers" class="hidden" />
     </label>
