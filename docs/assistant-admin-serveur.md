@@ -20,9 +20,15 @@ Procédure technique détaillée : `docs/commandes.md`, section 15.
 | 5 | Délai des tâches de fond | `.env` de Laravel | l'indexation d'un gros document peut durer jusqu'à 10 minutes |
 | 6 | Deux fichiers de réglages (secrets) | `nh-web/llm.env`, `nh-web/assistant/reglages.env` | adresse du modèle bge-m3 et jeton interne du service |
 | 7 | (si nginx est devant le site) taille des envois | configuration nginx du site | sinon les documents de plus de 1 Mo sont refusés |
+| 8 | Pièces jointes du chat : jusqu'à **20 Mo par fichier, 5 par conversation** | `storage/app/private/assistant/pj/` | les fichiers d'une conversation supprimée sont effacés automatiquement, rien à nettoyer à la main |
 
 **Aucun port à ouvrir** : le service de l'assistant écoute uniquement en local (`127.0.0.1:8765`),
 seul le site cAIman l'appelle.
+
+**Cette mise à jour (dossiers, pièces jointes, sources cliquables) n'ajoute aucun nouveau service
+système, aucune nouvelle bibliothèque Python et aucun port à ouvrir** : elle passe uniquement par
+`php artisan migrate` (4 nouvelles migrations) et un redémarrage de `nh-assistant` après mise à jour
+du code Python — voir « Relance » ci-dessous.
 
 **Accès réseau sortant nécessaire** depuis le serveur cAIman vers :
 - le serveur **bge-m3** (embedding) du bureau ;

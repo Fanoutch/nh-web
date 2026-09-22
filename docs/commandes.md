@@ -1157,7 +1157,7 @@ Laravel appelle le service Python `assistant/` (FastAPI) sur 127.0.0.1 avec un j
 | Fichier | Contenu |
 |---|---|
 | `llm.env` (racine) | LLM partage avec les HIL (`LLM_*`) + embedding bge-m3 (`EMBED_BASE_URL`, `EMBED_MODELE`, `EMBED_CLE_API`, `EMBED_FORMAT`) |
-| `assistant/reglages.env` | `ASSISTANT_HOTE`, `ASSISTANT_PORT`, `ASSISTANT_JETON`, `ASSISTANT_CHROMA_DIR`, `ASSISTANT_TOP_K`, `ASSISTANT_SEUIL_DISTANCE`, `ASSISTANT_TEMPERATURE`, `ASSISTANT_HISTORIQUE_TOURS`, `ASSISTANT_TAILLE_MAX_MO` |
+| `assistant/reglages.env` | `ASSISTANT_HOTE`, `ASSISTANT_PORT`, `ASSISTANT_JETON`, `ASSISTANT_CHROMA_DIR`, `ASSISTANT_TOP_K`, `ASSISTANT_TOP_K_DOSSIER`, `ASSISTANT_TOP_K_PJ`, `ASSISTANT_SEUIL_DISTANCE`, `ASSISTANT_TEMPERATURE`, `ASSISTANT_HISTORIQUE_TOURS`, `ASSISTANT_TAILLE_MAX_MO` |
 
 Modeles commentes : `llm.env.example`, `assistant/reglages.env.example`.
 
@@ -1201,6 +1201,26 @@ Jobs longs (indexation) : dans le `.env` de Laravel, `DB_QUEUE_RETRY_AFTER=660`,
 Streaming des reponses : Livewire envoie `X-Accel-Buffering: no`, nginx ne met donc pas les reponses en tampon.
 Si les reponses arrivent d'un bloc malgre tout, ajouter `proxy_buffering off;` dans le bloc `location /` du site nginx.
 
+### Mise a jour d'une installation existante
+
+Quand le code de l'assistant evolue (dossiers, pieces jointes, sources cliquables...), sur un serveur
+ou `nh-assistant` tourne deja :
+
+```bash
+git pull                                              # ou deploiement habituel du depot
+php artisan migrate                                   # nouvelles migrations assistant_* le cas echeant
+php artisan config:clear && php artisan route:clear && php artisan view:clear
+#   (si les caches sont utilises : php artisan config:cache && php artisan route:cache, en tant qu'utilisateur web)
+# code Python modifie (assistant/) et/ou requirements.lock modifie :
+cd assistant && .venv/bin/python -m pip install -r requirements.lock && cd ..
+systemctl restart nh-assistant nh-laravel nh-queue
+systemctl is-active nh-assistant nh-laravel nh-queue  # attendu : active x3
+```
+Reinstaller les dependances Python (`pip install -r requirements.lock`) n'est necessaire que si
+`requirements.lock` a change ; sinon un simple `systemctl restart nh-assistant` suffit pour charger
+le nouveau code Python. Aucun nouveau service systemd, aucune nouvelle bibliotheque et aucun port
+supplementaire ne sont necessaires pour ces evolutions.
+
 ### Verifications
 
 ```bash
@@ -1214,7 +1234,13 @@ tail -f /var/log/nh-assistant.log
 
 Modifier `assistant/reglages.env` puis `systemctl restart nh-assistant` :
 - `ASSISTANT_SEUIL_DISTANCE` : plus bas = plus strict (plus de « Je ne trouve pas ») ; plus haut = plus permissif.
-- `ASSISTANT_TOP_K` : nombre de morceaux de documents donnes au LLM.
+- `ASSISTANT_TOP_K` : nombre de morceaux de documents donnes au LLM, cherches sur **tout le secteur**
+  (la recherche ne se limite jamais a un seul dossier, meme si la question en nomme un).
+- `ASSISTANT_TOP_K_DOSSIER` (facultatif, defaut **3**) : morceaux ajoutes en plus depuis le dossier
+  actuellement ouvert dans l'onglet Documents, s'il y en a un. Ces morceaux s'ajoutent a ceux de
+  `ASSISTANT_TOP_K`, ils ne les remplacent pas.
+- `ASSISTANT_TOP_K_PJ` (facultatif, defaut **3**) : morceaux ajoutes en plus depuis les pieces jointes
+  de la conversation en cours, s'il y en a.
 - `ASSISTANT_TEMPERATURE` : 0 = reponses stables, 0.3 = plus naturelles.
 - `ASSISTANT_HISTORIQUE_TOURS` : echanges precedents pris en compte pour une question de suite.
 
