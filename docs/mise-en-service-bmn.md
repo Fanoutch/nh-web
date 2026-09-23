@@ -14,6 +14,10 @@ un template Excel**. Tout le reste arrive par git.
 
 ## `llm.env`
 
+```bash
+cp llm.env.example llm.env && chmod 600 llm.env
+```
+
 Sert à déduire la pièce incriminée des lignes HIL. Format d'API attendu :
 OpenAI, `POST {LLM_BASE_URL}/chat/completions`.
 
@@ -35,6 +39,10 @@ Si l'API interne n'est pas compatible OpenAI, seule `appeler_modele()` de
 `bmn/llm_client.py` est à adapter.
 
 ## `bmn/reglages.env`
+
+```bash
+cp bmn/reglages.env.example bmn/reglages.env
+```
 
 ```ini
 DISPO_TEMPLATE=template/dispo.xlsx   # relatif à bmn/, ou absolu
