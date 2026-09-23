@@ -225,3 +225,152 @@ def test_vrai_template_formules_coherentes_apres_suppression():
     noms = [c.value.strip() for c in ws["A"] if isinstance(c.value, str) and c.value.strip().startswith("NH")]
     assert noms == ["NH03", "NH10", "NH27"]
     assert all(r.max_row <= ws.max_row for r in ws.merged_cells.ranges)
+
+
+# ===========================================================================
+#  Duplication : une NH de l'extraction absente du template obtient son bloc
+# ===========================================================================
+def test_machines_absentes_du_template(feuille):
+    assert sb.machines_absentes(feuille, presentes={"NH01", "NH02", "NH03"}, hauteur=PAS) == ["NH02"]
+
+
+def test_aucune_absente_si_toutes_sont_la(feuille):
+    assert sb.machines_absentes(feuille, presentes={"NH01", "NH03"}, hauteur=PAS) == []
+
+
+def test_ordre_numerique_des_machines_absentes(feuille):
+    assert sb.machines_absentes(feuille, presentes={"NH10", "NH02", "NH04"}, hauteur=PAS) \
+        == ["NH02", "NH04", "NH10"]
+
+
+# ---------------------------------------------------------------------------
+# Insertion de lignes (mouvement inverse de la suppression)
+# ---------------------------------------------------------------------------
+def test_inserer_lignes_descend_les_cellules_et_les_formules(feuille):
+    sb.inserer_lignes(feuille, position=33, nombre=PAS)
+
+    assert feuille["A9"].value == "NH01"                  # au-dessus : inchangé
+    assert feuille["A81"].value == "NH03"                 # était en 57, descendu de 24
+    assert feuille["R81"].value == "=BG89"                # formule suivie (était =BG65)
+    assert feuille["AJ90"].value == '=IF(ISNUMBER(W90),(W90-BC4),"")'   # en-tête inchangé
+    assert feuille["A105"].value == "<<<<<<<<<<<"         # pied descendu
+    assert feuille["A33"].value is None                   # place libérée
+
+
+def test_inserer_lignes_decale_fusions_hauteurs_et_mfc(feuille):
+    hauteur_nh03 = feuille.row_dimensions[58].height
+    sb.inserer_lignes(feuille, position=33, nombre=PAS)
+
+    fusions = {str(r) for r in feuille.merged_cells.ranges}
+    assert "L15:Q15" in fusions and "L87:Q87" in fusions   # NH01 en place, NH03 descendue
+    assert feuille.row_dimensions[82].height == hauteur_nh03
+    plages = " ".join(str(cf.sqref) for cf in feuille.conditional_formatting)
+    assert "I15:K17" in plages and "I87:K89" in plages
+
+
+# ---------------------------------------------------------------------------
+# Duplication d'un bloc
+# ---------------------------------------------------------------------------
+def test_duplique_le_bloc_modele_a_sa_place_numerique(feuille):
+    sb.dupliquer_bloc(feuille, nom="NH02", modele=9, hauteur=PAS, position=33)
+
+    assert feuille["A33"].value == "NH02"                  # nom écrit dans la case
+    assert feuille["AQ34"].value == "FH"                   # intitulés recopiés
+    assert feuille["R33"].value == "=BG41"                 # formule du bloc, décalée
+    assert feuille["AJ42"].value == '=IF(ISNUMBER(W42),(W42-BC4),"")'   # en-tête conservé
+    assert feuille["A81"].value == "NH03"                  # NH03 poussée plus bas (24 lignes)
+    assert feuille["R81"].value == "=BG89"
+
+
+def test_duplique_sans_recopier_les_donnees_du_modele(feuille):
+    feuille["AU10"] = 1234            # compteur du modèle NH01
+    feuille["L15"] = "vieux HIL"
+
+    sb.dupliquer_bloc(feuille, nom="NH02", modele=9, hauteur=PAS, position=33,
+                      colonnes_donnees=("AU", "I", "L", "R"))
+
+    assert feuille["AU34"].value is None                   # nouveau bloc vierge
+    assert feuille["L39"].value is None
+    assert feuille["AU10"].value == 1234                   # modèle intact
+    assert feuille["L15"].value == "vieux HIL"
+    assert feuille["R33"].value == "=BG41"                 # les formules ne sont jamais vidées
+
+
+def test_duplique_fusions_et_hauteurs(feuille):
+    sb.dupliquer_bloc(feuille, nom="NH02", modele=9, hauteur=PAS, position=33)
+
+    fusions = {str(r) for r in feuille.merged_cells.ranges}
+    assert "L39:Q39" in fusions                            # fusion du bloc recopiée
+    assert feuille.row_dimensions[34].height == feuille.row_dimensions[10].height
+
+
+# ---------------------------------------------------------------------------
+# Intégration dans le pipeline
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def pipeline_dup(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "TEMPLATE_PATH", template_trois_blocs(tmp_path / "dispo.xlsx"))
+    monkeypatch.setattr(config, "LOG_FILE", tmp_path / "logs" / "t.log")
+    monkeypatch.setattr(config, "BLOCS", dict(config.BLOCS, actif=True,
+                                              supprimer_absentes=True, dupliquer_absentes=True))
+    return tmp_path
+
+
+def source_csv(dossier, lignes):
+    chemin = dossier / "dispo_2026-09-16.csv"
+    chemin.write_text("machine;zone;date;equipement;ref;fh\n" + lignes, encoding="utf-8-sig")
+    return chemin
+
+
+def test_process_cree_le_bloc_dune_machine_nouvelle(pipeline_dup):
+    source = source_csv(pipeline_dup, "NH01;;;;;100\nNH02;;;;;200\nNH03;;;;;300\n")
+
+    resultat = dr.process(source, dry_run=True, output_dir=pipeline_dup / "out")
+
+    ws = load_workbook(resultat.output_path)["DISPO"]
+    noms = [c.value for c in ws["A"] if isinstance(c.value, str) and c.value.startswith("NH")]
+    assert noms == ["NH01", "NH02", "NH03"]                # ordre numérique respecté
+    blocs = dr.reperer_blocs(ws)
+    assert ws[f"AU{blocs['NH02'] + 1}"].value == 200       # bloc nouveau rempli
+    assert ws[f"AU{blocs['NH03'] + 1}"].value == 300       # bloc existant rempli
+
+
+def test_process_sans_duplication_ignore_la_machine_nouvelle(pipeline_dup, monkeypatch):
+    monkeypatch.setattr(config, "BLOCS", dict(config.BLOCS, dupliquer_absentes=False))
+    source = source_csv(pipeline_dup, "NH01;;;;;100\nNH02;;;;;200\n")
+
+    resultat = dr.process(source, dry_run=True, output_dir=pipeline_dup / "out")
+
+    ws = load_workbook(resultat.output_path)["DISPO"]
+    noms = [c.value for c in ws["A"] if isinstance(c.value, str) and c.value.startswith("NH")]
+    assert noms == ["NH01"]
+
+
+def test_duplique_un_bloc_dont_les_cellules_de_donnees_sont_fusionnees(feuille):
+    """Sur le vrai template, les cases de valeurs sont fusionnées (ex. AU10:AX10)."""
+    feuille.merge_cells("AU10:AX10")
+    feuille["AU10"] = 1234
+
+    sb.dupliquer_bloc(feuille, nom="NH02", modele=9, hauteur=PAS, position=33,
+                      colonnes_donnees=("AU", "AV", "I", "L", "R"))
+
+    assert feuille["A33"].value == "NH02"
+    assert feuille["AU34"].value is None                    # bloc neuf vide
+    assert "AU34:AX34" in {str(r) for r in feuille.merged_cells.ranges}
+    assert feuille["AU10"].value == 1234                    # modèle intact
+
+
+def test_zone_dimpression_couvre_les_blocs_ajoutes(feuille):
+    """Un bloc créé après la fin de la zone d'impression doit rester imprimable."""
+    feuille.print_area = "A1:AM80"
+    sb.dupliquer_bloc(feuille, nom="NH28", modele=9, hauteur=PAS, position=81)
+
+    sb.ajuster_zone_impression(feuille)
+
+    assert feuille.print_area.endswith(f"$AM${feuille.max_row}")
+
+
+def test_zone_dimpression_inchangee_si_deja_suffisante(feuille):
+    feuille.print_area = "A1:AM200"
+    sb.ajuster_zone_impression(feuille)
+    assert feuille.print_area.endswith("$AM$200")

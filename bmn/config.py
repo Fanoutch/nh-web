@@ -126,6 +126,13 @@ BLOCS: dict = {
     # mises en forme décalées comme dans Excel (voir suppression_blocs.py).
     "supprimer_absentes": True,
 
+    # Créer le bloc d'une NH présente dans l'extraction mais absente du template
+    # (nouvel aéronef) : un bloc modèle est dupliqué à sa place, dans l'ordre
+    # numérique, puis rempli normalement. La couleur de l'état reste à la main.
+    "dupliquer_absentes": True,
+    # Bloc servant de modèle : None = le premier bloc nommé du template.
+    "bloc_modele": None,
+
     # Champs de la source
     "champ_machine": "machine",  # colonne/clé portant NH01, NH02, ...
     "champ_zone": "zone",        # colonne/clé valant "hil" ou "cil" (vide = ligne de compteurs)
