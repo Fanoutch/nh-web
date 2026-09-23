@@ -201,6 +201,14 @@ LLM: dict = {
     "timeout": 120,          # secondes, par ligne
     "temperature": 0,        # 0 = réponse la plus stable
 
+    # TLS. Un service interne à certificat auto-signé (réseau fermé) fait échouer
+    # la vérification. Deux réponses, réglables dans llm.env :
+    #   LLM_CA_BUNDLE=/chemin/ca-interne.pem  -> on fait confiance à l'autorité interne
+    #                                            (recommandé : la vérification reste active)
+    #   LLM_VERIF_TLS=false                   -> vérification désactivée, journalisée
+    "ca_bundle": "",
+    "verif_tls": True,
+
     # N'interroger le modèle que sur certaines lignes (économise les appels).
     # Ici : uniquement les lignes HIL, qui seules ont besoin d'un libellé.
     "filtre": {"champ": "zone", "valeurs": ["hil"]},
@@ -291,6 +299,9 @@ _CLES_LLM = {
     "LLM_CLE_API": ("cle_api", str),
     "LLM_TIMEOUT": ("timeout", lambda v: int(float(v))),
     "LLM_TEMPERATURE": ("temperature", float),
+    # TLS : réseau interne à certificat auto-signé (voir llm_client.contexte_ssl)
+    "LLM_CA_BUNDLE": ("ca_bundle", str),
+    "LLM_VERIF_TLS": ("verif_tls", _BOOLEEN),
 }
 
 _CLES_DISPO = {
