@@ -362,6 +362,29 @@ def supprimer_blocs_absents(ws: Worksheet, df: pd.DataFrame,
     return len(lignes)
 
 
+def afficher_blocs(ws: Worksheet, conf: dict | None = None) -> int:
+    """Démasque les lignes des blocs conservés. Retourne le nombre de lignes.
+
+    Le template de travail masque les blocs des machines qu'on ne souhaite pas
+    voir à l'écran. Une machine présente dans l'extraction doit apparaître dans
+    la dispo générée : sinon le fichier produit semble vide alors qu'il est
+    correctement rempli. Les lignes hors bloc (en-tête, séparateurs) ne sont
+    pas touchées.
+    """
+    conf = conf or config.BLOCS
+    hauteur = conf.get("hauteur_bloc", 24)
+    demasquees = 0
+    for base in reperer_blocs(ws, conf).values():
+        for ligne in range(base, base + hauteur):
+            dim = ws.row_dimensions.get(ligne)
+            if dim is not None and dim.hidden:
+                dim.hidden = False
+                demasquees += 1
+    if demasquees:
+        log.info("Lignes démasquées : %d", demasquees)
+    return demasquees
+
+
 def fill_blocs(ws: Worksheet, df: pd.DataFrame, conf: dict | None = None) -> tuple[int, int]:
     """Remplit un bloc par machine. Retourne (cellules écrites, lignes de liste écrites)."""
     conf = conf or config.BLOCS
@@ -713,6 +736,7 @@ def process(csv_path: Path, *, dry_run: bool = False,
         n_cells, n_rows = fill_blocs(feuille, df)
         if config.BLOCS.get("supprimer_absentes"):
             supprimer_blocs_absents(feuille, df)
+        afficher_blocs(feuille)
         import suppression_blocs as sb
         sb.ajuster_zone_impression(feuille)
     else:

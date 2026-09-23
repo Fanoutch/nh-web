@@ -343,3 +343,32 @@ def test_machine_presente_sans_hil_vide_ses_anciens_hil(blocs_actifs):
     assert ws["L15"].value is None and ws["I15"].value is None and ws["R15"].value is None
     assert ws["L21"].value is None
     assert ws["AU10"].value == 1
+
+
+# ---------------------------------------------------------------------------
+# Lignes masquées : le vrai template masque les blocs qu'on ne veut pas voir
+# ---------------------------------------------------------------------------
+def test_afficher_blocs_demasque_les_lignes_des_machines_conservees(tmp_path):
+    ws = feuille(construire_template(tmp_path / "dispo.xlsx"))
+    for ligne in range(9, 33):                  # bloc NH01 masqué dans le template
+        ws.row_dimensions[ligne].hidden = True
+    ws.row_dimensions[8].hidden = True          # hors bloc : doit rester masquée
+
+    assert dr.afficher_blocs(ws) == 24
+    assert not any(ws.row_dimensions[l].hidden for l in range(9, 33))
+    assert ws.row_dimensions[8].hidden
+
+
+def test_process_demasque_le_bloc_dune_machine_presente(blocs_actifs, tmp_path):
+    wb = load_workbook(config.TEMPLATE_PATH)
+    for ligne in range(9, 33):                  # NH01 masquée, NH02 visible
+        wb["DISPO"].row_dimensions[ligne].hidden = True
+    wb.save(config.TEMPLATE_PATH)
+    csv = tmp_path / "dispo_2026-09-03.csv"
+    csv.write_text("machine;fh\nNH01;2581,73\n", encoding="utf-8")
+
+    resultat = dr.process(csv, dry_run=True, output_dir=tmp_path / "out")
+
+    ws = feuille(resultat.output_path)
+    assert ws["A9"].value == "NH01"
+    assert not any(ws.row_dimensions[l].hidden for l in range(9, 33))
