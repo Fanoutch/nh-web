@@ -164,3 +164,42 @@ def test_lexemple_de_test_contient_les_champs_envoyes():
     exemple = llm_client.exemple_de_test(config.LLM)
     envoye = llm_client.selectionner_champs(exemple, config.LLM["champs_envoyes"])
     assert all(v not in (None, "") for v in envoye.values())
+
+
+# ---------------------------------------------------------------------------
+# TLS : certificat interne (réseau fermé) — réglable, jamais désactivé par défaut
+# ---------------------------------------------------------------------------
+def test_verification_tls_active_par_defaut():
+    assert llm_client.contexte_ssl(dict(config.LLM)) is None      # contexte standard de Python
+
+
+def test_autorite_interne_utilisee_si_fournie(tmp_path, monkeypatch):
+    autorite = tmp_path / "ca-interne.pem"
+    autorite.write_text("-----BEGIN CERTIFICATE-----", encoding="utf-8")
+    recu = {}
+    monkeypatch.setattr(llm_client.ssl, "create_default_context",
+                        lambda **kw: recu.update(kw) or "contexte")
+
+    contexte = llm_client.contexte_ssl(dict(config.LLM, ca_bundle=str(autorite)))
+
+    assert contexte == "contexte" and recu == {"cafile": str(autorite)}
+
+
+def test_verification_desactivable_explicitement(caplog):
+    contexte = llm_client.contexte_ssl(dict(config.LLM, verif_tls=False))
+
+    assert contexte.verify_mode == llm_client.ssl.CERT_NONE
+    assert contexte.check_hostname is False
+    assert "vérification tls désactivée" in caplog.text.lower()
+
+
+def test_autorite_introuvable_donne_une_erreur_lisible():
+    with pytest.raises(llm_client.LlmError, match="introuvable"):
+        llm_client.contexte_ssl(dict(config.LLM, ca_bundle="/chemin/absent.pem"))
+
+
+def test_reglages_tls_lus_dans_llm_env(tmp_path):
+    fichier = tmp_path / "llm.env"
+    fichier.write_text("LLM_VERIF_TLS=false\nLLM_CA_BUNDLE=/etc/ssl/interne.pem\n", encoding="utf-8")
+    reglages = config.reglages_llm(fichier, environ={})
+    assert reglages == {"verif_tls": False, "ca_bundle": "/etc/ssl/interne.pem"}

@@ -12,8 +12,8 @@
 # `appeler_modele`.** Elle reçoit les messages et la config, elle retourne le
 # texte brut de la réponse. Ne pas toucher au reste ni aux noms de fonctions.
 #
-# Réglages de connexion (adresse, modèle, clé) : fichier `llm.env` à la RACINE de
-# nh-web (partagé avec l'assistant IA), à créer depuis `llm.env.example`.
+# Réglages de connexion (adresse, modèle, clé, TLS) : fichier `llm.env` à la
+# RACINE de nh-web (partagé avec l'assistant IA), à créer depuis `llm.env.example`.
 # Prompt et champs : bloc `LLM` de `config.py`.
 # Vérification rapide du service :
 #
@@ -28,8 +28,11 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import ssl
 import urllib.error
 import urllib.request
+
+from pathlib import Path
 
 import config
 
@@ -38,6 +41,35 @@ log = logging.getLogger("bmn.llm")
 
 class LlmError(RuntimeError):
     """Le modèle n'a pas pu être interrogé (service, réseau, réponse illisible)."""
+
+
+# ---------------------------------------------------------------------------
+# TLS
+# ---------------------------------------------------------------------------
+def contexte_ssl(conf: dict):
+    """Contexte TLS de l'appel : standard, autorité interne, ou vérification coupée.
+
+    Un service interne à certificat auto-signé (réseau fermé) fait échouer la
+    vérification standard (CERTIFICATE_VERIFY_FAILED). Réglages dans llm.env :
+    `LLM_CA_BUNDLE` pour faire confiance à l'autorité interne (recommandé), ou
+    `LLM_VERIF_TLS=false` pour ne plus vérifier du tout, ce qui est journalisé.
+    """
+    autorite = (conf.get("ca_bundle") or "").strip()
+    if autorite:
+        if not Path(autorite).is_file():
+            raise LlmError(f"Autorité de certification introuvable : {autorite} "
+                           "(réglage LLM_CA_BUNDLE de llm.env)")
+        return ssl.create_default_context(cafile=autorite)
+
+    if conf.get("verif_tls", True):
+        return None                      # contexte standard de Python
+
+    log.warning("Vérification TLS désactivée (LLM_VERIF_TLS=false) : l'identité du "
+                "service %s n'est pas contrôlée", conf.get("base_url", ""))
+    contexte = ssl.create_default_context()
+    contexte.check_hostname = False
+    contexte.verify_mode = ssl.CERT_NONE
+    return contexte
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +118,8 @@ def appeler_modele(messages: list[dict], conf: dict) -> str:
         url, data=json.dumps(charge).encode("utf-8"), headers=entetes, method="POST"
     )
     try:
-        with urllib.request.urlopen(requete, timeout=conf.get("timeout", 120)) as reponse:
+        with urllib.request.urlopen(requete, timeout=conf.get("timeout", 120),
+                                    context=contexte_ssl(conf)) as reponse:
             corps = json.loads(reponse.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:300]
