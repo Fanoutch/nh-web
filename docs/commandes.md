@@ -1032,6 +1032,10 @@ Le dossier `logo/` a la racine du repo est **gitignore** (cf. `.gitignore`) — 
 
 ## 13. Secteur BMN — generation de la dispo (CSV -> Excel via `bmn/`)
 
+> **Mise en service sur le serveur** (equipe de deploiement) :
+> voir `docs/mise-en-service-bmn.md` — venv Python, `llm.env`, `bmn/reglages.env`,
+> template reel, migrations, roles et worker.
+
 Page `/secteurs/bmn/disponibilites` (menu « Secteurs » -> BMN -> onglet Disponibilites ; l'ancienne adresse `/bmn`
 redirige ici). Acces : membres du secteur BMN et admins (voir section 14). Le chef (ou un admin) depose le CSV recu par mail, un job en queue appelle
 le script Python `bmn/daily_report.py` (sous-dossier du repo, pas de repo separe) et la dispo
