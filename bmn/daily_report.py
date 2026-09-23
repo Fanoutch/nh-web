@@ -305,6 +305,43 @@ def _premiere_valeur(entree: pd.Series, champs: list[str]):
     return None
 
 
+def colonnes_de_donnees(conf: dict) -> list[str]:
+    """Colonnes où le remplissage écrit des données (valeurs FIA, listes HIL/CIL)."""
+    colonnes = {conf["valeurs"]["colonne_valeur"]}
+    for reglage in conf["listes"].values():
+        for cible in reglage["colonnes"].values():
+            colonnes.add(cible["colonne"] if isinstance(cible, dict) else cible)
+    return sorted(colonnes)
+
+
+def ajouter_blocs_manquants(ws: Worksheet, df: pd.DataFrame,
+                            conf: dict | None = None) -> list[str]:
+    """Crée le bloc des machines de l'extraction absentes du template (ordre numérique)."""
+    import suppression_blocs as sb
+
+    conf = conf or config.BLOCS
+    hauteur = conf.get("hauteur_bloc", 24)
+    presentes = {normaliser_machine(m) for m in df[conf["champ_machine"]]
+                 if _valeur_renseignee(m)}
+    manquantes = sb.machines_absentes(ws, presentes, hauteur=hauteur,
+                                      colonne_machine=conf["colonne_machine"],
+                                      motif=conf["motif_machine"])
+    if not manquantes:
+        return []
+
+    donnees = colonnes_de_donnees(conf)
+    for nom in manquantes:
+        modele = conf.get("bloc_modele") or min(reperer_blocs(ws, conf).values())
+        position = sb.place_du_bloc(ws, nom, hauteur=hauteur,
+                                    colonne_machine=conf["colonne_machine"],
+                                    motif=conf["motif_machine"])
+        sb.dupliquer_bloc(ws, nom=nom, modele=modele, hauteur=hauteur, position=position,
+                          colonne_machine=conf["colonne_machine"], colonnes_donnees=donnees)
+        log.info("Machine %s absente du template : bloc créé ligne %d (modèle ligne %d)",
+                 nom, position, modele)
+    return manquantes
+
+
 def supprimer_blocs_absents(ws: Worksheet, df: pd.DataFrame,
                             conf: dict | None = None) -> int:
     """Retire de la dispo les blocs des NH absentes de l'extraction. Retourne le nombre de lignes."""
@@ -671,9 +708,13 @@ def process(csv_path: Path, *, dry_run: bool = False,
     wb = load_template()
     if config.BLOCS.get("actif"):
         feuille = get_target_sheet(wb, config.BLOCS["feuille"])
+        if config.BLOCS.get("dupliquer_absentes"):
+            ajouter_blocs_manquants(feuille, df)
         n_cells, n_rows = fill_blocs(feuille, df)
         if config.BLOCS.get("supprimer_absentes"):
             supprimer_blocs_absents(feuille, df)
+        import suppression_blocs as sb
+        sb.ajuster_zone_impression(feuille)
     else:
         n_cells, n_rows = fill_workbook(wb, df)
     out_path = build_output_path(csv_path, run_ts, output_dir=output_dir)
