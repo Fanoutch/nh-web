@@ -68,13 +68,13 @@ it('renders the Disponibilités tab with both tabs', function () {
         ->assertSeeLivewire(ExcelReportUploader::class);
 });
 
-it('shows the Assistant IA tab as coming soon', function () {
+it('shows the Assistant IA tab with its chat', function () {
     $user = membreSecteur(secteurBmn(), 'utilisateur');
 
     $this->actingAs($user)->get('/secteurs/bmn/assistant')
         ->assertOk()
         ->assertSee('Assistant IA')
-        ->assertSee('Bientôt disponible');
+        ->assertSee('Posez une question sur les documents du secteur BMN.');
 });
 
 it('shows the Secteurs menu entry only to users with an accessible secteur', function () {

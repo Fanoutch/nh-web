@@ -20,6 +20,7 @@ Reference complete des commandes Laravel, serveur et deploiement. Source de veri
 12. [Changement de logo](#12-changement-de-logo)
 13. [Secteur BMN — generation de la dispo](#13-secteur-bmn--generation-de-la-dispo-csv---excel-via-bmn)
 14. [Secteurs — profils chef / utilisateur](#14-secteurs--profils-chef--utilisateur)
+15. [Assistant IA — service nh-assistant](#15-assistant-ia--service-nh-assistant)
 
 ---
 
@@ -1147,3 +1148,127 @@ App\Models\Secteur::create(['slug' => 'nouveau', 'nom' => 'Nouveau']);          
    **sans role, elles n'ont plus acces a la generation de dispo.**
 3. Si les caches sont actifs : `php artisan route:clear && php artisan view:clear`
 4. `php artisan queue:restart` (ou redemarrer le service worker)
+
+---
+
+## 15. Assistant IA — service nh-assistant
+
+Onglets du secteur : « Assistant IA » (chat, membres + admins) et « Documents » (depot, chefs + admins).
+Laravel appelle le service Python `assistant/` (FastAPI) sur 127.0.0.1 avec un jeton.
+
+### Fichiers de reglages (ignores par git)
+
+| Fichier | Contenu |
+|---|---|
+| `llm.env` (racine) | LLM partage avec les HIL (`LLM_*`) + embedding bge-m3 (`EMBED_BASE_URL`, `EMBED_MODELE`, `EMBED_CLE_API`, `EMBED_FORMAT`) |
+| `assistant/reglages.env` | `ASSISTANT_HOTE`, `ASSISTANT_PORT`, `ASSISTANT_JETON`, `ASSISTANT_CHROMA_DIR`, `ASSISTANT_TOP_K`, `ASSISTANT_TOP_K_DOSSIER`, `ASSISTANT_TOP_K_PJ`, `ASSISTANT_SEUIL_DISTANCE`, `ASSISTANT_TEMPERATURE`, `ASSISTANT_HISTORIQUE_TOURS`, `ASSISTANT_TAILLE_MAX_MO` |
+
+Modeles commentes : `llm.env.example`, `assistant/reglages.env.example`.
+
+### Installation / mise a jour
+
+Prerequis : **Python 3.12** (teste avec 3.12.3). `requirements.lock` fixe toutes les versions
+(dependances indirectes comprises) ; `requirements.txt` ne liste que les dependances directes.
+
+```bash
+php artisan migrate                                   # tables assistant_documents / _conversations / _messages
+cp assistant/reglages.env.example assistant/reglages.env
+php -r 'echo bin2hex(random_bytes(24)), PHP_EOL;'     # coller dans ASSISTANT_JETON
+chown root:www-data assistant/reglages.env && chmod 640 assistant/reglages.env   # groupe = utilisateur web
+# llm.env : ajouter les 4 lignes EMBED_* (voir llm.env.example)
+# Laravel lit aussi assistant/reglages.env : reconstruire ses caches APRES l'avoir cree
+php artisan config:clear && php artisan route:clear && php artisan view:clear
+#   (si les caches sont utilises : php artisan config:cache && php artisan route:cache, en tant qu'utilisateur web)
+php artisan queue:restart
+cd assistant && python3.12 -m venv .venv && .venv/bin/python -m pip install -r requirements.lock && cd ..
+sed "s#/CHEMIN/nh-web#$PWD#g" assistant/nh-assistant.service.example > /etc/systemd/system/nh-assistant.service
+systemctl daemon-reload && systemctl enable --now nh-assistant
+```
+
+Plusieurs utilisateurs en meme temps : dans `nh-laravel.service`, section `[Service]`, ajouter
+`Environment=PHP_CLI_SERVER_WORKERS=8`, puis `systemctl daemon-reload && systemctl restart nh-laravel`.
+Chaque reponse en cours d'ecriture occupe un worker pendant toute sa duree : au maximum
+(workers - 1) reponses simultanees ; chaque worker coute environ 30 a 50 Mo de RAM.
+
+Documents jusqu'a 50 Mo : creer `/etc/php/<version>/cli/conf.d/99-nh-web.ini` avec
+```
+upload_max_filesize = 64M
+post_max_size = 64M
+```
+puis `systemctl restart nh-laravel`.
+Selectionner les gros fichiers un par un : le total d'une selection de plusieurs fichiers doit rester
+sous `post_max_size`. Si nginx est devant l'application, ajouter aussi `client_max_body_size 64m;`
+dans le bloc `server` du site (voir aussi `proxy_buffering` plus bas).
+
+Jobs longs (indexation) : dans le `.env` de Laravel, `DB_QUEUE_RETRY_AFTER=660`, puis `php artisan queue:restart`.
+
+Streaming des reponses : Livewire envoie `X-Accel-Buffering: no`, nginx ne met donc pas les reponses en tampon.
+Si les reponses arrivent d'un bloc malgre tout, ajouter `proxy_buffering off;` dans le bloc `location /` du site nginx.
+
+### Mise a jour d'une installation existante
+
+Quand le code de l'assistant evolue (dossiers, pieces jointes, sources cliquables...), sur un serveur
+ou `nh-assistant` tourne deja :
+
+```bash
+git pull                                              # ou deploiement habituel du depot
+php artisan migrate                                   # nouvelles migrations assistant_* le cas echeant
+npm run build                                         # OBLIGATOIRE : nouvelles classes Tailwind (chat, explorateur)
+php artisan config:clear && php artisan route:clear && php artisan view:clear
+#   (si les caches sont utilises : php artisan config:cache && php artisan route:cache, en tant qu'utilisateur web)
+# code Python modifie (assistant/) et/ou requirements.lock modifie :
+cd assistant && .venv/bin/python -m pip install -r requirements.lock && cd ..
+systemctl restart nh-assistant nh-laravel nh-queue
+systemctl is-active nh-assistant nh-laravel nh-queue  # attendu : active x3
+```
+Sans `npm run build`, les nouveaux ecrans (chat refondu, explorateur de dossiers) s'affichent mal :
+les classes Tailwind ajoutees n'existent pas dans le CSS compile de `public/build/`, qui n'est pas
+suivi par git. Si `node_modules/` est absent : `npm ci` avant `npm run build`.
+
+Reinstaller les dependances Python (`pip install -r requirements.lock`) n'est necessaire que si
+`requirements.lock` a change ; sinon un simple `systemctl restart nh-assistant` suffit pour charger
+le nouveau code Python. Aucun nouveau service systemd, aucune nouvelle bibliotheque et aucun port
+supplementaire ne sont necessaires pour ces evolutions.
+
+### Verifications
+
+```bash
+systemctl status nh-assistant
+J=$(grep '^ASSISTANT_JETON=' assistant/reglages.env | cut -d= -f2-)
+curl -s -H "X-Assistant-Jeton: $J" http://127.0.0.1:8765/sante     # {"service":"ok","embedding":"ok","llm":"ok"}
+tail -f /var/log/nh-assistant.log
+```
+
+### Reglages de la recherche
+
+Modifier `assistant/reglages.env` puis `systemctl restart nh-assistant` :
+- `ASSISTANT_SEUIL_DISTANCE` : plus bas = plus strict (plus de « Je ne trouve pas ») ; plus haut = plus permissif.
+- `ASSISTANT_TOP_K` : nombre de morceaux de documents donnes au LLM, cherches sur **tout le secteur**
+  (la recherche ne se limite jamais a un seul dossier, meme si la question en nomme un).
+- `ASSISTANT_TOP_K_DOSSIER` (facultatif, defaut **3**) : morceaux ajoutes en plus depuis le ou les
+  dossiers dont le nom est reconnu **dans le texte de la question** (le dossier ouvert dans l'onglet
+  Documents n'a aucune incidence sur la recherche). Ces morceaux s'ajoutent a ceux de
+  `ASSISTANT_TOP_K`, ils ne les remplacent pas.
+- `ASSISTANT_TOP_K_PJ` (facultatif, defaut **3**) : morceaux ajoutes en plus depuis les pieces jointes
+  de la conversation en cours, s'il y en a.
+- `ASSISTANT_TEMPERATURE` : 0 = reponses stables, 0.3 = plus naturelles.
+- `ASSISTANT_HISTORIQUE_TOURS` : echanges precedents pris en compte pour une question de suite.
+
+`ASSISTANT_JETON`, `ASSISTANT_TAILLE_MAX_MO`, `ASSISTANT_HISTORIQUE_TOURS`, `ASSISTANT_HOTE` et `ASSISTANT_PORT`
+sont aussi lus par Laravel : apres les avoir modifies, en plus de `systemctl restart nh-assistant`, lancer
+`php artisan config:clear` (ou `php artisan config:cache` si les caches sont utilises) puis `php artisan queue:restart`.
+Augmenter `ASSISTANT_TAILLE_MAX_MO` demande aussi d'augmenter la regle `max` (en Ko) de `config/livewire.php`
+(`temporary_file_upload`), `upload_max_filesize` / `post_max_size` de PHP et, avec nginx, `client_max_body_size`.
+
+### Tests
+
+```bash
+vendor/bin/pest tests/Feature/Assistant*
+cd assistant && .venv/bin/python -m pytest -q
+```
+
+### Depannage
+
+- « L'assistant est indisponible » : `systemctl status nh-assistant`, `/sante`, `tail /var/log/nh-assistant.log`.
+- Les signalements des utilisateurs (bouton « Signaler ») sont dans le journal d'audit (`/admin/audit-log`, categorie `assistant`), avec le detail technique.
+- Reconstruire la base vectorielle : arreter le service, supprimer `ASSISTANT_CHROMA_DIR`, redemarrer, puis redeposer (ou « Remplacer ») les documents.

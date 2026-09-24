@@ -33,3 +33,7 @@ Thumbs.db
 # Notes locales (pas pour git, reste sur ce PC)
 /update.md
 /docs/superpowers/
+
+# Assistant IA : réglages locaux (jeton) et environnement Python — jamais dans git
+/assistant/reglages.env
+/assistant/.venv/

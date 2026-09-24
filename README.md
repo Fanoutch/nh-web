@@ -20,7 +20,8 @@ les pannes detectees par la pipeline Python [`nh-pipeline`](../nh-pipeline).
 - **Audit log** `/admin/audit-log` (super admin) : tracage des modifications metier + erreurs pipeline (Spatie ActivityLog)
 - **Secteurs** (`/secteurs`) : choix du secteur puis ses outils, roles chef / utilisateur par secteur (geres par le super admin dans `/admin/users`)
   - **BMN — Disponibilites** (`/secteurs/bmn/disponibilites`) : depot du CSV quotidien, generation de la dispo (Excel) via le script Python BMN (formules du template preservees), historique + telechargement
-  - **BMN — Assistant IA** (`/secteurs/bmn/assistant`) : bientot disponible
+  - **BMN — Assistant IA** (`/secteurs/bmn/assistant`) : chat sur les documents du secteur (historique personnel, reponses en direct, sources cliquables) ; service Python `assistant/` (voir `docs/commandes.md` section 15)
+  - **BMN — Documents** (`/secteurs/bmn/documents`, chefs + admins) : depot des PDF / Word qui servent de base a l'assistant
 - Page profil `/profile` : modif infos, mot de passe, suppression de compte
 - Auth Laravel Breeze (login / register / password reset)
 

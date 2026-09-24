@@ -1,0 +1,23 @@
+# Service systemd de l'assistant IA de cAIman.
+# 1. Remplacer /CHEMIN/nh-web par le chemin réel du projet (2 occurrences)
+# 2. Le port doit être celui de ASSISTANT_PORT (assistant/reglages.env)
+# 3. cp nh-assistant.service.example /etc/systemd/system/nh-assistant.service
+#    systemctl daemon-reload && systemctl enable --now nh-assistant
+[Unit]
+Description=cAIman - service de l'assistant IA (nh-assistant)
+After=network.target
+
+[Service]
+# L'utilisateur du service doit pouvoir lire llm.env, assistant/reglages.env et storage/app/private,
+# et écrire dans ASSISTANT_CHROMA_DIR (sinon laisser root, par défaut).
+# User=www-data
+WorkingDirectory=/CHEMIN/nh-web/assistant
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/CHEMIN/nh-web/assistant/.venv/bin/uvicorn service:creer_app --factory --host 127.0.0.1 --port 8765
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/log/nh-assistant.log
+StandardError=append:/var/log/nh-assistant.log
+
+[Install]
+WantedBy=multi-user.target

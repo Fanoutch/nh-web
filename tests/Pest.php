@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AssistantConversation;
 use App\Models\Secteur;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -26,4 +27,14 @@ function membreSecteur(Secteur $secteur, string $role, array $attributes = []): 
     $secteur->users()->attach($user->id, ['role' => $role]);
 
     return $user;
+}
+
+/** Crée une conversation avec l'assistant IA pour l'utilisateur donné, dans le secteur donné. */
+function conversation(User $user, Secteur $secteur, array $attributes = []): AssistantConversation
+{
+    return AssistantConversation::create(array_merge([
+        'user_id' => $user->id,
+        'secteur_id' => $secteur->id,
+        'titre' => 'Conversation de test',
+    ], $attributes));
 }
