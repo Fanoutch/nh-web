@@ -34,8 +34,9 @@ class FausseReponse:
 def appels(monkeypatch):
     journal = {"reponses": [], "requetes": []}
 
-    def faux_post(url, headers, json, timeout, stream=False):
-        journal["requetes"].append({"url": url, "headers": headers, "json": json, "stream": stream})
+    def faux_post(url, headers, json, timeout, stream=False, verify=True):
+        journal["requetes"].append({"url": url, "headers": headers, "json": json, "stream": stream,
+                                    "verify": verify})
         return journal["reponses"].pop(0)
 
     monkeypatch.setattr(modeles.requests, "post", faux_post)
@@ -169,3 +170,44 @@ def test_embedding_format_openai_trie_par_index(appels):
     ]}))
 
     assert modeles.embedder(["a", "b", "c"], R_OPENAI) == [[1.0], [2.0], [3.0]]
+
+
+# --- TLS : certificat interne du réseau fermé (LLM_CA_BUNDLE / LLM_VERIF_TLS) ---
+
+def test_tls_verifie_par_defaut(appels):
+    appels["reponses"] += [FausseReponse([[0.1]]), FausseReponse({"choices": [{"message": {"content": "ok"}}]})]
+
+    modeles.embedder(["a"], R_HF)
+    modeles.discuter([{"role": "user", "content": "q"}], R_LLM, 0.3)
+
+    assert [q["verify"] for q in appels["requetes"]] == [True, True]
+
+
+def test_tls_autorite_interne(appels, tmp_path):
+    autorite = tmp_path / "ca.pem"
+    autorite.write_text("certificat")
+    r = Reglages(embed_base_url="https://hf.example/bge", embed_format="hf", llm_base_url="https://llm/v1",
+                 llm_modele="m", ca_bundle=str(autorite))
+    appels["reponses"] += [FausseReponse([[0.1]]), FausseReponse({"choices": [{"message": {"content": "ok"}}]})]
+
+    modeles.embedder(["a"], r)
+    modeles.discuter([{"role": "user", "content": "q"}], r, 0.3)
+
+    assert [q["verify"] for q in appels["requetes"]] == [str(autorite)] * 2
+
+
+def test_tls_autorite_introuvable(appels):
+    r = Reglages(embed_base_url="https://hf.example/bge", embed_format="hf", ca_bundle="/nulle/part/ca.pem")
+
+    with pytest.raises(modeles.ModeleIndisponible, match="LLM_CA_BUNDLE"):
+        modeles.embedder(["a"], r)
+    assert appels["requetes"] == []
+
+
+def test_tls_verification_coupee(appels):
+    r = Reglages(llm_base_url="https://llm/v1", llm_modele="m", verif_tls=False)
+    appels["reponses"].append(FausseReponse({"choices": [{"message": {"content": "ok"}}]}))
+
+    modeles.discuter([{"role": "user", "content": "q"}], r, 0.3)
+
+    assert appels["requetes"][0]["verify"] is False

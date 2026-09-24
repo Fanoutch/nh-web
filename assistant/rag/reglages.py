@@ -37,6 +37,8 @@ class Reglages:
     llm_modele: str = ""
     llm_cle_api: str = ""
     llm_timeout: int = 120
+    ca_bundle: str = ""
+    verif_tls: bool = True
     embed_base_url: str = ""
     embed_modele: str = "BAAI/bge-m3"
     embed_cle_api: str = ""
@@ -59,6 +61,8 @@ _CLES = {  # variable -> (champ de Reglages, conversion)
     "LLM_MODELE": ("llm_modele", str),
     "LLM_CLE_API": ("llm_cle_api", str),
     "LLM_TIMEOUT": ("llm_timeout", lambda v: int(float(v))),
+    "LLM_CA_BUNDLE": ("ca_bundle", str),
+    "LLM_VERIF_TLS": ("verif_tls", _booleen),
     "EMBED_BASE_URL": ("embed_base_url", str),
     "EMBED_MODELE": ("embed_modele", str),
     "EMBED_CLE_API": ("embed_cle_api", str),

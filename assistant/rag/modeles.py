@@ -6,6 +6,7 @@ celui des HIL de la dispo.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Iterator
 
 import requests
@@ -26,9 +27,27 @@ def _entetes(cle: str) -> dict:
     return entetes
 
 
-def _post(url: str, cle: str, charge: dict, timeout: int, stream: bool = False):
+def _verification(r: Reglages):
+    """Vérification TLS des appels (LLM et embedding), comme pour les HIL de la dispo.
+
+    requests n'utilise pas les autorités du système : un service interne à certificat
+    maison échoue (CERTIFICATE_VERIFY_FAILED). Réglages dans llm.env : LLM_CA_BUNDLE
+    (fichier d'autorités à croire, recommandé) ou LLM_VERIF_TLS=false (plus de contrôle).
+    """
+    autorite = r.ca_bundle.strip()
+    if autorite:
+        if not Path(autorite).is_file():
+            raise ModeleIndisponible(f"Autorité de certification introuvable : {autorite} "
+                                     "(réglage LLM_CA_BUNDLE de llm.env)")
+        return autorite
+    return r.verif_tls
+
+
+def _post(url: str, cle: str, charge: dict, r: Reglages, stream: bool = False):
+    verification = _verification(r)
     try:
-        reponse = requests.post(url, headers=_entetes(cle), json=charge, timeout=timeout, stream=stream)
+        reponse = requests.post(url, headers=_entetes(cle), json=charge, timeout=r.llm_timeout,
+                                stream=stream, verify=verification)
     except requests.RequestException as exc:
         raise ModeleIndisponible(f"Service injoignable sur {url} : {exc}") from exc
     if not reponse.ok:
@@ -49,7 +68,7 @@ def _embedder_lot(textes: list[str], r: Reglages) -> list[list[float]]:
         url, charge = r.embed_base_url, {"inputs": textes}
     else:
         url, charge = r.embed_base_url.rstrip("/") + "/embeddings", {"input": textes, "model": r.embed_modele}
-    donnees = _json(_post(url, r.embed_cle_api, charge, r.llm_timeout), url)
+    donnees = _json(_post(url, r.embed_cle_api, charge, r), url)
     try:
         if r.embed_format == "hf":
             if not isinstance(donnees, list):
@@ -93,7 +112,7 @@ def _charge_chat(messages: list[dict], r: Reglages, temperature: float, flux: bo
 
 def discuter(messages: list[dict], r: Reglages, temperature: float) -> str:
     url = _url_chat(r)
-    donnees = _json(_post(url, r.llm_cle_api, _charge_chat(messages, r, temperature, False), r.llm_timeout), url)
+    donnees = _json(_post(url, r.llm_cle_api, _charge_chat(messages, r, temperature, False), r), url)
     try:
         return donnees["choices"][0]["message"]["content"] or ""
     except (KeyError, IndexError, TypeError) as exc:
@@ -103,7 +122,7 @@ def discuter(messages: list[dict], r: Reglages, temperature: float) -> str:
 def discuter_en_flux(messages: list[dict], r: Reglages, temperature: float) -> Iterator[str]:
     """Fragments de texte au fil de l'eau (format « data: {...} » d'OpenAI)."""
     reponse = _post(_url_chat(r), r.llm_cle_api, _charge_chat(messages, r, temperature, True),
-                    r.llm_timeout, stream=True)
+                    r, stream=True)
     reponse.encoding = "utf-8"
     try:
         for ligne in reponse.iter_lines(decode_unicode=True):

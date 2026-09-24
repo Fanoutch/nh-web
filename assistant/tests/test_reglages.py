@@ -76,3 +76,14 @@ def test_chemin_chroma_relatif_au_dossier_assistant(tmp_path):
     r = reglages.charger({"ASSISTANT_REGLAGES": str(reg), "LLM_ENV": str(tmp_path / "absent.env")})
 
     assert r.chroma_dir == (reglages.DOSSIER_ASSISTANT / "../storage/x").resolve()
+
+
+def test_reglages_tls_lus_dans_llm_env(tmp_path):
+    llm = tmp_path / "llm.env"
+    llm.write_text("LLM_CA_BUNDLE=/etc/pki/tls/certs/ca-bundle.crt\nLLM_VERIF_TLS=false\n")
+
+    r = reglages.charger({"LLM_ENV": str(llm), "ASSISTANT_REGLAGES": str(tmp_path / "absent.env")})
+
+    assert r.ca_bundle == "/etc/pki/tls/certs/ca-bundle.crt"
+    assert r.verif_tls is False
+    assert reglages.charger({"ASSISTANT_REGLAGES": "aucun"}).verif_tls is True
