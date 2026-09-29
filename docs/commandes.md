@@ -1267,6 +1267,16 @@ vendor/bin/pest tests/Feature/Assistant*
 cd assistant && .venv/bin/python -m pytest -q
 ```
 
+### Tests navigateur
+
+```bash
+scripts/tests-navigateur.sh
+```
+
+Banc Playwright (vrai Chrome, base de test uniquement) qui rejoue le chat et l'explorateur de
+documents pour detecter une panne du JavaScript que Pest ne voit pas. Outil de developpement,
+inutile au bureau. Voir `docs/tests-navigateur.md`.
+
 ### Depannage
 
 - « L'assistant est indisponible » : `systemctl status nh-assistant`, `/sante`, `tail /var/log/nh-assistant.log`.

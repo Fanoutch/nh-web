@@ -37,3 +37,6 @@ Thumbs.db
 # Assistant IA : réglages locaux (jeton) et environnement Python — jamais dans git
 /assistant/reglages.env
 /assistant/.venv/
+
+# Tests navigateur : environnement Python dedie (jamais dans git)
+/.venv-tests/
