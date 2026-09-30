@@ -6,7 +6,7 @@ Le banc pose une serie de questions a l'assistant sur des documents d'essai (PDF
 mesure deux choses :
 
 - la **recherche** : le bon passage est-il retrouve parmi les premiers resultats ? (colonne « Trouvé ») ;
-- les **réponses** : la réponse donnee est-elle juste, fidele aux documents, et l'assistant refuse-t-il
+- les **réponses** : la réponse donnée est-elle juste, fidèle aux documents, et l'assistant refuse-t-il
   bien quand l'information n'existe pas ? (colonnes « Justes », « Fidèles », « Refus corrects »).
 
 Il ne touche jamais aux vrais documents du site ni à sa base : il travaille dans un espace temporaire.
@@ -23,9 +23,9 @@ Ne modifiez jamais le code sur place.
 ## Lancer la vérification
 
 ```
-cd assistant
+cd /home/coder/nh-web1/assistant
 .venv/bin/python -m banc.banc --reglages retenu --formats pdf
-.venv/bin/python -m banc.banc --reglages retenu --formats pdf --réponses
+.venv/bin/python -m banc.banc --reglages retenu --formats pdf --reponses
 ```
 
 La première commande teste la recherche seule (rapide). La seconde fait aussi répondre et juger
@@ -48,11 +48,14 @@ Chaque lancement écrit un dossier `banc/resultats/<date>_<heure>/` avec `rappor
 | | pdf | docx | txt |
 |---|---|---|---|
 | Recherche, « Trouvé » | 96 % | 94 % | 97 % |
-| Réponses, « Justes » | 92 % | 90 % | 97 % |
+| Réponses, « Justes » (chiffres bruts de `rapport.md`) | 88 % | 90 % | 97 % |
 
-Fidèles et refus corrects : 100 % dans les trois formats. (Avec l'ancien comportement, les réponses
-justes en pdf n'étaient que de 63 %.) Quelques points d'écart d'un lancement à l'autre sont normaux :
-le corpus est petit.
+Fidèles et refus corrects : 100 % dans les trois formats. Avec l'ancien comportement (`actuel`), les réponses
+justes en pdf n'étaient que de 63 % (chiffre brut), contre 88 % (brut) avec `retenu`.
+
+Le juge automatique compte parfois à tort une bonne réponse comme fausse : quelques points de moins sur
+« Justes » ne sont donc pas alarmants. La règle des 10 points ci-dessous s'applique à « Trouvé ».
+Quelques points d'écart d'un lancement à l'autre sont normaux : le corpus est petit.
 
 ## Si les chiffres diffèrent
 
