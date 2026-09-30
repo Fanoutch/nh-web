@@ -53,16 +53,16 @@ class Reglages:
     seuil_distance: float = 1.0
     temperature: float = 0.3
     historique_tours: int = 3
-    taille_morceau: int = 800
-    taille_min: int = 200
-    fusion_sections: bool = False
-    par_page: bool = True
-    chevauchement: int = 0
-    voisins: int = 0
+    taille_morceau: int = 600
+    taille_min: int = 150
+    fusion_sections: bool = True
+    par_page: bool = False
+    chevauchement: int = 150
+    voisins: int = 1
 
     @property
     def taille_max(self) -> int:
-        """Au-delà, un morceau est redécoupé (1500 pour 800, comme avant les réglages)."""
+        """Au-delà, un morceau est redécoupé (1125 pour 600)."""
         return int(self.taille_morceau * 1.875)
 
 

@@ -89,13 +89,13 @@ def test_reglages_tls_lus_dans_llm_env(tmp_path):
     assert reglages.charger({"ASSISTANT_REGLAGES": "aucun"}).verif_tls is True
 
 
-def test_reglages_decoupage_par_defaut_identiques_a_aujourd_hui():
+def test_reglages_decoupage_par_defaut():
     r = reglages.charger({"ASSISTANT_REGLAGES": "aucun"})
 
-    assert (r.taille_morceau, r.taille_min, r.taille_max) == (800, 200, 1500)
-    assert r.fusion_sections is False
-    assert r.par_page is True
-    assert (r.chevauchement, r.voisins) == (0, 0)
+    assert (r.taille_morceau, r.taille_min, r.taille_max) == (600, 150, 1125)
+    assert r.fusion_sections is True
+    assert r.par_page is False
+    assert (r.chevauchement, r.voisins) == (150, 1)
 
 
 def test_reglages_decoupage_lus_dans_reglages_env(tmp_path):

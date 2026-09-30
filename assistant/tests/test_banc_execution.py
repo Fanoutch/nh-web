@@ -32,7 +32,8 @@ QUESTIONS = [
 
 
 def test_executer_recherche_et_non_applicable(corpus, tmp_path):
-    r = Reglages(llm_actif=True, top_k=1, seuil_distance=2.0, chroma_dir=tmp_path / "jamais")
+    r = Reglages(llm_actif=True, top_k=1, seuil_distance=2.0, chroma_dir=tmp_path / "jamais",
+                 fusion_sections=False, par_page=True, chevauchement=0, voisins=0, taille_morceau=800, taille_min=200)
     res = executer("actuel", r, "txt", QUESTIONS, corpus, avec_reponses=False)
 
     lignes = {l["id"]: l for l in res["lignes"]}

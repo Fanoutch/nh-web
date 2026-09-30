@@ -251,7 +251,7 @@ def test_document_entier_ne_coupe_plus_au_saut_de_page(tmp_path, monkeypatch):
              {"page": 2, "texte": "purger le circuit jusqu'à zéro."}]
     monkeypatch.setattr(module.lecteurs, "lire", lambda chemin: pages)
 
-    par_page = Assistant(Reglages(), None)._decouper("x.pdf", "X")
+    par_page = Assistant(Reglages(par_page=True), None)._decouper("x.pdf", "X")
     entier = Assistant(Reglages(par_page=False), None)._decouper("x.pdf", "X")
 
     assert len(par_page) == 2
@@ -264,7 +264,7 @@ def test_decouper_applique_taille_et_fusion(monkeypatch):
     texte = "\n\n".join(f"{i}. TITRE {i}\nContenu court {i}." for i in range(1, 30))
     monkeypatch.setattr(module.lecteurs, "lire", lambda chemin: [{"page": None, "texte": texte}])
 
-    defaut = Assistant(Reglages(), None)._decouper("x.txt", "X")
+    defaut = Assistant(Reglages(fusion_sections=False, taille_morceau=800, taille_min=200, chevauchement=0), None)._decouper("x.txt", "X")
     fusion = Assistant(Reglages(fusion_sections=True, taille_morceau=400, taille_min=100), None)._decouper("x.txt", "X")
 
     assert len(fusion) < len(defaut)
