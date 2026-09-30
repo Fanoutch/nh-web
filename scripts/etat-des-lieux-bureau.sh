@@ -120,7 +120,7 @@ else
   echo "assistant/requirements.lock absent : assistant pas encore livre ici"
 fi
 echo "--- composer :"
-composer config -g repos 2>/dev/null | head -5 || echo "composer indisponible"
+out=$(composer config -g repos 2>/dev/null) && echo "$out" | head -5 || echo "composer indisponible"
 echo "--- npm :"
 npm config get registry 2>/dev/null || echo "npm indisponible"
 
