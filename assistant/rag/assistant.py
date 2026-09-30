@@ -96,7 +96,7 @@ class Assistant:
             if not trouves:
                 yield from _reponse_fixe(REPONSE_INTROUVABLE.format(secteur=nom_secteur))
                 return
-            yield {"type": "sources", "sources": _sources(trouves)}
+            yield {"type": "sources", "sources": _sources([m for m in trouves if not m.get("voisin")])}
             messages = [
                 {"role": "system", "content": PROMPT_SYSTEME.format(secteur=nom_secteur)},
                 *historique,
@@ -157,12 +157,12 @@ class Assistant:
             for voisin in avant:
                 if voisin["id"] not in vus:
                     vus.add(voisin["id"])
-                    resultat.append({**voisin, "distance": m["distance"]})
+                    resultat.append({**voisin, "voisin": True, "distance": m["distance"]})
             resultat.append(m)
             for voisin in apres:
                 if voisin["id"] not in vus:
                     vus.add(voisin["id"])
-                    resultat.append({**voisin, "distance": m["distance"]})
+                    resultat.append({**voisin, "voisin": True, "distance": m["distance"]})
         return resultat
 
     def _reformuler(self, question: str, historique: list[dict]) -> str:

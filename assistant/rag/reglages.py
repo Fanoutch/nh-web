@@ -131,9 +131,29 @@ def charger(environ: Mapping[str, str] | None = None) -> Reglages:
     for cle in _CLES:
         if env.get(cle):
             brut[cle] = env[cle]
-    valeurs = {
-        champ: conversion(brut[cle])
-        for cle, (champ, conversion) in _CLES.items()
-        if brut.get(cle, "") != ""
-    }
-    return Reglages(**valeurs)
+    valeurs = {}
+    for cle, (champ, conversion) in _CLES.items():
+        if brut.get(cle, "") == "":
+            continue
+        try:
+            valeurs[champ] = conversion(brut[cle])
+        except ValueError:
+            raise ValueError(f"{cle} doit être un nombre (valeur lue : « {brut[cle]} »).") from None
+    r = Reglages(**valeurs)
+    _verifier(r)
+    return r
+
+
+def _verifier(r: Reglages) -> None:
+    """Refuse des tailles de découpage incohérentes, avec un message qui nomme la variable."""
+    if r.taille_morceau <= 0:
+        raise ValueError(f"ASSISTANT_TAILLE_MORCEAU ({r.taille_morceau}) doit être supérieur à 0.")
+    if r.taille_min < 0:
+        raise ValueError(f"ASSISTANT_TAILLE_MIN ({r.taille_min}) doit être supérieur ou égal à 0.")
+    if r.taille_min >= r.taille_morceau:
+        raise ValueError(f"ASSISTANT_TAILLE_MIN ({r.taille_min}) doit être inférieur à "
+                         f"ASSISTANT_TAILLE_MORCEAU ({r.taille_morceau}).")
+    if r.chevauchement < 0:
+        raise ValueError(f"ASSISTANT_CHEVAUCHEMENT ({r.chevauchement}) doit être supérieur ou égal à 0.")
+    if r.voisins < 0:
+        raise ValueError(f"ASSISTANT_VOISINS ({r.voisins}) doit être supérieur ou égal à 0.")

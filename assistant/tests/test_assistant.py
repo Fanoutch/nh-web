@@ -2,7 +2,7 @@ import pytest
 
 from rag import assistant as module
 from rag import modeles
-from rag.assistant import Assistant, _pages_bout_a_bout
+from rag.assistant import Assistant, _page_a, _pages_bout_a_bout
 from rag.base import BaseVectorielle
 from rag.lecteurs import LectureImpossible
 from rag.reglages import Reglages
@@ -272,6 +272,7 @@ def test_decouper_applique_taille_et_fusion(monkeypatch):
 
 
 def test_passages_sans_voisins_egal_a_la_recherche(assistant):
+    assistant.r = Reglages(**{**assistant.r.__dict__, "voisins": 0})
     passages = assistant.passages("bmn", "vol de maintenance ?")
     assert [p["id"] for p in passages] == ["doc1_m0"]
 
@@ -298,3 +299,27 @@ def test_repondre_envoie_les_voisins_au_llm(tmp_path, journal):
 
     envoye = journal["flux"][0]["messages"][-1]["content"]
     assert "le chef BMN" in envoye and "sous 72 heures" in envoye
+
+
+def test_sources_ne_montrent_que_les_passages_trouves_pas_les_voisins(tmp_path, journal):
+    r = Reglages(llm_actif=True, top_k=1, seuil_distance=1.0, voisins=1)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    morceaux = [{"texte": "texte sans rapport", "page": 3},
+                {"texte": "ordonne le vol de maintenance", "page": 3},
+                {"texte": "autre page sans rapport", "page": 4}]
+    a.base.ajouter_document("bmn", 4, "M.pdf", morceaux, [faux_vecteur(m["texte"]) for m in morceaux])
+
+    evenements = list(a.repondre("bmn", "BMN", "vol de maintenance ?", []))
+
+    sources = next(e for e in evenements if e["type"] == "sources")["sources"]
+    assert len(sources) == 1
+    assert sources[0]["page"] == 3 and sources[0]["extrait"] == "ordonne le vol de maintenance"
+    envoye = journal["flux"][0]["messages"][-1]["content"]
+    assert "texte sans rapport" in envoye and "autre page sans rapport" in envoye
+
+
+def test_page_a_morceau_commencant_apres_la_page_1():
+    reperes = [(0, 1), (100, 2), (200, 3)]
+    assert _page_a(reperes, 0) == 1
+    assert _page_a(reperes, 150) == 2
+    assert _page_a(reperes, 250) == 3

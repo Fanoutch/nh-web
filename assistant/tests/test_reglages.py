@@ -1,3 +1,4 @@
+import pytest
 from pathlib import Path
 
 from rag import reglages
@@ -101,14 +102,45 @@ def test_reglages_decoupage_par_defaut():
 def test_reglages_decoupage_lus_dans_reglages_env(tmp_path):
     fichier = tmp_path / "reglages.env"
     fichier.write_text(
-        "ASSISTANT_TAILLE_MORCEAU=1200\nASSISTANT_TAILLE_MIN=300\nASSISTANT_FUSION_SECTIONS=oui\n"
-        "ASSISTANT_PAR_PAGE=non\nASSISTANT_CHEVAUCHEMENT=150\nASSISTANT_VOISINS=1\n",
+        "ASSISTANT_TAILLE_MORCEAU=1000\nASSISTANT_TAILLE_MIN=250\nASSISTANT_FUSION_SECTIONS=non\n"
+        "ASSISTANT_PAR_PAGE=oui\nASSISTANT_CHEVAUCHEMENT=40\nASSISTANT_VOISINS=2\n",
         encoding="utf-8",
     )
 
     r = reglages.charger({"ASSISTANT_REGLAGES": str(fichier), "LLM_ENV": str(tmp_path / "absent.env")})
 
-    assert (r.taille_morceau, r.taille_min, r.taille_max) == (1200, 300, 2250)
-    assert r.fusion_sections is True
-    assert r.par_page is False
-    assert (r.chevauchement, r.voisins) == (150, 1)
+    assert (r.taille_morceau, r.taille_min, r.taille_max) == (1000, 250, 1875)
+    assert r.fusion_sections is False
+    assert r.par_page is True
+    assert (r.chevauchement, r.voisins) == (40, 2)
+
+
+def _env(tmp_path, **valeurs):
+    return {"ASSISTANT_REGLAGES": "aucun", **{f"ASSISTANT_{k}": str(v) for k, v in valeurs.items()}}
+
+
+@pytest.mark.parametrize("valeurs, variable", [
+    ({"TAILLE_MORCEAU": 0}, "ASSISTANT_TAILLE_MORCEAU"),
+    ({"TAILLE_MORCEAU": 200, "TAILLE_MIN": 300}, "ASSISTANT_TAILLE_MIN"),
+    ({"TAILLE_MIN": -1}, "ASSISTANT_TAILLE_MIN"),
+    ({"CHEVAUCHEMENT": -5}, "ASSISTANT_CHEVAUCHEMENT"),
+    ({"VOISINS": -1}, "ASSISTANT_VOISINS"),
+])
+def test_reglages_invalides_message_francais_nommant_la_variable(tmp_path, valeurs, variable):
+    with pytest.raises(ValueError) as exc:
+        reglages.charger(_env(tmp_path, **valeurs))
+    assert variable in str(exc.value)
+    assert "doit" in str(exc.value)
+
+
+def test_reglages_taille_min_trop_grande_message_exact(tmp_path):
+    with pytest.raises(ValueError) as exc:
+        reglages.charger(_env(tmp_path, TAILLE_MORCEAU=200, TAILLE_MIN=300))
+    assert str(exc.value) == ("ASSISTANT_TAILLE_MIN (300) doit être inférieur à "
+                              "ASSISTANT_TAILLE_MORCEAU (200).")
+
+
+def test_reglages_valeur_non_numerique_message_francais(tmp_path):
+    with pytest.raises(ValueError) as exc:
+        reglages.charger(_env(tmp_path, TAILLE_MORCEAU="abc"))
+    assert str(exc.value) == "ASSISTANT_TAILLE_MORCEAU doit être un nombre (valeur lue : « abc »)."
