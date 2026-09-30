@@ -14,8 +14,11 @@ def envelopper_embedder(embedder: Callable, dossier: Path, modele: str) -> Calla
     memoire: dict[str, list[float]] = {}
     if fichier.exists():
         for ligne in fichier.read_text(encoding="utf-8").splitlines():
-            entree = json.loads(ligne)
-            memoire[entree["cle"]] = entree["vecteur"]
+            try:
+                entree = json.loads(ligne)
+                memoire[entree["cle"]] = entree["vecteur"]
+            except (ValueError, KeyError, TypeError):
+                continue  # ligne abîmée (écriture interrompue) : on la recalculera
 
     def embedder_en_cache(textes: list[str], r) -> list[list[float]]:
         cles = [hashlib.sha256(t.encode("utf-8")).hexdigest() for t in textes]

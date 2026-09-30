@@ -76,3 +76,30 @@ def test_rapport_ecrit_tableau_et_detail(corpus, tmp_path):
     rapport = (dossier / "rapport.md").read_text(encoding="utf-8")
     assert "| actuel | txt |" in rapport and "100 %" in rapport
     assert (dossier / "detail.csv").read_text(encoding="utf-8-sig").splitlines()[0].startswith("jeu;format;id")
+
+
+def test_rapport_montre_erreurs_et_illisibles(tmp_path):
+    lignes = [{"id": str(i), "type": "simple", "applicable": True, "trouve": True, "rang": 1, "note": n,
+               "juste": None, "fidele": None, "refus_correct": None}
+              for i, n in enumerate(["ok", "erreur", "erreur", "illisible"])]
+    res = {"jeu": "j", "format": "txt", "lignes": lignes, "seuil_propose": None,
+           "morceaux": {"nombre": 1, "mediane": 1, "petits": 0}}
+    dossier = ecrire_rapport([res], tmp_path / "s")
+
+    rapport = (dossier / "rapport.md").read_text(encoding="utf-8").splitlines()
+    en_tete = [c.strip() for c in rapport[2].strip("|").split("|")]
+    ligne = [c.strip() for c in rapport[4].strip("|").split("|")]
+    assert ligne[en_tete.index("Erreurs")] == "2"
+    assert ligne[en_tete.index("Illisibles")] == "1"
+
+
+def test_banc_refuse_reponses_si_llm_desactive(tmp_path, monkeypatch, capsys):
+    from banc import banc
+    llm = tmp_path / "llm.env"
+    llm.write_text("LLM_ACTIF=false\n", encoding="utf-8")
+    monkeypatch.setattr(banc, "reglages_du_jeu", lambda nom, llm_env: Reglages(llm_actif=False))
+
+    code = banc.main(["--reglages", "actuel", "--reponses", "--llm-env", str(llm)])
+
+    assert code == 2
+    assert "Le LLM est désactivé" in capsys.readouterr().out

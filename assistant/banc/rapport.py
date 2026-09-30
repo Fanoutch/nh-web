@@ -19,8 +19,9 @@ def ecrire_rapport(resultats: list[dict], dossier: Path) -> Path:
     dossier.mkdir(parents=True, exist_ok=True)
     md = ["# Rapport du banc RAG", "",
           "| Jeu | Format | Questions | Trouvé (hors absentes) | Rang moyen | Absentes rejetées | "
-          "Seuil proposé | Morceaux | Taille médiane | Petits morceaux | Justes | Fidèles | Refus corrects |",
-          "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+          "Seuil proposé | Morceaux | Taille médiane | Petits morceaux | Justes | Fidèles | Refus corrects | "
+          "Erreurs | Illisibles |",
+          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for res in resultats:
         app = [l for l in res["lignes"] if l["applicable"]]
         utiles = [l for l in app if l["type"] != "absente"]
@@ -34,7 +35,8 @@ def ecrire_rapport(resultats: list[dict], dossier: Path) -> Path:
             f"{res['seuil_propose'] if res['seuil_propose'] is not None else '—'} | {m['nombre']} | {m['mediane']} | "
             f"{m['petits']} | {_pct([l['juste'] for l in notes if l['juste'] is not None])} | "
             f"{_pct([l['fidele'] for l in notes if l['fidele'] is not None])} | "
-            f"{_pct([l['refus_correct'] for l in notes if l['refus_correct'] is not None])} |")
+            f"{_pct([l['refus_correct'] for l in notes if l['refus_correct'] is not None])} | "
+            f"{sum(1 for l in app if l['note'] == 'erreur')} | {sum(1 for l in app if l['note'] == 'illisible')} |")
     md += ["", "## Trouvé par type de question", "",
            "| Jeu | Format | " + " | ".join(TYPES) + " |", "|---|---|" + "---|" * len(TYPES)]
     for res in resultats:

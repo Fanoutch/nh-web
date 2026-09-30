@@ -37,6 +37,10 @@ def main(argv: list[str] | None = None) -> int:
     resultats = []
     for jeu in jeux:
         r = reglages_du_jeu(jeu, args.llm_env)
+        if args.reponses and not r.llm_actif:
+            print("Le LLM est désactivé (LLM_ACTIF=false ou absent dans llm.env) : impossible de mesurer "
+                  "les réponses. Mettez LLM_ACTIF=true puis relancez.")
+            return 2
         modeles.embedder = envelopper_embedder(ORIGINE_EMBEDDER, DOSSIER / "resultats" / "cache", r.embed_modele)
         for format_ in [f.strip() for f in args.formats.split(",") if f.strip()]:
             print(f"… {jeu} / {format_}", flush=True)

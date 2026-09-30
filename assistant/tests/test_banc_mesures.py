@@ -74,3 +74,18 @@ def test_cache_n_appelle_le_modele_qu_une_fois(tmp_path):
     assert appels == [["a", "bb"], ["ccc"]]
     assert envelopper_embedder(faux, tmp_path, "bge-m3")(["a"], None) == [[1.0]]   # relu depuis le disque
     assert len(appels) == 2
+
+
+def test_cache_ignore_une_ligne_illisible(tmp_path):
+    appels = []
+    def emb(textes, r):
+        appels.append(textes)
+        return [[1.0] for _ in textes]
+    e1 = envelopper_embedder(emb, tmp_path, "m")
+    e1(["a"], None)
+    fichier = next(tmp_path.glob("vecteurs-*.jsonl"))
+    with fichier.open("a", encoding="utf-8") as f:
+        f.write('{"cle": "tronq\n')
+    e2 = envelopper_embedder(emb, tmp_path, "m")
+    assert e2(["a"], None) == [[1.0]]
+    assert len(appels) == 1
