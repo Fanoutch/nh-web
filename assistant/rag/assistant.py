@@ -63,9 +63,22 @@ class Assistant:
         self.base.supprimer_conversation(conversation_id)
 
     def _decouper(self, chemin: str, nom: str) -> list[dict]:
+        """Découpe le document selon les réglages (par page ou document entier)."""
         pages = lecteurs.lire(chemin)
-        docs = [{"source": nom, "page": p["page"], "text": p["texte"]} for p in pages]
-        morceaux = [{"texte": m["text"], "page": m["page"]} for m in chunk_documents(docs)]
+        if self.r.par_page:
+            docs = [{"source": nom, "page": p["page"], "text": p["texte"]} for p in pages]
+            reperes = None
+        else:
+            texte, reperes = _pages_bout_a_bout(pages)
+            docs = [{"source": nom, "page": reperes[0][1] if reperes else None, "text": texte}]
+        morceaux = [
+            {"texte": m["text"], "page": _page_a(reperes, m["debut"]) if reperes else m["page"]}
+            for m in chunk_documents(
+                docs, target_size=self.r.taille_morceau, min_size=self.r.taille_min,
+                max_size=self.r.taille_max, fusion_sections=self.r.fusion_sections,
+                chevauchement=self.r.chevauchement,
+            )
+        ]
         if not morceaux:
             raise lecteurs.LectureImpossible("Aucun texte trouvé dans ce document.")
         return morceaux
@@ -172,3 +185,23 @@ def _extraits(morceaux: list[dict]) -> str:
         page = f", page {m['page']}" if m["page"] is not None else ""
         blocs.append(f"--- Extrait {i} ({m['nom']}{page}) ---\n{m['texte']}")
     return "\n\n".join(blocs)
+
+
+def _pages_bout_a_bout(pages: list[dict]) -> tuple[str, list[tuple[int, int | None]]]:
+    """Met les pages bout à bout (séparées par une ligne vide) et note où commence chacune."""
+    morceaux, reperes, position = [], [], 0
+    for p in pages:
+        reperes.append((position, p["page"]))
+        morceaux.append(p["texte"])
+        position += len(p["texte"]) + 2
+    return "\n\n".join(morceaux), reperes
+
+
+def _page_a(reperes: list[tuple[int, int | None]], position: int) -> int | None:
+    """Numéro de la page qui contient `position` dans le texte mis bout à bout."""
+    page = reperes[0][1]
+    for debut, numero in reperes:
+        if debut > position:
+            break
+        page = numero
+    return page

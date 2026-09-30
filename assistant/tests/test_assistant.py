@@ -2,7 +2,7 @@ import pytest
 
 from rag import assistant as module
 from rag import modeles
-from rag.assistant import Assistant
+from rag.assistant import Assistant, _pages_bout_a_bout
 from rag.base import BaseVectorielle
 from rag.lecteurs import LectureImpossible
 from rag.reglages import Reglages
@@ -237,3 +237,35 @@ def test_sources_documents_du_secteur_toujours_dedoublonnes_par_page():
     sources = module._sources(morceaux)
 
     assert len(sources) == 1
+
+
+def test_pages_bout_a_bout_garde_la_page_de_chaque_position():
+    texte, reperes = _pages_bout_a_bout([{"page": 1, "texte": "Début de la règle"}, {"page": 2, "texte": "suite de la règle."}])
+
+    assert texte == "Début de la règle\n\nsuite de la règle."
+    assert reperes == [(0, 1), (19, 2)]
+
+
+def test_document_entier_ne_coupe_plus_au_saut_de_page(tmp_path, monkeypatch):
+    pages = [{"page": 1, "texte": "Avant toute dépose, l'opérateur doit"},
+             {"page": 2, "texte": "purger le circuit jusqu'à zéro."}]
+    monkeypatch.setattr(module.lecteurs, "lire", lambda chemin: pages)
+
+    par_page = Assistant(Reglages(), None)._decouper("x.pdf", "X")
+    entier = Assistant(Reglages(par_page=False), None)._decouper("x.pdf", "X")
+
+    assert len(par_page) == 2
+    assert len(entier) == 1
+    assert "doit\n\npurger" in entier[0]["texte"]
+    assert entier[0]["page"] == 1                                # page où le morceau commence
+
+
+def test_decouper_applique_taille_et_fusion(monkeypatch):
+    texte = "\n\n".join(f"{i}. TITRE {i}\nContenu court {i}." for i in range(1, 30))
+    monkeypatch.setattr(module.lecteurs, "lire", lambda chemin: [{"page": None, "texte": texte}])
+
+    defaut = Assistant(Reglages(), None)._decouper("x.txt", "X")
+    fusion = Assistant(Reglages(fusion_sections=True, taille_morceau=400, taille_min=100), None)._decouper("x.txt", "X")
+
+    assert len(fusion) < len(defaut)
+    assert all(len(m["texte"]) <= 750 for m in fusion)
