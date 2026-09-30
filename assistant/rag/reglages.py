@@ -53,6 +53,17 @@ class Reglages:
     seuil_distance: float = 1.0
     temperature: float = 0.3
     historique_tours: int = 3
+    taille_morceau: int = 800
+    taille_min: int = 200
+    fusion_sections: bool = False
+    par_page: bool = True
+    chevauchement: int = 0
+    voisins: int = 0
+
+    @property
+    def taille_max(self) -> int:
+        """Au-delà, un morceau est redécoupé (1500 pour 800, comme avant les réglages)."""
+        return int(self.taille_morceau * 1.875)
 
 
 _CLES = {  # variable -> (champ de Reglages, conversion)
@@ -77,6 +88,12 @@ _CLES = {  # variable -> (champ de Reglages, conversion)
     "ASSISTANT_SEUIL_DISTANCE": ("seuil_distance", float),
     "ASSISTANT_TEMPERATURE": ("temperature", float),
     "ASSISTANT_HISTORIQUE_TOURS": ("historique_tours", int),
+    "ASSISTANT_TAILLE_MORCEAU": ("taille_morceau", int),
+    "ASSISTANT_TAILLE_MIN": ("taille_min", int),
+    "ASSISTANT_FUSION_SECTIONS": ("fusion_sections", _booleen),
+    "ASSISTANT_PAR_PAGE": ("par_page", _booleen),
+    "ASSISTANT_CHEVAUCHEMENT": ("chevauchement", int),
+    "ASSISTANT_VOISINS": ("voisins", int),
 }
 
 

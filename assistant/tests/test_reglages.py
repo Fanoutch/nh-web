@@ -87,3 +87,28 @@ def test_reglages_tls_lus_dans_llm_env(tmp_path):
     assert r.ca_bundle == "/etc/pki/tls/certs/ca-bundle.crt"
     assert r.verif_tls is False
     assert reglages.charger({"ASSISTANT_REGLAGES": "aucun"}).verif_tls is True
+
+
+def test_reglages_decoupage_par_defaut_identiques_a_aujourd_hui():
+    r = reglages.charger({"ASSISTANT_REGLAGES": "aucun"})
+
+    assert (r.taille_morceau, r.taille_min, r.taille_max) == (800, 200, 1500)
+    assert r.fusion_sections is False
+    assert r.par_page is True
+    assert (r.chevauchement, r.voisins) == (0, 0)
+
+
+def test_reglages_decoupage_lus_dans_reglages_env(tmp_path):
+    fichier = tmp_path / "reglages.env"
+    fichier.write_text(
+        "ASSISTANT_TAILLE_MORCEAU=1200\nASSISTANT_TAILLE_MIN=300\nASSISTANT_FUSION_SECTIONS=oui\n"
+        "ASSISTANT_PAR_PAGE=non\nASSISTANT_CHEVAUCHEMENT=150\nASSISTANT_VOISINS=1\n",
+        encoding="utf-8",
+    )
+
+    r = reglages.charger({"ASSISTANT_REGLAGES": str(fichier), "LLM_ENV": str(tmp_path / "absent.env")})
+
+    assert (r.taille_morceau, r.taille_min, r.taille_max) == (1200, 300, 2250)
+    assert r.fusion_sections is True
+    assert r.par_page is False
+    assert (r.chevauchement, r.voisins) == (150, 1)
