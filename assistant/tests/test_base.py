@@ -176,3 +176,47 @@ def test_secteur_et_conversation_de_meme_nom_ne_se_melangent_pas(base):
 
     assert [m["nom"] for m in trouves_secteur] == ["secteur.pdf"]
     assert [m["nom"] for m in trouves_conversation] == ["conversation.pdf"]
+
+
+def _indexer_cinq(base):
+    morceaux = [{"texte": f"morceau {i}", "page": i} for i in range(5)]
+    base.ajouter_document("bmn", 7, "Manuel.pdf", morceaux, [[1.0, float(i), 0.0] for i in range(5)])
+
+
+def test_voisins_avant_et_apres_dans_l_ordre(base):
+    _indexer_cinq(base)
+    avant, apres = base.voisins("bmn", "doc7_m2", 1)
+
+    assert [m["id"] for m in avant] == ["doc7_m1"]
+    assert [m["id"] for m in apres] == ["doc7_m3"]
+    assert avant[0]["texte"] == "morceau 1" and avant[0]["distance"] is None
+
+
+def test_voisins_aux_extremites_sans_erreur(base):
+    _indexer_cinq(base)
+    assert base.voisins("bmn", "doc7_m0", 2)[0] == []
+    assert [m["id"] for m in base.voisins("bmn", "doc7_m4", 2)[1]] == []
+    assert [m["id"] for m in base.voisins("bmn", "doc7_m4", 2)[0]] == ["doc7_m2", "doc7_m3"]
+
+
+def test_voisins_zero_ou_identifiant_inconnu(base):
+    _indexer_cinq(base)
+    assert base.voisins("bmn", "doc7_m2", 0) == ([], [])
+    assert base.voisins("bmn", "n_importe_quoi", 1) == ([], [])
+    assert base.voisins("autre_secteur", "doc7_m2", 1) == ([], [])
+
+
+def test_voisins_conversation(base):
+    base.ajouter_piece_jointe(3, 5, "pj.pdf", [{"texte": f"pj {i}", "page": None} for i in range(3)],
+                              [[0.0, 1.0, float(i)] for i in range(3)])
+    avant, apres = base.voisins_conversation(3, "pj5_m1", 1)
+    assert [m["id"] for m in avant + apres] == ["pj5_m0", "pj5_m2"]
+    assert apres[0]["pj"] is True
+    assert base.voisins_conversation(99, "pj5_m1", 1) == ([], [])
+
+
+def test_get_chroma_ignore_les_identifiants_absents(base):
+    """Vérifie l'hypothèse de `_lire_ids` : `get` ne renvoie que les ids existants."""
+    _indexer_cinq(base)
+    trouves = base._collection("bmn").get(ids=["doc7_m4", "doc7_m9"], include=["documents", "metadatas"])
+    assert trouves["ids"] == ["doc7_m4"]

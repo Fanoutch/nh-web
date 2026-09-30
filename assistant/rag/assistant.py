@@ -92,8 +92,7 @@ class Assistant:
                 yield from _reponse_fixe(REPONSE_DESACTIVE)
                 return
             recherche = self._reformuler(question, historique) if historique else question
-            vecteur = modeles.embedder([recherche], self.r)[0]
-            trouves = self._rassembler(secteur, vecteur, documents_prioritaires, conversation)
+            trouves = self.passages(secteur, recherche, documents_prioritaires, conversation)
             if not trouves:
                 yield from _reponse_fixe(REPONSE_INTROUVABLE.format(secteur=nom_secteur))
                 return
@@ -134,6 +133,37 @@ class Assistant:
             vus.add(m["id"])
             fusion.append(m)
         return fusion[:self.r.top_k + self.r.top_k_dossier + self.r.top_k_pj]
+
+    def passages(self, secteur: str, question: str, documents_prioritaires: list[int] | None = None,
+                 conversation: int | None = None) -> list[dict]:
+        """Morceaux transmis au LLM pour cette question (utilisé aussi par le banc d'évaluation)."""
+        vecteur = modeles.embedder([question], self.r)[0]
+        return self._avec_voisins(secteur, self._rassembler(secteur, vecteur, documents_prioritaires, conversation),
+                                  conversation)
+
+    def _avec_voisins(self, secteur: str, trouves: list[dict], conversation: int | None) -> list[dict]:
+        """Ajoute autour de chaque morceau retenu ses voisins du même document, dans l'ordre du document.
+
+        `vus` contient dès le départ tous les morceaux retrouvés : l'un d'eux n'est jamais ajouté
+        une seconde fois comme voisin d'un autre, il reste à sa place."""
+        if self.r.voisins <= 0 or not trouves:
+            return trouves
+        vus, resultat = {m["id"] for m in trouves}, []
+        for m in trouves:
+            if m.get("pj"):
+                avant, apres = self.base.voisins_conversation(conversation, m["id"], self.r.voisins)
+            else:
+                avant, apres = self.base.voisins(secteur, m["id"], self.r.voisins)
+            for voisin in avant:
+                if voisin["id"] not in vus:
+                    vus.add(voisin["id"])
+                    resultat.append({**voisin, "distance": m["distance"]})
+            resultat.append(m)
+            for voisin in apres:
+                if voisin["id"] not in vus:
+                    vus.add(voisin["id"])
+                    resultat.append({**voisin, "distance": m["distance"]})
+        return resultat
 
     def _reformuler(self, question: str, historique: list[dict]) -> str:
         texte = "\n".join(

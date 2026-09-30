@@ -5,6 +5,7 @@ par un verrou ; les recherches se font en parallèle.
 """
 from __future__ import annotations
 
+import re
 import threading
 from pathlib import Path
 
@@ -111,6 +112,53 @@ class BaseVectorielle:
                 resultat["ids"][0], resultat["metadatas"][0], resultat["documents"][0], resultat["distances"][0]
             )
         ]
+
+    _ID_MORCEAU = re.compile(r"^(doc|pj)(\d+)_m(\d+)$")
+
+    def _ids_voisins(self, morceau_id: str, n: int) -> tuple[list[str], list[str]]:
+        """Identifiants des n morceaux avant / après : l'identifiant porte l'ordre (`doc7_m3`)."""
+        m = self._ID_MORCEAU.match(morceau_id)
+        if n <= 0 or m is None:
+            return [], []
+        prefixe, rang = f"{m.group(1)}{m.group(2)}_m", int(m.group(3))
+        avant = [f"{prefixe}{i}" for i in range(max(0, rang - n), rang)]
+        apres = [f"{prefixe}{i}" for i in range(rang + 1, rang + n + 1)]
+        return avant, apres
+
+    @staticmethod
+    def _lire_ids(collection, ids: list[str], pj: bool) -> list[dict]:
+        if collection is None or not ids:
+            return []
+        trouves = collection.get(ids=ids, include=["documents", "metadatas"])
+        par_id = {
+            id_: {
+                "id": id_,
+                "document_id": None if pj else meta["document_id"],
+                "nom": meta["nom"],
+                "page": None if meta["page"] == -1 else meta["page"],
+                "texte": texte,
+                "distance": None,
+                "pj": pj,
+            }
+            for id_, meta, texte in zip(trouves["ids"], trouves["metadatas"], trouves["documents"])
+        }
+        return [par_id[i] for i in ids if i in par_id]   # ordre du document, absents ignorés
+
+    def voisins(self, secteur: str, morceau_id: str, n: int) -> tuple[list[dict], list[dict]]:
+        """Morceaux (avant, après) voisins d'un morceau du secteur, dans l'ordre du document."""
+        avant, apres = self._ids_voisins(morceau_id, n)
+        if not avant and not apres:
+            return [], []
+        collection = self._collection(secteur)
+        return self._lire_ids(collection, avant, False), self._lire_ids(collection, apres, False)
+
+    def voisins_conversation(self, conversation_id: int, morceau_id: str, n: int) -> tuple[list[dict], list[dict]]:
+        """Idem `voisins`, pour une pièce jointe de conversation."""
+        avant, apres = self._ids_voisins(morceau_id, n)
+        if not avant and not apres:
+            return [], []
+        collection = self._collection_conversation(conversation_id, creer=False)
+        return self._lire_ids(collection, avant, True), self._lire_ids(collection, apres, True)
 
     def nb_morceaux(self, secteur: str, document_id: int) -> int:
         return len(self._collection(secteur).get(where={"document_id": document_id})["ids"])

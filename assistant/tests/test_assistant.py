@@ -269,3 +269,32 @@ def test_decouper_applique_taille_et_fusion(monkeypatch):
 
     assert len(fusion) < len(defaut)
     assert all(len(m["texte"]) <= 750 for m in fusion)
+
+
+def test_passages_sans_voisins_egal_a_la_recherche(assistant):
+    passages = assistant.passages("bmn", "vol de maintenance ?")
+    assert [p["id"] for p in passages] == ["doc1_m0"]
+
+
+def test_passages_avec_voisins_places_a_cote_sans_doublon(tmp_path, journal):
+    r = Reglages(llm_actif=True, top_k=2, seuil_distance=1.0, voisins=1)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    morceaux = [{"texte": t, "page": 1} for t in ["intro compost", "vol de maintenance", "suite compost", "fin"]]
+    a.base.ajouter_document("bmn", 4, "M.pdf", morceaux, [faux_vecteur(m["texte"]) for m in morceaux])
+
+    ids = [p["id"] for p in a.passages("bmn", "vol de maintenance ?")]
+
+    assert ids.index("doc4_m0") < ids.index("doc4_m1") < ids.index("doc4_m2")
+    assert len(ids) == len(set(ids))
+
+
+def test_repondre_envoie_les_voisins_au_llm(tmp_path, journal):
+    r = Reglages(llm_actif=True, top_k=1, seuil_distance=1.0, voisins=1)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    morceaux = [{"texte": t, "page": 1} for t in ["le chef BMN", "ordonne le vol de maintenance", "sous 72 heures"]]
+    a.base.ajouter_document("bmn", 4, "M.pdf", morceaux, [faux_vecteur(m["texte"]) for m in morceaux])
+
+    list(a.repondre("bmn", "BMN", "vol de maintenance ?", []))
+
+    envoye = journal["flux"][0]["messages"][-1]["content"]
+    assert "le chef BMN" in envoye and "sous 72 heures" in envoye
