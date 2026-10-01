@@ -8,6 +8,10 @@ A lancer sur le poste du bureau, depuis la racine du projet :
 Lit l'adresse, le modele et la cle dans llm.env. N'ecrit rien, n'installe rien,
 n'affiche jamais la cle. Bibliotheque standard uniquement.
 
+Le test va au bout de la boucle d'agent : on declare un outil, le modele demande
+a l'utiliser, on lui renvoie un resultat invente, et on verifie qu'il s'en sert
+pour repondre. C'est cette boucle complete qui conditionne la faisabilite.
+
 Trois resultats possibles :
   A. format standard  -> le serveur renvoie un champ tool_calls structure
   B. format texte     -> la decision arrive en texte brut, a decoder nous-memes
@@ -118,27 +122,70 @@ def main() -> None:
     print(json.dumps(message, ensure_ascii=False)[:300])
     print()
 
+    # Resultat invente, renvoye au modele comme si l'outil avait vraiment tourne.
+    RESULTAT_OUTIL = {"feuille": "Stock", "lignes": 128, "colonnes": ["Materiel", "Quantite", "Besoin"]}
+
     if appels:
         print("RESULTAT A : format standard.")
         print("Le serveur renvoie un champ tool_calls structure :")
         print(json.dumps(appels, ensure_ascii=False, indent=2)[:600])
-        print("\n=> Conception possible telle quelle : le modele choisit ses outils.")
-        return
-
-    motif = re.search(r"\[TOOL_CALLS\]\s*(\[.*\])", texte, re.S) or re.search(
-        r'\{\s*"name"\s*:\s*"lire_classeur".*\}', texte, re.S
-    )
-    if motif:
+        suite = [
+            {"role": "user", "content": QUESTION},
+            message,
+            {
+                "role": "tool",
+                "tool_call_id": appels[0].get("id", "appel-1"),
+                "name": "lire_classeur",
+                "content": json.dumps(RESULTAT_OUTIL, ensure_ascii=False),
+            },
+        ]
+        forme = "A"
+    else:
+        motif = re.search(r"\[TOOL_CALLS\]\s*(\[.*\])", texte, re.S) or re.search(
+            r'\{\s*"name"\s*:\s*"lire_classeur".*\}', texte, re.S
+        )
+        if not motif:
+            print("RESULTAT C : aucun appel d'outil.")
+            print("Le modele a repondu en texte, sans utiliser l'outil :")
+            print(texte[:400])
+            print("\n=> Les agents ne pourront pas choisir leurs outils : conception differente a prevoir.")
+            return
         print("RESULTAT B : format texte.")
         print("Le modele decide bien d'appeler l'outil, mais la decision arrive en texte brut :")
         print(texte[:400])
-        print("\n=> Utilisable, avec un decodage de ce format a ecrire de notre cote.")
-        return
+        suite = [
+            {"role": "user", "content": QUESTION},
+            {"role": "assistant", "content": texte},
+            {
+                "role": "user",
+                "content": "Resultat de l'outil lire_classeur : "
+                + json.dumps(RESULTAT_OUTIL, ensure_ascii=False)
+                + ". Reponds maintenant a la question en une phrase, en te servant de ce resultat.",
+            },
+        ]
+        forme = "B"
 
-    print("RESULTAT C : aucun appel d'outil.")
-    print("Le modele a repondu en texte, sans utiliser l'outil :")
-    print(texte[:400])
-    print("\n=> Les agents ne pourront pas choisir leurs outils : conception differente a prevoir.")
+    print("\n--- deuxieme tour : on renvoie un resultat d'outil invente ---")
+    print(f"Resultat fourni : {json.dumps(RESULTAT_OUTIL, ensure_ascii=False)}")
+
+    donnees2 = appeler(
+        f"{base}/chat/completions",
+        cle,
+        {"model": modele, "messages": suite, "tools": [OUTIL], "temperature": 0},
+    )
+    try:
+        finale = (donnees2["choices"][0]["message"].get("content") or "").strip()
+    except (KeyError, IndexError):
+        finale = ""
+
+    print(f"Reponse finale  : {finale[:300] or '(vide)'}")
+
+    if "128" in finale:
+        print(f"\n=> BOUCLE COMPLETE OK (forme {forme}). Le modele utilise le resultat de l'outil")
+        print("   pour repondre : un agent qui enchaine des outils est faisable.")
+    else:
+        print(f"\n=> Forme {forme} reconnue, mais le modele n'a pas repris la valeur de l'outil (128).")
+        print("   A examiner : la boucle marche peut-etre quand meme, le modele reformule.")
 
 
 if __name__ == "__main__":
