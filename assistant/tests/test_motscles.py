@@ -67,3 +67,13 @@ def test_rares():
     assert idx.rares("vol HYD-112") == {"hyd112", "hyd", "112"}
     assert idx.rares("vol") == set()
     assert IndexMotsCles().rares("vol") == set()
+
+
+def test_apostrophes_courbes_vs_droites():
+    """Apostrophes courbes et droites doivent être traitées identiquement."""
+    assert mots("l'échéance") == mots("l'échéance") == ["echeance"]
+
+
+def test_ligatures():
+    """Ligatures œ/æ doivent être converties en oe/ae."""
+    assert mots("Œil de bœuf") == ["oeil", "boeuf"]

@@ -21,6 +21,11 @@ _SEPARATEURS = re.compile(r"[-./]")
 
 
 def _ascii(texte: str) -> str:
+    # Remplacer les apostrophes courbes par un espace pour éviter de coller les mots
+    # (Word produit des U+2019, les questions tapées utilisent le U+0027 droit)
+    texte = texte.replace("'", " ").replace("'", " ").replace("´", " ").replace("ʼ", " ")
+    # Convertir les ligatures avant NFKD pour éviter qu'elles disparaissent
+    texte = texte.replace("œ", "oe").replace("Œ", "oe").replace("æ", "ae").replace("Æ", "ae")
     return unicodedata.normalize("NFKD", texte.lower()).encode("ascii", "ignore").decode()
 
 
