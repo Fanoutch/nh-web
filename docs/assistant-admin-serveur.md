@@ -160,13 +160,34 @@ Ce sont aussi les valeurs par défaut : un `reglages.env` sans ces lignes donne 
 La recherche par mots-clés s'ajoute à la recherche par le sens et retrouve les codes, sigles et références
 (ex. « VDC », « HYD-112 ») que la recherche par le sens rate parfois.
 
-- **Aucun document à redéposer** : l'index des mots-clés se reconstruit tout seul au démarrage du service
-  (`systemctl restart nh-assistant`). Un réglage modifié s'applique après ce redémarrage.
-- Les passages trouvés par mots-clés ne sont pas filtrés par le seuil de pertinence : même quand
-  l'information n'existe pas, quelques passages sont transmis au LLM, et c'est lui qui doit refuser de répondre.
-  À surveiller avec la colonne « Refus corrects » du banc (`assistant/banc/A-LIRE.md`).
+- **Aucun document à redéposer** : l'index des mots-clés n'est pas construit au démarrage du service mais
+  **à la première question posée dans chaque secteur** (et à la première question d'une conversation qui a
+  des pièces jointes). Cette première question est donc un peu plus lente ; les suivantes non. L'index est
+  ensuite tenu à jour à chaque dépôt ou suppression de document. Un réglage modifié s'applique après
+  `systemctl restart nh-assistant`.
+- **Mémoire** : l'index est gardé en mémoire par le service, environ **5 Mo pour 1 000 morceaux**
+  (un document de 50 pages donne de l'ordre de 100 à 200 morceaux).
+- Les passages trouvés par la recherche par le sens sont toujours tous gardés ; la recherche par
+  mots-clés en **ajoute** au plus `ASSISTANT_TOP_K_MOTS_CLES`, et seulement s'ils contiennent un mot rare
+  de la question (code, sigle). Quand la recherche par le sens n'a rien trouvé de pertinent, rien n'est
+  ajouté sauf si la question contient un code qui existe tel quel dans les documents (« HYD-112 ») :
+  un code voisin (« HYD-113 ») ne ramène rien.
+- Même ainsi, quelques passages peuvent être transmis au LLM alors que l'information n'existe pas :
+  c'est lui qui doit refuser de répondre. À surveiller avec la colonne « Refus corrects » du banc
+  (`assistant/banc/A-LIRE.md`), questions pièges P01 à P10 comprises.
 - **Pour désactiver** : mettre `ASSISTANT_MOTS_CLES=non` dans `assistant/reglages.env`, puis
   `systemctl restart nh-assistant` (retour exact au comportement précédent, sans redépôt).
+
+### Plafond du texte envoyé au LLM
+
+```
+ASSISTANT_PLAFOND_CARACTERES=10000
+```
+Valeur par défaut. Nombre maximal de caractères d'extraits envoyés au LLM pour une question
+(voisins compris). Le premier extrait est toujours envoyé ; les suivants seulement s'ils tiennent dans
+le plafond. `0` = sans plafond. À baisser si le LLM du bureau refuse des questions pour « texte trop long »
+(colonne « Erreurs » du banc), à monter si les réponses manquent d'informations présentes dans les
+documents. S'applique après `systemctl restart nh-assistant`, sans redépôt.
 
 ---
 

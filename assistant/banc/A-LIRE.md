@@ -24,7 +24,7 @@ Ne modifiez jamais le code sur place.
 
   Sans eux, ou avec un autre nom, les 17 questions qui les concernent sont « non applicables » et les
   pourcentages ne sont plus comparables. Regardez la colonne « Questions » de `rapport.md` : elle doit
-  indiquer **57** en pdf avec les 3 vrais PDF (40 sans eux). Si vous lisez un autre nombre, vérifiez les noms.
+  indiquer **67** en pdf avec les 3 vrais PDF (50 sans eux). Si vous lisez un autre nombre, vérifiez les noms.
 
 ## Lancer la vérification
 
@@ -50,7 +50,22 @@ Chaque lancement écrit un dossier `banc/resultats/<date>_<heure>/` avec `rappor
   texte trop long pour le LLM). Doit rester à 0 ; si Erreurs > 0, renvoyer `rapport.md`.
 - **Illisibles** : nombre de réponses que le juge automatique n'a pas su noter (à 0 en principe).
 - **Refus corrects** : pour les questions dont la réponse n'est pas dans les documents,
-  l'assistant dit bien qu'il ne sait pas (doit rester 100 %).
+  l'assistant dit bien qu'il ne sait pas (doit rester 100 %, **y compris sur les questions pièges
+  P01 à P10**, voir plus bas).
+- **Passages envoyés (moy / max)** : nombre d'extraits transmis au LLM par question, en moyenne et au
+  plus (voisins compris).
+- **Caractères envoyés (moy / max)** : volume de texte transmis au LLM par question. Le maximum ne
+  dépasse pas `ASSISTANT_PLAFOND_CARACTERES` (10 000 par défaut), sauf si le premier extrait à lui seul
+  est plus long. Un volume qui grimpe = réponses plus lentes et plus chères.
+
+### Les questions pièges (P01 à P10)
+
+Ce sont des questions **sans réponse dans les documents** mais très proches de ce qu'ils contiennent :
+un code voisin d'un code existant (« HYD-113 » alors que seul HYD-112 existe, « PC-HYD-08 » au lieu de
+PC-HYD-07), une visite ou un circuit qui n'existe pas (V5, circuit 3), un document électrique alors que
+seuls les documents hydrauliques sont décrits, etc. Elles vérifient que la recherche par mots-clés ne
+fait pas répondre l'assistant à côté : pour chacune, la bonne réponse est le refus. Le détail par
+question est dans `detail.csv` (colonne `refus_correct`).
 
 ## Chiffres de référence (mesurés ici, réglages `retenu-motscles-k8`)
 
