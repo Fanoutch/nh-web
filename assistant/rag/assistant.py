@@ -63,9 +63,22 @@ class Assistant:
         self.base.supprimer_conversation(conversation_id)
 
     def _decouper(self, chemin: str, nom: str) -> list[dict]:
+        """Découpe le document selon les réglages (par page ou document entier)."""
         pages = lecteurs.lire(chemin)
-        docs = [{"source": nom, "page": p["page"], "text": p["texte"]} for p in pages]
-        morceaux = [{"texte": m["text"], "page": m["page"]} for m in chunk_documents(docs)]
+        if self.r.par_page:
+            docs = [{"source": nom, "page": p["page"], "text": p["texte"]} for p in pages]
+            reperes = None
+        else:
+            texte, reperes = _pages_bout_a_bout(pages)
+            docs = [{"source": nom, "page": reperes[0][1] if reperes else None, "text": texte}]
+        morceaux = [
+            {"texte": m["text"], "page": _page_a(reperes, m["debut"]) if reperes else m["page"]}
+            for m in chunk_documents(
+                docs, target_size=self.r.taille_morceau, min_size=self.r.taille_min,
+                max_size=self.r.taille_max, fusion_sections=self.r.fusion_sections,
+                chevauchement=self.r.chevauchement,
+            )
+        ]
         if not morceaux:
             raise lecteurs.LectureImpossible("Aucun texte trouvé dans ce document.")
         return morceaux
@@ -79,12 +92,11 @@ class Assistant:
                 yield from _reponse_fixe(REPONSE_DESACTIVE)
                 return
             recherche = self._reformuler(question, historique) if historique else question
-            vecteur = modeles.embedder([recherche], self.r)[0]
-            trouves = self._rassembler(secteur, vecteur, documents_prioritaires, conversation)
+            trouves = self.passages(secteur, recherche, documents_prioritaires, conversation)
             if not trouves:
                 yield from _reponse_fixe(REPONSE_INTROUVABLE.format(secteur=nom_secteur))
                 return
-            yield {"type": "sources", "sources": _sources(trouves)}
+            yield {"type": "sources", "sources": _sources([m for m in trouves if not m.get("voisin")])}
             messages = [
                 {"role": "system", "content": PROMPT_SYSTEME.format(secteur=nom_secteur)},
                 *historique,
@@ -121,6 +133,37 @@ class Assistant:
             vus.add(m["id"])
             fusion.append(m)
         return fusion[:self.r.top_k + self.r.top_k_dossier + self.r.top_k_pj]
+
+    def passages(self, secteur: str, question: str, documents_prioritaires: list[int] | None = None,
+                 conversation: int | None = None) -> list[dict]:
+        """Morceaux transmis au LLM pour cette question (utilisé aussi par le banc d'évaluation)."""
+        vecteur = modeles.embedder([question], self.r)[0]
+        return self._avec_voisins(secteur, self._rassembler(secteur, vecteur, documents_prioritaires, conversation),
+                                  conversation)
+
+    def _avec_voisins(self, secteur: str, trouves: list[dict], conversation: int | None) -> list[dict]:
+        """Ajoute autour de chaque morceau retenu ses voisins du même document, dans l'ordre du document.
+
+        `vus` contient dès le départ tous les morceaux retrouvés : l'un d'eux n'est jamais ajouté
+        une seconde fois comme voisin d'un autre, il reste à sa place."""
+        if self.r.voisins <= 0 or not trouves:
+            return trouves
+        vus, resultat = {m["id"] for m in trouves}, []
+        for m in trouves:
+            if m.get("pj"):
+                avant, apres = self.base.voisins_conversation(conversation, m["id"], self.r.voisins)
+            else:
+                avant, apres = self.base.voisins(secteur, m["id"], self.r.voisins)
+            for voisin in avant:
+                if voisin["id"] not in vus:
+                    vus.add(voisin["id"])
+                    resultat.append({**voisin, "voisin": True, "distance": m["distance"]})
+            resultat.append(m)
+            for voisin in apres:
+                if voisin["id"] not in vus:
+                    vus.add(voisin["id"])
+                    resultat.append({**voisin, "voisin": True, "distance": m["distance"]})
+        return resultat
 
     def _reformuler(self, question: str, historique: list[dict]) -> str:
         texte = "\n".join(
@@ -172,3 +215,23 @@ def _extraits(morceaux: list[dict]) -> str:
         page = f", page {m['page']}" if m["page"] is not None else ""
         blocs.append(f"--- Extrait {i} ({m['nom']}{page}) ---\n{m['texte']}")
     return "\n\n".join(blocs)
+
+
+def _pages_bout_a_bout(pages: list[dict]) -> tuple[str, list[tuple[int, int | None]]]:
+    """Met les pages bout à bout (séparées par une ligne vide) et note où commence chacune."""
+    morceaux, reperes, position = [], [], 0
+    for p in pages:
+        reperes.append((position, p["page"]))
+        morceaux.append(p["texte"])
+        position += len(p["texte"]) + 2
+    return "\n\n".join(morceaux), reperes
+
+
+def _page_a(reperes: list[tuple[int, int | None]], position: int) -> int | None:
+    """Numéro de la page qui contient `position` dans le texte mis bout à bout."""
+    page = reperes[0][1]
+    for debut, numero in reperes:
+        if debut > position:
+            break
+        page = numero
+    return page

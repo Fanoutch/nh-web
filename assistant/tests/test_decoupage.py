@@ -271,3 +271,76 @@ def test_position_for_short_doc_is_debut():
     docs = [{"source": "a.txt", "page": None, "text": "tiny"}]
     chunks = chunk_documents(docs)
     assert chunks[0]["position"] == "début"
+
+
+import json
+from pathlib import Path
+
+import pytest
+
+from rag.lecteurs import lire
+from tests.donnees.textes_reference import SECTIONS, TEXTES
+
+REFERENCE = json.loads((Path(__file__).parent / "donnees" / "decoupage_reference.json").read_text(encoding="utf-8"))
+DOSSIER_PDF = Path(__file__).resolve().parents[2] / "storage/app/private/assistant/documents/bmn"
+
+
+@pytest.mark.parametrize("nom", sorted(TEXTES))
+def test_defauts_identiques_a_la_reference_textes(nom):
+    morceaux = chunk_documents([{"source": nom, "page": 1, "text": TEXTES[nom]}])
+    assert [m["hash"] for m in morceaux] == REFERENCE["textes"][nom]
+
+
+def test_defauts_identiques_a_la_reference_vrais_pdf():
+    pdfs = sorted(DOSSIER_PDF.glob("*.pdf"))
+    if not pdfs:
+        pytest.skip("vrais PDF absents de ce poste")
+    for pdf in pdfs:
+        docs = [{"source": pdf.name, "page": p["page"], "text": p["texte"]} for p in lire(pdf)]
+        assert [m["hash"] for m in chunk_documents(docs)] == REFERENCE["pdf"][pdf.name.split("_", 1)[1]]
+
+
+def test_debut_indique_la_position_du_morceau():
+    texte = TEXTES["paragraphes"]
+    for m in chunk_documents([{"source": "p", "page": 1, "text": texte}]):
+        assert texte[m["debut"]:].lstrip().startswith(m["text"][:40])
+
+
+def test_fusion_sections_supprime_les_petits_morceaux():
+    doc = {"source": "s", "page": 1, "text": SECTIONS}
+    sans = chunk_documents([doc])
+    avec = chunk_documents([doc], fusion_sections=True)
+
+    assert sum(len(m["text"]) < 200 for m in sans) >= 4
+    assert all(len(m["text"]) >= 200 for m in avec[:-1])       # seul le dernier peut rester petit
+    assert len(avec) < len(sans)
+    assert "1.1. Domaine" in " ".join(m["text"] for m in avec)  # les titres restent dans le texte
+
+
+def test_fusion_ne_depasse_jamais_la_taille_max():
+    doc = {"source": "s", "page": 1, "text": SECTIONS}
+    assert all(len(m["text"]) <= 1500 for m in chunk_documents([doc], fusion_sections=True))
+
+
+def test_chevauchement_reprend_la_fin_du_morceau_precedent():
+    doc = {"source": "p", "page": 1, "text": TEXTES["paragraphes"]}
+    morceaux = chunk_documents([doc], chevauchement=150)
+
+    assert len(morceaux) > 3
+    for precedent, suivant in zip(morceaux, morceaux[1:]):
+        p = precedent["text"]
+        # plus longue fin du précédent (≤ 150 car.) par laquelle commence le suivant
+        k = next((k for k in range(min(150, len(p)), 0, -1) if suivant["text"].startswith(p[-k:])), 0)
+        assert k > 0
+        assert suivant["text"][0].isupper()                      # coupé sur un début de phrase
+
+
+def test_chevauchement_nul_ne_change_rien():
+    doc = {"source": "p", "page": 1, "text": TEXTES["paragraphes"]}
+    assert [m["hash"] for m in chunk_documents([doc], chevauchement=0)] == REFERENCE["textes"]["paragraphes"]
+
+
+def test_chevauchement_plus_grand_que_le_morceau_precedent():
+    doc = {"source": "p", "page": 1, "text": "Première phrase courte.\n\n" + "Suite du texte. " * 80}
+    morceaux = chunk_documents([doc], chevauchement=5000)
+    assert all(m["text"] for m in morceaux)

@@ -120,6 +120,33 @@ php artisan queue:restart
 Les caches doivent être reconstruits **après** la création de `assistant/reglages.env` (Laravel y lit
 le jeton du service).
 
+### Découpage des documents
+
+Six réglages de `assistant/reglages.env` fixent la façon dont un document est découpé en morceaux.
+Valeurs retenues (mesurées avec le banc de `assistant/banc/`) :
+
+```
+ASSISTANT_FUSION_SECTIONS=oui
+ASSISTANT_PAR_PAGE=non
+ASSISTANT_CHEVAUCHEMENT=150
+ASSISTANT_VOISINS=1
+ASSISTANT_TAILLE_MORCEAU=600
+ASSISTANT_TAILLE_MIN=150
+```
+Ce sont aussi les valeurs par défaut : un `reglages.env` sans ces lignes donne le même résultat.
+Sur un serveur déjà installé, ajouter ces six lignes au `reglages.env` existant (le fichier ne se remplace
+pas), puis `systemctl restart nh-assistant`.
+
+- **Passer à cette version** change le découpage par défaut, même sans toucher à `reglages.env` : les
+  documents déjà indexés gardent l'ancien découpage (page par page, sans chevauchement). Il faut donc
+  **redéposer tous les documents déjà indexés** pour profiter du nouveau. Avec d'anciens morceaux, les
+  voisins fonctionnent mais agrandissent les extraits envoyés au LLM. Il n'existe pas d'outil de
+  réindexation en masse (besoin à prévoir plus tard) : le redépôt se fait document par document.
+- `FUSION_SECTIONS`, `PAR_PAGE`, `CHEVAUCHEMENT`, `TAILLE_MORCEAU`, `TAILLE_MIN` ne s'appliquent qu'aux
+  documents déposés **ensuite** : après un changement, **redéposer** les documents déjà indexés.
+- `VOISINS` s'applique **tout de suite**, sans redépôt (simple redémarrage du service).
+- Mode d'emploi du banc de vérification : `assistant/banc/A-LIRE.md`.
+
 ---
 
 ## Vérification finale

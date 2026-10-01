@@ -1,0 +1,4 @@
+# Rapports et cache des vecteurs : propres à chaque poste
+resultats/
+# Vrais documents du bureau : jamais dans git (copiés à la main, voir A-LIRE)
+corpus/pdf/reel-*.pdf

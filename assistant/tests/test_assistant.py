@@ -2,7 +2,7 @@ import pytest
 
 from rag import assistant as module
 from rag import modeles
-from rag.assistant import Assistant
+from rag.assistant import Assistant, _page_a, _pages_bout_a_bout
 from rag.base import BaseVectorielle
 from rag.lecteurs import LectureImpossible
 from rag.reglages import Reglages
@@ -237,3 +237,89 @@ def test_sources_documents_du_secteur_toujours_dedoublonnes_par_page():
     sources = module._sources(morceaux)
 
     assert len(sources) == 1
+
+
+def test_pages_bout_a_bout_garde_la_page_de_chaque_position():
+    texte, reperes = _pages_bout_a_bout([{"page": 1, "texte": "Début de la règle"}, {"page": 2, "texte": "suite de la règle."}])
+
+    assert texte == "Début de la règle\n\nsuite de la règle."
+    assert reperes == [(0, 1), (19, 2)]
+
+
+def test_document_entier_ne_coupe_plus_au_saut_de_page(tmp_path, monkeypatch):
+    pages = [{"page": 1, "texte": "Avant toute dépose, l'opérateur doit"},
+             {"page": 2, "texte": "purger le circuit jusqu'à zéro."}]
+    monkeypatch.setattr(module.lecteurs, "lire", lambda chemin: pages)
+
+    par_page = Assistant(Reglages(par_page=True), None)._decouper("x.pdf", "X")
+    entier = Assistant(Reglages(par_page=False), None)._decouper("x.pdf", "X")
+
+    assert len(par_page) == 2
+    assert len(entier) == 1
+    assert "doit\n\npurger" in entier[0]["texte"]
+    assert entier[0]["page"] == 1                                # page où le morceau commence
+
+
+def test_decouper_applique_taille_et_fusion(monkeypatch):
+    texte = "\n\n".join(f"{i}. TITRE {i}\nContenu court {i}." for i in range(1, 30))
+    monkeypatch.setattr(module.lecteurs, "lire", lambda chemin: [{"page": None, "texte": texte}])
+
+    defaut = Assistant(Reglages(fusion_sections=False, taille_morceau=800, taille_min=200, chevauchement=0), None)._decouper("x.txt", "X")
+    fusion = Assistant(Reglages(fusion_sections=True, taille_morceau=400, taille_min=100), None)._decouper("x.txt", "X")
+
+    assert len(fusion) < len(defaut)
+    assert all(len(m["texte"]) <= 750 for m in fusion)
+
+
+def test_passages_sans_voisins_egal_a_la_recherche(assistant):
+    assistant.r = Reglages(**{**assistant.r.__dict__, "voisins": 0})
+    passages = assistant.passages("bmn", "vol de maintenance ?")
+    assert [p["id"] for p in passages] == ["doc1_m0"]
+
+
+def test_passages_avec_voisins_places_a_cote_sans_doublon(tmp_path, journal):
+    r = Reglages(llm_actif=True, top_k=2, seuil_distance=1.0, voisins=1)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    morceaux = [{"texte": t, "page": 1} for t in ["intro compost", "vol de maintenance", "suite compost", "fin"]]
+    a.base.ajouter_document("bmn", 4, "M.pdf", morceaux, [faux_vecteur(m["texte"]) for m in morceaux])
+
+    ids = [p["id"] for p in a.passages("bmn", "vol de maintenance ?")]
+
+    assert ids.index("doc4_m0") < ids.index("doc4_m1") < ids.index("doc4_m2")
+    assert len(ids) == len(set(ids))
+
+
+def test_repondre_envoie_les_voisins_au_llm(tmp_path, journal):
+    r = Reglages(llm_actif=True, top_k=1, seuil_distance=1.0, voisins=1)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    morceaux = [{"texte": t, "page": 1} for t in ["le chef BMN", "ordonne le vol de maintenance", "sous 72 heures"]]
+    a.base.ajouter_document("bmn", 4, "M.pdf", morceaux, [faux_vecteur(m["texte"]) for m in morceaux])
+
+    list(a.repondre("bmn", "BMN", "vol de maintenance ?", []))
+
+    envoye = journal["flux"][0]["messages"][-1]["content"]
+    assert "le chef BMN" in envoye and "sous 72 heures" in envoye
+
+
+def test_sources_ne_montrent_que_les_passages_trouves_pas_les_voisins(tmp_path, journal):
+    r = Reglages(llm_actif=True, top_k=1, seuil_distance=1.0, voisins=1)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    morceaux = [{"texte": "texte sans rapport", "page": 3},
+                {"texte": "ordonne le vol de maintenance", "page": 3},
+                {"texte": "autre page sans rapport", "page": 4}]
+    a.base.ajouter_document("bmn", 4, "M.pdf", morceaux, [faux_vecteur(m["texte"]) for m in morceaux])
+
+    evenements = list(a.repondre("bmn", "BMN", "vol de maintenance ?", []))
+
+    sources = next(e for e in evenements if e["type"] == "sources")["sources"]
+    assert len(sources) == 1
+    assert sources[0]["page"] == 3 and sources[0]["extrait"] == "ordonne le vol de maintenance"
+    envoye = journal["flux"][0]["messages"][-1]["content"]
+    assert "texte sans rapport" in envoye and "autre page sans rapport" in envoye
+
+
+def test_page_a_morceau_commencant_apres_la_page_1():
+    reperes = [(0, 1), (100, 2), (200, 3)]
+    assert _page_a(reperes, 0) == 1
+    assert _page_a(reperes, 150) == 2
+    assert _page_a(reperes, 250) == 3

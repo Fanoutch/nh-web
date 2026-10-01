@@ -1,0 +1,145 @@
+DOCUMENT FICTIF — BANC DE TEST
+
+1. OBJET
+
+Le présent manuel décrit les opérations d'entretien courant du circuit hydraulique principal d'un hélicoptère de la flotte fictive utilisée pour ce banc d'essai. Il rassemble les consignes que le personnel de la base de maintenance applique lors des visites programmées, des contrôles de niveau et des interventions sur les organes du circuit. Il ne remplace pas la documentation constructeur, qui reste la référence en cas de doute sur une opération.
+
+Chaque section est rédigée pour être lue seule : le lecteur qui cherche une consigne précise doit pouvoir la retrouver sans parcourir l'ensemble du document. Les renvois à d'autres sections sont donc volontairement rares.
+
+Le manuel est révisé par le bureau technique lorsque la documentation constructeur évolue ou lorsqu'un retour d'expérience de la base le justifie. Chaque révision est diffusée avec une page de garde qui résume ce qui change, afin que personne n'ait à relire l'ensemble pour repérer une modification.
+
+1.1. Domaine d'application
+
+Ce manuel s'applique à tous les aéronefs suivis par le bureau technique de la base, quelle que soit leur affectation du moment. Il concerne les pompes, le réservoir, les filtres, les servocommandes et l'accumulateur du circuit hydraulique, ainsi que les canalisations qui les relient entre eux.
+
+Les opérations sur les équipements électriques associés au circuit font l'objet de documents distincts. Lorsqu'une intervention touche à la fois l'hydraulique et l'électricité, le chef d'équipe désigne le document qui fait foi pour chaque étape.
+
+1.2. Abréviations
+
+Les abréviations suivantes sont employées dans tout le document et dans les imprimés de la base.
+
+CRH : compte rendu hydraulique.
+
+BTH : bon de travaux hydraulique.
+
+Les autres sigles courants de la base, comme ceux des grades ou des secteurs, sont supposés connus du lecteur et ne sont pas repris ici. Toute abréviation nouvelle introduite dans une révision du manuel est définie à cet endroit.
+
+Les termes techniques employés dans le manuel suivent le vocabulaire habituel de la maintenance aéronautique. Quand deux mots existent pour désigner le même organe, le manuel retient celui qui figure sur les plaques et sur les imprimés de la base.
+
+2. RESPONSABILITÉS
+
+La bonne tenue du circuit hydraulique repose sur une répartition claire des rôles. Chaque intervenant connaît ce qu'on attend de lui et ce qu'il ne doit jamais faire seul. Cette section rappelle les trois fonctions qui interviennent le plus souvent sur un chantier hydraulique et la limite de responsabilité de chacune.
+
+Aucune fonction ne peut se substituer à une autre pour la signature des documents.
+
+Les intervenants suivent une formation initiale puis un rappel régulier sur les règles propres au circuit hydraulique. Cette formation est consignée dans le livret individuel de chacun, et le chef d'équipe vérifie qu'elle est à jour avant de lui confier un chantier. En cas d'absence, la suppléance est organisée par le chef d'équipe et consignée dans le cahier de chantier.
+
+2.1. Chef d'équipe
+
+Le chef d'équipe organise le chantier, répartit les tâches entre les techniciens et veille à la disponibilité de l'outillage et des consommables. Il s'assure que les consignes de sécurité sont comprises avant le début de chaque opération.
+
+Il rend compte au chef de la section de l'avancement des travaux et signale sans délai toute anomalie qui pourrait retarder la remise en service de l'aéronef. Il tient à jour le cahier de chantier et en garantit la lisibilité.
+
+Enfin, il accueille les nouveaux arrivants dans l'équipe, leur présente l'outillage et leur indique les consignes particulières de la base. Un technicien récemment arrivé travaille d'abord en binôme avec un collègue expérimenté.
+
+2.2. Technicien
+
+Le technicien exécute les opérations décrites par le bon de travaux, dans l'ordre prévu, avec l'outillage contrôlé mis à sa disposition. Il consigne ce qu'il a fait au fur et à mesure et signale tout écart entre la réalité de l'aéronef et la description du manuel.
+
+Il ne poursuit jamais une opération dont il doute. Il demande d'abord l'avis du chef d'équipe, qui tranche ou remonte la question au bureau technique. Le technicien garde son poste de travail propre, car une contamination du circuit par des impuretés est la première cause d'usure prématurée des organes.
+
+2.3. Contrôleur
+
+Le contrôleur intervient de manière indépendante, après la fin des opérations, pour constater que le travail est conforme à la description et que l'aéronef peut être remis au service. Il ne participe pas à l'exécution des tâches qu'il contrôle.
+
+Il dispose pour cela d'une liste de points de vérification qu'il parcourt dans l'ordre. Il peut demander le démontage d'un capot pour examiner une zone qui lui paraît douteuse, et le chef d'équipe ne peut pas s'y opposer.
+
+Le contrôleur signe le BTH après vérification de l'étanchéité. Il refuse sa signature si un suintement, même léger, subsiste sur un raccord ou sur un organe qui vient d'être manipulé, et renvoie le dossier au chef d'équipe avec la mention des points à reprendre.
+
+3. VISITES PÉRIODIQUES
+
+Les visites périodiques maintiennent le circuit hydraulique dans un état connu. Elles sont déclenchées par le potentiel écoulé de l'aéronef et non par la date du calendrier, sauf pour la visite annuelle traitée dans un autre document. Chaque visite s'ajoute aux précédentes : les opérations d'une visite de niveau supérieur comprennent celles des niveaux inférieurs.
+
+Avant chaque visite, le chef d'équipe consulte le dossier de l'aéronef pour connaître les défauts en suspens et les consignes de surveillance particulières. Il prépare l'outillage et les consommables nécessaires, afin que l'immobilisation de l'aéronef reste la plus courte possible.
+
+Le déroulement détaillé de chaque visite figure dans les sous-sections qui suivent, dans l'ordre croissant de leur ampleur.
+
+3.1. Visite V1
+
+La visite V1 est réalisée toutes les 25 heures de vol. Elle consiste surtout en un examen visuel du circuit : recherche de traces de fuite, état des flexibles et des raccords, propreté des connecteurs et fixation des canalisations. Elle comprend aussi le contrôle du niveau du réservoir.
+
+Elle ne demande ni dépose d'organe ni outillage particulier. Le technicien qui la réalise note ses constatations sur le bon de travaux, même lorsqu'elles sont sans gravité, pour que le bureau technique puisse suivre l'évolution d'un défaut mineur.
+
+Un éclairage suffisant est indispensable : le technicien utilise une lampe baladeuse et un miroir pour examiner les zones difficiles d'accès, notamment sous le plancher et autour des pompes.
+
+3.2. Visite V2
+
+La visite V2 reprend toutes les opérations de la visite V1 et les complète par un contrôle approfondi des organes du circuit. Le technicien vérifie le serrage des fixations des pompes, l'état des servocommandes et le jeu de leurs articulations, puis examine les filtres à la recherche de particules métalliques. Les résultats sont reportés sur le compte rendu de la visite. La visite V2 est réalisée toutes les 50 heures de vol.
+
+3.3. Report de la visite V2
+
+Ce report ne peut excéder 5 heures de vol et doit être validé par le chef BMN. Il reste une mesure exceptionnelle, réservée aux cas où l'aéronef est engagé dans une mission qu'il est impossible d'interrompre.
+
+La demande de report est écrite et indique le motif, la durée souhaitée et les opérations de surveillance renforcée proposées pendant cette durée. Le report accordé est inscrit au dossier de l'aéronef, et la visite suivante reste calculée à partir de la date initiale et non de celle du report.
+
+3.4. Visite V3
+
+La visite V3 comprend le remplacement systématique des filtres HP et BP. Elle inclut également toutes les opérations des visites précédentes, ainsi qu'une inspection détaillée des canalisations rigides et des supports, pour déceler toute trace de frottement ou de fatigue.
+
+Les filtres déposés sont examinés avant d'être mis au rebut : l'aspect et la quantité des dépôts renseignent sur l'état interne du circuit. Le technicien joint ses observations au dossier, accompagnées si besoin d'une photographie.
+
+4. PRESSIONS ET NIVEAUX
+
+Le bon fonctionnement du circuit dépend de deux grandeurs que l'on surveille régulièrement : le niveau de fluide dans le réservoir et les pressions dans le circuit. Un écart sur l'une de ces grandeurs est souvent le premier signe d'une fuite ou d'une usure. Les contrôles se font aéronef au sol, sur une surface plane, avec les instruments dont l'étalonnage est à jour.
+
+4.1. Niveau du réservoir
+
+Le niveau du réservoir se contrôle rotor arrêté, au moins 15 minutes après l'arrêt. Ce délai laisse au fluide le temps de redescendre dans le réservoir et évite une lecture faussée par la présence de fluide encore en circulation ou de bulles d'air.
+
+Le niveau se lit sur le voyant prévu à cet effet, entre les deux repères gravés. Un niveau proche du repère bas n'est pas anormal en soi, mais il doit être noté et comparé aux relevés précédents. Toute baisse rapide entre deux contrôles déclenche une recherche de fuite.
+
+Avant la lecture, le technicien essuie le voyant s'il est encrassé, car un dépôt peut donner une fausse impression de niveau. Il contrôle aussi que l'aéronef repose bien à l'horizontale, une pente marquée modifiant l'aspect du niveau.
+
+4.2. Pression de service
+
+La pression de service du circuit 1 est de 20 700 kPa. On la relève sur le manomètre de contrôle avec le circuit en fonctionnement normal, après une courte période de stabilisation.
+
+Une pression instable ou qui oscille sans raison apparente est le signe d'une présence d'air ou d'une pompe fatiguée. Le technicien ne tente pas de corriger lui-même le réglage : il note la valeur observée et informe le chef d'équipe, qui décide de la suite à donner selon la consigne en vigueur.
+
+4.3. Pression de gonflage de l'accumulateur
+
+La pression de gonflage à froid est de 1 450 kPa, tolérance plus ou moins 50 kPa.
+
+5. DÉPOSE DE L'ACCUMULATEUR
+
+L'accumulateur stocke de l'énergie sous pression : c'est l'organe le plus dangereux du circuit à manipuler. Sa dépose ne s'improvise pas et n'est confiée qu'à un technicien habilité, en présence du chef d'équipe. Les sous-sections qui suivent donnent les précautions, la dépose proprement dite, puis la repose et les essais.
+
+5.1. Précautions
+
+Avant toute dépose de l'accumulateur, l'opérateur doit purger le circuit jusqu'à ce que le manomètre indique zéro et poser la plaque de consignation référence PC-HYD-07.
+
+Le technicien porte des lunettes de protection et des gants adaptés. Il s'assure qu'aucune autre intervention n'est en cours sur les commandes de l'aéronef et que l'aire de travail est dégagée. Le fluide récupéré est placé dans le bac prévu, jamais dans un récipient de fortune.
+
+5.2. Dépose
+
+La dépose commence par le débranchement des canalisations, en commençant par celle qui est la plus éloignée du point de fixation. Chaque orifice ouvert est immédiatement obturé par un bouchon propre afin d'empêcher l'entrée de poussière.
+
+L'accumulateur est ensuite soutenu à la main pendant le desserrage des fixations, puis déposé sur un support garni de matière souple. Le technicien contrôle l'état des portées et des joints avant toute repose et note les éventuelles traces d'usure dans le compte rendu de chantier.
+
+Un accumulateur déposé est stocké à l'abri des chocs, orifices bouchonnés, avec une étiquette indiquant son aéronef d'origine et la date de dépose. Il n'est jamais posé directement sur le sol de l'atelier.
+
+5.3. Repose et essais
+
+La repose s'effectue dans l'ordre inverse de la dépose, avec des joints neufs à chaque raccord. Le serrage des fixations suit les valeurs du document constructeur, qui reste la seule référence en la matière.
+
+Après repose, un essai de fonctionnement de 10 minutes est effectué au sol. Pendant cet essai, le technicien observe chaque raccord à la recherche d'un suintement, puis le contrôleur procède à sa propre vérification avant de signer les documents de l'opération.
+
+6. TRAÇABILITÉ
+
+Chaque intervention sur le circuit hydraulique laisse une trace écrite. Le technicien remplit le bon de travaux, le contrôleur le signe et le chef d'équipe le transmet au bureau technique avec le compte rendu de l'intervention.
+
+Le CRH est conservé 24 mois au bureau technique.
+
+Les documents sont classés par aéronef, puis par date d'intervention. Le bureau technique vérifie régulièrement que les dossiers sont complets et signale au chef d'équipe toute pièce manquante, afin qu'elle soit retrouvée ou régularisée sans attendre.
+
+Une fois par an, le bureau technique organise une revue des archives hydrauliques avec les chefs d'équipe. Cette revue permet de repérer les défauts qui reviennent et d'adapter les consignes de surveillance en conséquence.

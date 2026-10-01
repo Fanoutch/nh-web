@@ -104,7 +104,27 @@ fi
 ligne "10. Journal de l'application (30 dernieres lignes)"
 tail -30 storage/logs/laravel.log 2>/dev/null || echo "aucun journal"
 
-ligne "11. Espace disque et memoire"
+ligne "11. Miroir interne : les bibliotheques sont-elles installables ?"
+echo "--- pip :"
+python3.12 -m pip config list 2>/dev/null | grep -i 'index-url' || echo "aucun miroir configure pour pip (index-url par defaut)"
+if [ -f assistant/requirements.lock ]; then
+  TMP=$(mktemp -d)
+  if python3.12 -m venv "$TMP/venv" 2>/dev/null; then
+    echo "--- test a blanc de l'installation des bibliotheques de l'assistant (rien n'est installe) :"
+    "$TMP/venv/bin/python" -m pip install --dry-run -r assistant/requirements.lock 2>&1 | tail -5
+  else
+    echo "creation d'un environnement Python 3.12 impossible"
+  fi
+  rm -rf "$TMP"
+else
+  echo "assistant/requirements.lock absent : assistant pas encore livre ici"
+fi
+echo "--- composer :"
+out=$(composer config -g repos 2>/dev/null) && echo "$out" | head -5 || echo "composer indisponible"
+echo "--- npm :"
+npm config get registry 2>/dev/null || echo "npm indisponible"
+
+ligne "12. Espace disque et memoire"
 df -h . | tail -2
 free -h 2>/dev/null | head -2
 

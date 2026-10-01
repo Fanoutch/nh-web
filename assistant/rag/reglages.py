@@ -53,6 +53,17 @@ class Reglages:
     seuil_distance: float = 1.0
     temperature: float = 0.3
     historique_tours: int = 3
+    taille_morceau: int = 600
+    taille_min: int = 150
+    fusion_sections: bool = True
+    par_page: bool = False
+    chevauchement: int = 150
+    voisins: int = 1
+
+    @property
+    def taille_max(self) -> int:
+        """Au-delà, un morceau est redécoupé (1125 pour 600)."""
+        return int(self.taille_morceau * 1.875)
 
 
 _CLES = {  # variable -> (champ de Reglages, conversion)
@@ -77,6 +88,12 @@ _CLES = {  # variable -> (champ de Reglages, conversion)
     "ASSISTANT_SEUIL_DISTANCE": ("seuil_distance", float),
     "ASSISTANT_TEMPERATURE": ("temperature", float),
     "ASSISTANT_HISTORIQUE_TOURS": ("historique_tours", int),
+    "ASSISTANT_TAILLE_MORCEAU": ("taille_morceau", int),
+    "ASSISTANT_TAILLE_MIN": ("taille_min", int),
+    "ASSISTANT_FUSION_SECTIONS": ("fusion_sections", _booleen),
+    "ASSISTANT_PAR_PAGE": ("par_page", _booleen),
+    "ASSISTANT_CHEVAUCHEMENT": ("chevauchement", int),
+    "ASSISTANT_VOISINS": ("voisins", int),
 }
 
 
@@ -114,9 +131,29 @@ def charger(environ: Mapping[str, str] | None = None) -> Reglages:
     for cle in _CLES:
         if env.get(cle):
             brut[cle] = env[cle]
-    valeurs = {
-        champ: conversion(brut[cle])
-        for cle, (champ, conversion) in _CLES.items()
-        if brut.get(cle, "") != ""
-    }
-    return Reglages(**valeurs)
+    valeurs = {}
+    for cle, (champ, conversion) in _CLES.items():
+        if brut.get(cle, "") == "":
+            continue
+        try:
+            valeurs[champ] = conversion(brut[cle])
+        except ValueError:
+            raise ValueError(f"{cle} doit être un nombre (valeur lue : « {brut[cle]} »).") from None
+    r = Reglages(**valeurs)
+    _verifier(r)
+    return r
+
+
+def _verifier(r: Reglages) -> None:
+    """Refuse des tailles de découpage incohérentes, avec un message qui nomme la variable."""
+    if r.taille_morceau <= 0:
+        raise ValueError(f"ASSISTANT_TAILLE_MORCEAU ({r.taille_morceau}) doit être supérieur à 0.")
+    if r.taille_min < 0:
+        raise ValueError(f"ASSISTANT_TAILLE_MIN ({r.taille_min}) doit être supérieur ou égal à 0.")
+    if r.taille_min >= r.taille_morceau:
+        raise ValueError(f"ASSISTANT_TAILLE_MIN ({r.taille_min}) doit être inférieur à "
+                         f"ASSISTANT_TAILLE_MORCEAU ({r.taille_morceau}).")
+    if r.chevauchement < 0:
+        raise ValueError(f"ASSISTANT_CHEVAUCHEMENT ({r.chevauchement}) doit être supérieur ou égal à 0.")
+    if r.voisins < 0:
+        raise ValueError(f"ASSISTANT_VOISINS ({r.voisins}) doit être supérieur ou égal à 0.")

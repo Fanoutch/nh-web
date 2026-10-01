@@ -244,11 +244,50 @@ def _merge_small_paragraphs(
     return merged
 
 
+def _fusionner_sections(
+    segments: list[tuple[int, int, str | None]],
+    target_size: int,
+    min_size: int,
+    max_size: int,
+) -> list[tuple[int, int, str | None]]:
+    """Regroupe une section avec la précédente tant que la précédente n'a pas atteint
+    la taille visée, ou quand la section est petite, sans jamais dépasser max_size.
+    Le morceau regroupé garde le titre de sa première section ; les titres suivants
+    restent dans le texte, donc un titre n'est plus jamais isolé de son contenu."""
+    fusion: list[tuple[int, int, str | None]] = []
+    for debut, fin, titre in segments:
+        if fusion:
+            p_debut, p_fin, p_titre = fusion[-1]
+            taille_prec, taille = p_fin - p_debut, fin - debut
+            if (taille_prec < target_size or taille < min_size) and (fin - p_debut) <= max_size:
+                fusion[-1] = (p_debut, fin, p_titre)
+                continue
+        fusion.append((debut, fin, titre))
+    return fusion
+
+
+def _reprise(precedent: str, longueur: int) -> str:
+    """Fin du morceau précédent (≤ longueur), commençant à un début de phrase ;
+    à défaut de phrase entière, commence après la première espace."""
+    if longueur <= 0:
+        return ""
+    fin = precedent[-longueur:]
+    if len(precedent) <= longueur:
+        return precedent.strip()
+    m = SENTENCE_BOUNDARY.search(fin)
+    if m:
+        return fin[m.end():].strip()
+    espace = fin.find(" ")
+    return fin[espace + 1:].strip() if espace >= 0 else ""
+
+
 def chunk_documents(
     docs: list[dict],
     target_size: int = TARGET_CHUNK_SIZE,
     min_size: int = MIN_CHUNK_SIZE,
     max_size: int = MAX_CHUNK_SIZE,
+    fusion_sections: bool = False,
+    chevauchement: int = 0,
 ) -> list[dict]:
     """Split each document into semantically coherent chunks.
 
@@ -257,6 +296,9 @@ def chunk_documents(
         target_size: target chunk size in characters (default 800).
         min_size:    below this, segments are merged (paragraph mode only).
         max_size:    above this, segments are re-split.
+        fusion_sections: regroupe les petites sections voisines (mode sections).
+        chevauchement:   nombre de caractères repris de la fin du morceau précédent
+                         (0 = aucun).
     """
     if not (min_size < target_size < max_size):
         raise ValueError(
@@ -265,7 +307,7 @@ def chunk_documents(
         )
     chunks: list[dict] = []
     for doc in docs:
-        chunks.extend(_chunk_one(doc, target_size, min_size, max_size))
+        chunks.extend(_chunk_one(doc, target_size, min_size, max_size, fusion_sections, chevauchement))
     return chunks
 
 
@@ -274,6 +316,8 @@ def _chunk_one(
     target_size: int,
     min_size: int,
     max_size: int,
+    fusion_sections: bool = False,
+    chevauchement: int = 0,
 ) -> list[dict]:
     text = doc["text"]
     if not text or not text.strip():
@@ -304,6 +348,10 @@ def _chunk_one(
     if not headers:
         refined = _merge_small_paragraphs(refined, target_size, max_size)
 
+    # 3 bis. Option : regrouper les petites sections (mode sections uniquement).
+    if headers and fusion_sections:
+        refined = _fusionner_sections(refined, target_size, min_size, max_size)
+
     # 4. Build chunk dicts.
     out: list[dict] = []
     chunk_idx = 0
@@ -319,6 +367,17 @@ def _chunk_one(
             "section_title": title,
             "text": piece,
             "hash": _hash_text(piece),
+            "debut": s,
         })
         chunk_idx += 1
+
+    # 5. Option : chaque morceau reprend la fin du précédent (même document).
+    #    Parcours en ordre inverse : chaque reprise est prise dans le texte sans
+    #    reprise du morceau précédent, les reprises ne s'empilent donc pas.
+    if chevauchement > 0:
+        for i in range(len(out) - 1, 0, -1):
+            reprise = _reprise(out[i - 1]["text"], chevauchement)
+            if reprise:
+                out[i]["text"] = f"{reprise}\n{out[i]['text']}"
+                out[i]["hash"] = _hash_text(out[i]["text"])
     return out
