@@ -323,3 +323,66 @@ def test_page_a_morceau_commencant_apres_la_page_1():
     assert _page_a(reperes, 0) == 1
     assert _page_a(reperes, 150) == 2
     assert _page_a(reperes, 250) == 3
+
+
+from rag.assistant import _fusionner
+
+
+def _assistant_mots_cles(tmp_path, journal, **reglages_supp):
+    r = Reglages(llm_actif=True, top_k=1, seuil_distance=1.0, voisins=0, mots_cles=True, top_k_mots_cles=3,
+                 **reglages_supp)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    textes = ["vol de maintenance ordonné par le chef"] + [f"compost numéro {i}" for i in range(18)] + \
+             ["code HYD-112 : fuite de l'accumulateur"]
+    a.base.ajouter_document("bmn", 1, "M.pdf", [{"texte": t, "page": 1} for t in textes],
+                            [faux_vecteur(t) for t in textes])
+    return a
+
+
+def test_mots_cles_retrouvent_le_code_rate_par_les_vecteurs(tmp_path, journal):
+    a = _assistant_mots_cles(tmp_path, journal)
+    passages = a.passages("bmn", "vol HYD-112 ?")
+    ids = {p["id"]: p["origine"] for p in passages}
+    assert ids["doc1_m19"] == "mots_cles"
+    assert ids["doc1_m0"] in ("vecteurs", "les_deux")
+
+
+def test_garde_fou_sans_mot_rare_rien_n_est_ajoute(tmp_path, journal):
+    a = _assistant_mots_cles(tmp_path, journal)
+    passages = a.passages("bmn", "compost ?")            # « compost » est partout : pas rare
+    assert all(p["origine"] != "mots_cles" for p in passages)
+
+
+def test_question_sans_mot_utile(tmp_path, journal):
+    a = _assistant_mots_cles(tmp_path, journal)
+    assert [p["origine"] for p in a.passages("bmn", "de la ?")] in ([], ["vecteurs"])
+
+
+def test_mots_cles_desactives_identique_a_aujourd_hui(tmp_path, journal):
+    r = Reglages(llm_actif=True, top_k=6, seuil_distance=1.0, voisins=0, mots_cles=False)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    a.indexer("bmn", 1, str(pdf_texte(tmp_path / "m.pdf", ["Le vol de maintenance est ordonne par le chef BMN."])), "M.pdf")
+    passages = a.passages("bmn", "vol de maintenance ?")
+    assert [p["id"] for p in passages] == ["doc1_m0"] and "origine" not in passages[0]
+
+
+def test_panne_de_l_index_vectoriel_seul_et_avertissement(tmp_path, journal, monkeypatch, caplog):
+    a = _assistant_mots_cles(tmp_path, journal)
+
+    def panne(*args, **kwargs):
+        raise RuntimeError("index illisible")
+
+    monkeypatch.setattr(a.base, "chercher_mots_cles", panne)
+    with caplog.at_level("WARNING"):
+        passages = a.passages("bmn", "vol HYD-112 ?")
+    assert [p["id"] for p in passages] == ["doc1_m0"]
+    assert "recherche par mots-clés indisponible" in caplog.text
+
+
+def test_fusionner_rrf_et_origine():
+    v = [{"id": "a", "texte": "x", "distance": 0.1}, {"id": "b", "texte": "y", "distance": 0.2}]
+    mc = [{"id": "b", "texte": "y", "distance": None}, {"id": "c", "texte": "code hyd112", "distance": None},
+          {"id": "d", "texte": "rien de rare", "distance": None}]
+    f = _fusionner(v, mc, {"hyd112"})
+    assert [m["id"] for m in f] == ["b", "a", "c"]                 # b dans les deux listes passe en tête
+    assert [m["origine"] for m in f] == ["les_deux", "vecteurs", "mots_cles"]

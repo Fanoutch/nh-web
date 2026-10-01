@@ -59,6 +59,8 @@ class Reglages:
     par_page: bool = False
     chevauchement: int = 150
     voisins: int = 1
+    mots_cles: bool = False
+    top_k_mots_cles: int = 6
 
     @property
     def taille_max(self) -> int:
@@ -94,6 +96,8 @@ _CLES = {  # variable -> (champ de Reglages, conversion)
     "ASSISTANT_PAR_PAGE": ("par_page", _booleen),
     "ASSISTANT_CHEVAUCHEMENT": ("chevauchement", int),
     "ASSISTANT_VOISINS": ("voisins", int),
+    "ASSISTANT_MOTS_CLES": ("mots_cles", _booleen),
+    "ASSISTANT_TOP_K_MOTS_CLES": ("top_k_mots_cles", int),
 }
 
 
@@ -157,3 +161,5 @@ def _verifier(r: Reglages) -> None:
         raise ValueError(f"ASSISTANT_CHEVAUCHEMENT ({r.chevauchement}) doit être supérieur ou égal à 0.")
     if r.voisins < 0:
         raise ValueError(f"ASSISTANT_VOISINS ({r.voisins}) doit être supérieur ou égal à 0.")
+    if r.top_k_mots_cles < 1:
+        raise ValueError(f"ASSISTANT_TOP_K_MOTS_CLES ({r.top_k_mots_cles}) doit être supérieur ou égal à 1.")

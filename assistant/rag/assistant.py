@@ -5,12 +5,17 @@ erreur) que le service transmet tels quels à Laravel.
 """
 from __future__ import annotations
 
+import logging
 from typing import Iterator
 
 from rag import lecteurs, modeles
 from rag.base import BaseVectorielle
 from rag.decoupage import chunk_documents
+from rag.motscles import _ascii, _MOT, mots
 from rag.reglages import Reglages
+
+log = logging.getLogger("assistant")
+RRF_K = 60  # constante de la fusion par rang (RRF)
 
 PROMPT_SYSTEME = """Tu es l'assistant IA du secteur {secteur}. Tu réponds en français, uniquement à partir des extraits de documents fournis avec la question.
 Règles :
@@ -111,8 +116,8 @@ class Assistant:
             yield {"type": "erreur", "message": MESSAGE_INDISPONIBLE,
                    "detail": f"{type(exc).__name__}: {exc}"}
 
-    def _rassembler(self, secteur: str, vecteur: list[float], documents_prioritaires: list[int] | None,
-                     conversation: int | None) -> list[dict]:
+    def _rassembler(self, secteur: str, question: str, vecteur: list[float],
+                    documents_prioritaires: list[int] | None, conversation: int | None) -> list[dict]:
         """Recherche fusionnée : la recherche principale porte toujours sur tout le
         secteur ; les documents prioritaires et la pièce jointe de conversation ne
         font qu'AJOUTER des passages, jamais restreindre la recherche principale.
@@ -132,14 +137,25 @@ class Assistant:
                 continue
             vus.add(m["id"])
             fusion.append(m)
-        return fusion[:self.r.top_k + self.r.top_k_dossier + self.r.top_k_pj]
+        limite = self.r.top_k + self.r.top_k_dossier + self.r.top_k_pj
+        if not self.r.mots_cles:
+            return fusion[:limite]
+        try:
+            par_mots = self.base.chercher_mots_cles(secteur, question, self.r.top_k_mots_cles)
+            if conversation is not None:
+                par_mots += self.base.chercher_mots_cles_conversation(conversation, question, self.r.top_k_mots_cles)
+            rares = self.base.mots_rares(secteur, question)
+        except Exception as exc:
+            log.warning("recherche par mots-clés indisponible, recherche vectorielle seule : %s", exc)
+            return fusion[:limite]
+        return _fusionner(fusion, par_mots, rares)[:limite]
 
     def passages(self, secteur: str, question: str, documents_prioritaires: list[int] | None = None,
                  conversation: int | None = None) -> list[dict]:
         """Morceaux transmis au LLM pour cette question (utilisé aussi par le banc d'évaluation)."""
         vecteur = modeles.embedder([question], self.r)[0]
-        return self._avec_voisins(secteur, self._rassembler(secteur, vecteur, documents_prioritaires, conversation),
-                                  conversation)
+        trouves = self._rassembler(secteur, question, vecteur, documents_prioritaires, conversation)
+        return self._avec_voisins(secteur, trouves, conversation)
 
     def _avec_voisins(self, secteur: str, trouves: list[dict], conversation: int | None) -> list[dict]:
         """Ajoute autour de chaque morceau retenu ses voisins du même document, dans l'ordre du document.
@@ -157,12 +173,14 @@ class Assistant:
             for voisin in avant:
                 if voisin["id"] not in vus:
                     vus.add(voisin["id"])
-                    resultat.append({**voisin, "voisin": True, "distance": m["distance"]})
+                    resultat.append({**voisin, "voisin": True, "distance": m["distance"],
+                                     **({"origine": m["origine"]} if "origine" in m else {})})
             resultat.append(m)
             for voisin in apres:
                 if voisin["id"] not in vus:
                     vus.add(voisin["id"])
-                    resultat.append({**voisin, "voisin": True, "distance": m["distance"]})
+                    resultat.append({**voisin, "voisin": True, "distance": m["distance"],
+                                     **({"origine": m["origine"]} if "origine" in m else {})})
         return resultat
 
     def _reformuler(self, question: str, historique: list[dict]) -> str:
@@ -172,6 +190,33 @@ class Assistant:
         prompt = PROMPT_REFORMULATION.format(historique=texte, question=question)
         reformulee = modeles.discuter([{"role": "user", "content": prompt}], self.r, 0).strip()
         return reformulee or question
+
+
+def _mots_du_morceau(texte: str) -> set[str]:
+    """Mots d'un morceau pour le garde-fou : ceux de l'index, plus les mots collés tels qu'écrits
+    (« HYD112 » sans tiret n'est indexé qu'en « hyd » + « 112 », mais reste un code à reconnaître)."""
+    return set(mots(texte)) | set(_MOT.findall(_ascii(texte)))
+
+
+def _fusionner(vecteurs: list[dict], par_mots: list[dict], rares: set[str]) -> list[dict]:
+    """Fusion par rang (RRF). Un morceau trouvé seulement par mots-clés n'est gardé que s'il
+    contient un mot rare de la question (code, sigle) : protège les refus des questions sans réponse."""
+    scores: dict[str, float] = {}
+    morceaux: dict[str, dict] = {}
+    origines: dict[str, set[str]] = {}
+    for rang, m in enumerate(vecteurs, start=1):
+        scores[m["id"]] = scores.get(m["id"], 0.0) + 1 / (RRF_K + rang)
+        morceaux.setdefault(m["id"], m)
+        origines.setdefault(m["id"], set()).add("vecteurs")
+    for rang, m in enumerate(par_mots, start=1):
+        if m["id"] not in morceaux and not (_mots_du_morceau(m["texte"]) & rares):
+            continue
+        scores[m["id"]] = scores.get(m["id"], 0.0) + 1 / (RRF_K + rang)
+        morceaux.setdefault(m["id"], m)
+        origines.setdefault(m["id"], set()).add("mots_cles")
+    ordre = sorted(scores, key=lambda i: (-scores[i], i))
+    return [{**morceaux[i], "origine": "les_deux" if len(origines[i]) == 2 else next(iter(origines[i]))}
+            for i in ordre]
 
 
 def _reponse_fixe(texte: str) -> Iterator[dict]:
