@@ -6,7 +6,7 @@ from pathlib import Path
 
 from banc.questions import TYPES
 
-COLONNES = ["jeu", "format", "id", "type", "applicable", "trouve", "rang", "distance_min", "retrouves",
+COLONNES = ["jeu", "format", "id", "type", "applicable", "trouve", "rang", "trouve_par_mots_cles", "distance_min", "retrouves",
             "reponse", "juste", "fidele", "refus_correct", "note", "justification"]
 
 
@@ -14,14 +14,27 @@ def _pct(valeurs: list[bool]) -> str:
     return f"{round(100 * sum(valeurs) / len(valeurs))} %" if valeurs else "—"
 
 
+def _etat(resultats: list[dict]) -> str:
+    lignes = [l for r in resultats for l in r["lignes"] if l["applicable"]]
+    if not lignes:
+        return "**État : ERREUR** — aucune question applicable. Prochaine action : vérifier banc/corpus et questions.csv."
+    erreurs = sum(1 for l in lignes if l["note"] == "erreur")
+    refus = [l["refus_correct"] for l in lignes if l["note"] == "ok" and l["refus_correct"] is not None]
+    if erreurs or (refus and not all(refus)):
+        return (f"**État : AVERTISSEMENT** — {erreurs} erreur(s), refus corrects {_pct(refus)}. "
+                "Prochaine action : renvoyer rapport.md.")
+    return ("**État : OK** — mesures complètes. Prochaine action : comparer aux chiffres de référence "
+            "(banc/A-LIRE.md).")
+
+
 def ecrire_rapport(resultats: list[dict], dossier: Path) -> Path:
     dossier = Path(dossier)
     dossier.mkdir(parents=True, exist_ok=True)
-    md = ["# Rapport du banc RAG", "",
-          "| Jeu | Format | Questions | Trouvé (hors absentes) | Rang moyen | Absentes rejetées | "
+    md = ["# Rapport du banc RAG", "", _etat(resultats), "",
+          "| Jeu | Format | Questions | Trouvé (hors absentes) | Rang moyen | Trouvé grâce aux mots-clés | Absentes rejetées | "
           "Seuil proposé | Morceaux | Taille médiane | Petits morceaux | Justes | Fidèles | Refus corrects | "
           "Erreurs | Illisibles |",
-          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for res in resultats:
         app = [l for l in res["lignes"] if l["applicable"]]
         utiles = [l for l in app if l["type"] != "absente"]
@@ -31,7 +44,8 @@ def ecrire_rapport(resultats: list[dict], dossier: Path) -> Path:
         m = res["morceaux"]
         md.append(
             f"| {res['jeu']} | {res['format']} | {len(app)} | {_pct([bool(l['trouve']) for l in utiles])} | "
-            f"{round(sum(rangs) / len(rangs), 1) if rangs else '—'} | {_pct([bool(l['trouve']) for l in absentes])} | "
+            f"{round(sum(rangs) / len(rangs), 1) if rangs else '—'} | "
+            f"{sum(1 for l in utiles if l.get('trouve_par_mots_cles') is True)} | {_pct([bool(l['trouve']) for l in absentes])} | "
             f"{res['seuil_propose'] if res['seuil_propose'] is not None else '—'} | {m['nombre']} | {m['mediane']} | "
             f"{m['petits']} | {_pct([l['juste'] for l in notes if l['juste'] is not None])} | "
             f"{_pct([l['fidele'] for l in notes if l['fidele'] is not None])} | "

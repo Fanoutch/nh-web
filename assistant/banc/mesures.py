@@ -16,13 +16,14 @@ def normaliser(texte: str) -> list[str]:
     return _MOT.findall(sans_accents)
 
 
-def contient(texte: str, passage: str, part: float = 0.8) -> bool:
+def contient(texte: str, passage: str, part: float = 0.8, facteur: float = 1.25) -> bool:
     """Vrai si au moins `part` des mots du passage apparaissent, dans l'ordre, dans une
-    fenêtre du texte de même longueur (+ 25 %) : tolère les mots cassés du PDF."""
+    fenêtre du texte de même longueur (× `facteur`, 1,25 par défaut) : tolère les mots cassés du PDF.
+    Les lignes de tableau Word / texte, réécrites avec leurs en-têtes, demandent une fenêtre plus large (2,0)."""
     mots_p, mots_t = normaliser(passage), normaliser(texte)
     if not mots_p:
         return False
-    fenetre = max(len(mots_p), int(len(mots_p) * 1.25))
+    fenetre = max(len(mots_p), int(len(mots_p) * facteur))
     requis = part * len(mots_p)
     ensemble_p = set(mots_p)
     for debut in range(0, max(1, len(mots_t) - len(mots_p) // 2)):
@@ -43,9 +44,10 @@ def contient(texte: str, passage: str, part: float = 0.8) -> bool:
 def evaluer_recherche(q: Question, passages: list[dict], noms: dict[int, str]) -> dict:
     if q.type == "absente":
         return {"trouve": not passages, "rang": None}
+    facteur = 2.0 if q.type == "tableau" else 1.25
     rangs = []
     for attendu in q.passages:
-        rang = next((i for i, p in enumerate(passages, start=1) if contient(p["texte"], attendu)), None)
+        rang = next((i for i, p in enumerate(passages, start=1) if contient(p["texte"], attendu, facteur=facteur)), None)
         if rang is None:
             return {"trouve": False, "rang": None}
         rangs.append(rang)
