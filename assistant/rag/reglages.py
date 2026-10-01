@@ -59,8 +59,8 @@ class Reglages:
     par_page: bool = False
     chevauchement: int = 150
     voisins: int = 1
-    mots_cles: bool = False
-    top_k_mots_cles: int = 6
+    mots_cles: bool = True
+    top_k_mots_cles: int = 8
 
     @property
     def taille_max(self) -> int:

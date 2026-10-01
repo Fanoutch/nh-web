@@ -148,7 +148,7 @@ def test_reglages_valeur_non_numerique_message_francais(tmp_path):
 
 def test_reglages_mots_cles_defauts_et_lecture(tmp_path):
     r = reglages.charger({"ASSISTANT_REGLAGES": "aucun"})
-    assert r.mots_cles is False and r.top_k_mots_cles == 6
+    assert r.mots_cles is True and r.top_k_mots_cles == 8
     f = tmp_path / "reglages.env"
     f.write_text("ASSISTANT_MOTS_CLES=oui\nASSISTANT_TOP_K_MOTS_CLES=4\n", encoding="utf-8")
     r = reglages.charger({"ASSISTANT_REGLAGES": str(f), "LLM_ENV": str(tmp_path / "absent.env")})

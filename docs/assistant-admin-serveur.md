@@ -148,6 +148,26 @@ pas), puis `systemctl restart nh-assistant`.
 - Depuis cette version, les tableaux des documents Word et texte sont lus à leur place avec leurs en-têtes ; les Word et textes déjà indexés sont à redéposer pour en profiter (les PDF ne changent pas).
 - Mode d'emploi du banc de vérification : `assistant/banc/A-LIRE.md`.
 
+### Recherche par mots-clés (codes, sigles, références)
+
+Deux réglages de `assistant/reglages.env` :
+
+```
+ASSISTANT_MOTS_CLES=oui
+ASSISTANT_TOP_K_MOTS_CLES=8
+```
+Ce sont aussi les valeurs par défaut : un `reglages.env` sans ces lignes donne le même résultat.
+La recherche par mots-clés s'ajoute à la recherche par le sens et retrouve les codes, sigles et références
+(ex. « VDC », « HYD-112 ») que la recherche par le sens rate parfois.
+
+- **Aucun document à redéposer** : l'index des mots-clés se reconstruit tout seul au démarrage du service
+  (`systemctl restart nh-assistant`). Un réglage modifié s'applique après ce redémarrage.
+- Les passages trouvés par mots-clés ne sont pas filtrés par le seuil de pertinence : même quand
+  l'information n'existe pas, quelques passages sont transmis au LLM, et c'est lui qui doit refuser de répondre.
+  À surveiller avec la colonne « Refus corrects » du banc (`assistant/banc/A-LIRE.md`).
+- **Pour désactiver** : mettre `ASSISTANT_MOTS_CLES=non` dans `assistant/reglages.env`, puis
+  `systemctl restart nh-assistant` (retour exact au comportement précédent, sans redépôt).
+
 ---
 
 ## Vérification finale

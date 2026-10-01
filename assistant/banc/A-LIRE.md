@@ -30,13 +30,13 @@ Ne modifiez jamais le code sur place.
 
 ```
 cd /home/coder/nh-web1/assistant
-.venv/bin/python -m banc.banc --reglages retenu --formats pdf
-.venv/bin/python -m banc.banc --reglages retenu --formats pdf --reponses
+.venv/bin/python -m banc.banc --reglages retenu-motscles-k8 --formats pdf
+.venv/bin/python -m banc.banc --reglages retenu-motscles-k8 --formats pdf --reponses
 ```
 
 La première commande teste la recherche seule (rapide). La seconde fait aussi répondre et juger
 chaque question (plus longue, elle utilise le LLM). Pour comparer avec l'ancien comportement,
-ajoutez-le : `--reglages actuel,retenu`.
+ajoutez-le : `--reglages retenu,retenu-motscles-k8` (`retenu` = sans mots-clés).
 
 ## Lire le résultat
 
@@ -52,15 +52,17 @@ Chaque lancement écrit un dossier `banc/resultats/<date>_<heure>/` avec `rappor
 - **Refus corrects** : pour les questions dont la réponse n'est pas dans les documents,
   l'assistant dit bien qu'il ne sait pas (doit rester 100 %).
 
-## Chiffres de référence (mesurés ici, réglages `retenu`)
+## Chiffres de référence (mesurés ici, réglages `retenu-motscles-k8`)
 
 | | pdf | docx | txt |
 |---|---|---|---|
-| Recherche, « Trouvé » | 96 % | 94 % | 97 % |
-| Réponses, « Justes » (chiffres bruts de `rapport.md`) | 88 % | 90 % | 97 % |
+| Recherche, « Trouvé » | 100 % | 97 % | 97 % |
+| Réponses, « Justes » (chiffres bruts de `rapport.md`) | 90 % | 94 % | 97 % |
 
-Fidèles et refus corrects : 100 % dans les trois formats. Avec l'ancien comportement (`actuel`), les réponses
-justes en pdf n'étaient que de 63 % (chiffre brut), contre 88 % (brut) avec `retenu`.
+Fidèles et refus corrects : 100 % dans les trois formats. Sans la recherche par mots-clés (`retenu`),
+le « Trouvé » était de 96 / 94 / 97 %.
+
+**Au bureau, regardez surtout la colonne Refus corrects : la recherche par mots-clés laisse passer des passages même quand l'information n'existe pas, c'est le LLM qui doit refuser. Si Refus corrects < 100 %, renvoyez rapport.md : on pourra remettre ASSISTANT_MOTS_CLES=non dans reglages.env.**
 
 Le juge automatique compte parfois à tort une bonne réponse comme fausse : quelques points de moins sur
 « Justes » ne sont donc pas alarmants. La règle des 10 points ci-dessous s'applique à « Trouvé ».
