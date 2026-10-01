@@ -332,3 +332,11 @@ def test_mots_cles_piece_jointe_reindexee_avec_moins_de_morceaux(base):
     assert base.chercher_mots_cles_conversation(3, "bravo", 5) == []
     base.ajouter_piece_jointe(3, 5, "pj.pdf", [], [])
     assert base.chercher_mots_cles_conversation(3, "alpha", 5) == []
+
+
+def test_mots_rares_conversation(base):
+    textes = [{"texte": "vol de maintenance", "page": 1} for _ in range(9)] + [{"texte": "plaque ZX-900", "page": 2}]
+    base.ajouter_piece_jointe(3, 5, "P.pdf", textes, [[1.0, float(i), 0.0] for i in range(10)])
+    rares = base.mots_rares_conversation(3, "vol ZX-900")
+    assert "zx900" in rares and "vol" not in rares
+    assert base.mots_rares_conversation(99, "vol ZX-900") == set()

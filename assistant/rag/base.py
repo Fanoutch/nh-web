@@ -282,6 +282,14 @@ class BaseVectorielle:
         return self._mots_cles(f"conv_{conversation_id}",
                                self._collection_conversation(conversation_id, creer=False), question, n, True)
 
+    def mots_rares_conversation(self, conversation_id: int, question: str) -> set[str]:
+        """Idem `mots_rares`, dans les pièces jointes d'une conversation (vide si aucune)."""
+        with self._verrou:
+            collection = self._collection_conversation(conversation_id, creer=False)
+            if collection is None:
+                return set()
+            return self._index_de(f"conv_{conversation_id}", collection).rares(question, 0.10)
+
     def mots_rares(self, secteur: str, question: str) -> set[str]:
         """Mots de la question présents dans moins de 10 % des morceaux du secteur."""
         with self._verrou:

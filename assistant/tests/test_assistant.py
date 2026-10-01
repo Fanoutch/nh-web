@@ -386,3 +386,17 @@ def test_fusionner_rrf_et_origine():
     f = _fusionner(v, mc, {"hyd112"})
     assert [m["id"] for m in f] == ["b", "a", "c"]                 # b dans les deux listes passe en tête
     assert [m["origine"] for m in f] == ["les_deux", "vecteurs", "mots_cles"]
+
+
+def test_mots_cles_retrouvent_un_code_de_la_piece_jointe(tmp_path, journal):
+    r = Reglages(llm_actif=True, top_k=1, top_k_pj=1, seuil_distance=0.5, voisins=0, mots_cles=True,
+                 top_k_mots_cles=3)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    a.base.ajouter_document("bmn", 1, "M.pdf", [{"texte": "vol de maintenance ordonné", "page": 1}],
+                            [faux_vecteur("vol maintenance")])
+    textes = ["note sur le compost", "plaque ZX-900 : serrage à 40 Nm"]
+    a.base.ajouter_piece_jointe(7, 2, "P.pdf", [{"texte": t, "page": 1} for t in textes],
+                                [faux_vecteur(t) for t in textes])
+    passages = a.passages("bmn", "vol ZX-900 ?", conversation=7)
+    origines = {p["id"]: p["origine"] for p in passages}
+    assert origines["pj2_m1"] == "mots_cles"

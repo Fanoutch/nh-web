@@ -145,8 +145,11 @@ class Assistant:
             if conversation is not None:
                 par_mots += self.base.chercher_mots_cles_conversation(conversation, question, self.r.top_k_mots_cles)
             rares = self.base.mots_rares(secteur, question)
+            if conversation is not None:
+                rares |= self.base.mots_rares_conversation(conversation, question)
         except Exception as exc:
-            log.warning("recherche par mots-clés indisponible, recherche vectorielle seule : %s", exc)
+            log.warning("recherche par mots-clés indisponible, recherche vectorielle seule : %s: %s",
+                        type(exc).__name__, exc)
             return fusion[:limite]
         return _fusionner(fusion, par_mots, rares)[:limite]
 
