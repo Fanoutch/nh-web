@@ -48,7 +48,8 @@ def executer(nom_jeu: str, r: Reglages, format_: str, questions: list[Question],
         utiles, absentes = [], []
         for q in questions:
             ligne = {"id": q.id, "type": q.type, "applicable": all(d in presents for d in q.documents),
-                     "trouve": None, "trouve_par_mots_cles": None, "rang": None, "distance_min": None, "retrouves": "", "reponse": "",
+                     "trouve": None, "trouve_par_mots_cles": None, "rang": None, "distance_min": None, "retrouves": "",
+                     "passages_envoyes": None, "caracteres_envoyes": None, "reponse": "",
                      "juste": None, "fidele": None, "refus_correct": None, "note": "", "justification": ""}
             lignes.append(ligne)
             if not ligne["applicable"]:
@@ -60,6 +61,9 @@ def executer(nom_jeu: str, r: Reglages, format_: str, questions: list[Question],
             except modeles.ModeleIndisponible as exc:
                 raise _arret(exc) from exc
             ligne.update(evaluer_recherche(q, passages, noms))
+            # volume transmis au LLM pour cette question (voisins et plafond compris)
+            ligne["passages_envoyes"] = len(passages)
+            ligne["caracteres_envoyes"] = sum(len(p["texte"]) for p in passages)
             if q.type != "absente" and ligne["trouve"]:
                 # trouvé seulement grâce aux mots-clés ? on refait la mesure sans ces passages
                 sans_mots = [p for p in passages if p.get("origine") != "mots_cles"]

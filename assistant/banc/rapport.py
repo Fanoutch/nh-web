@@ -7,11 +7,16 @@ from pathlib import Path
 from banc.questions import TYPES
 
 COLONNES = ["jeu", "format", "id", "type", "applicable", "trouve", "rang", "trouve_par_mots_cles", "distance_min", "retrouves",
-            "reponse", "juste", "fidele", "refus_correct", "note", "justification"]
+            "passages_envoyes", "caracteres_envoyes", "reponse", "juste", "fidele", "refus_correct", "note", "justification"]
 
 
 def _pct(valeurs: list[bool]) -> str:
     return f"{round(100 * sum(valeurs) / len(valeurs))} %" if valeurs else "—"
+
+
+def _moy_max(valeurs: list) -> str:
+    valeurs = [v for v in valeurs if v is not None]
+    return f"{round(sum(valeurs) / len(valeurs))} / {max(valeurs)}" if valeurs else "—"
 
 
 def _etat(resultats: list[dict]) -> str:
@@ -33,8 +38,8 @@ def ecrire_rapport(resultats: list[dict], dossier: Path) -> Path:
     md = ["# Rapport du banc RAG", "", _etat(resultats), "",
           "| Jeu | Format | Questions | Trouvé (hors absentes) | Rang moyen | Trouvé grâce aux mots-clés | Absentes rejetées | "
           "Seuil proposé | Morceaux | Taille médiane | Petits morceaux | Justes | Fidèles | Refus corrects | "
-          "Erreurs | Illisibles |",
-          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+          "Erreurs | Illisibles | Passages envoyés (moy / max) | Caractères envoyés (moy / max) |",
+          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for res in resultats:
         app = [l for l in res["lignes"] if l["applicable"]]
         utiles = [l for l in app if l["type"] != "absente"]
@@ -50,7 +55,8 @@ def ecrire_rapport(resultats: list[dict], dossier: Path) -> Path:
             f"{m['petits']} | {_pct([l['juste'] for l in notes if l['juste'] is not None])} | "
             f"{_pct([l['fidele'] for l in notes if l['fidele'] is not None])} | "
             f"{_pct([l['refus_correct'] for l in notes if l['refus_correct'] is not None])} | "
-            f"{sum(1 for l in app if l['note'] == 'erreur')} | {sum(1 for l in app if l['note'] == 'illisible')} |")
+            f"{sum(1 for l in app if l['note'] == 'erreur')} | {sum(1 for l in app if l['note'] == 'illisible')} | "
+            f"{_moy_max([l.get('passages_envoyes') for l in app])} | {_moy_max([l.get('caracteres_envoyes') for l in app])} |")
     md += ["", "## Trouvé par type de question", "",
            "| Jeu | Format | " + " | ".join(TYPES) + " |", "|---|---|" + "---|" * len(TYPES)]
     for res in resultats:

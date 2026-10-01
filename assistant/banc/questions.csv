@@ -56,3 +56,13 @@ R17;coupee;Quel avis le CSMN accorde-t-il aux flottilles pour les marges du NSO,
 R18;deux_pages;Qui doit approuver l'utilisation d'une marge sur une butée d'entrée en visite NSI ?;état-major organique | DMAé;L’utilisation des marges/tolérances pour les opérations liées aux butées de visite NSI relève du RGMN de la flotte concernée. L’év olution d’une programmation d’entrée en visite pouvant avoir des implications | contractuelles avec le NSI, son utilisation necessite l’approbation conjointe de l’état -major organique et de la DMAé.;reel-4105-5-utilisation-des-tolerances-impactant-une-echeance-de-tache-dentretien
 R19;reformulee;Quelle personne doit rester informée, au niveau de la base, des décisions de recours aux tolérances ?;RGMN local;Le RGMN local doit néanmoins être tenu informé, au travers d’un fichier de suivi;reel-4105-5-utilisation-des-tolerances-impactant-une-echeance-de-tache-dentretien
 R20;absente;Quel délai la DMAé a-t-elle pour répondre à une demande d'autorisation d'écart ?;;;
+P01;absente;À quoi correspond le code HYD-113 ?;;;
+P02;absente;Que faire en cas de code ELE-032 ?;;;
+P03;absente;À quoi sert la plaque de consignation PC-HYD-08 ?;;;
+P04;absente;Quelle est la tolérance sur la visite V5 ?;;;
+P05;absente;Quelle est la pression de gonflage du pneu du train avant ?;;;
+P06;absente;Combien de temps garde-t-on le compte rendu électrique ?;;;
+P07;absente;Qui signe le bon de travaux électrique ?;;;
+P08;absente;Quelle est la durée minimale d'un vol de contrôle ?;;;
+P09;absente;Quelle est la pression de service du circuit 3 ?;;;
+P10;absente;Quelle note annule la note de service n° 15 ?;;;

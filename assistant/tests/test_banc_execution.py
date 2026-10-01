@@ -120,3 +120,25 @@ def test_trouve_par_mots_cles_et_etat_du_rapport(corpus, tmp_path, monkeypatch):
     rapport = (ecrire_rapport([res], tmp_path / "s") / "rapport.md").read_text(encoding="utf-8")
     assert rapport.splitlines()[2].startswith("**État : OK**")
     assert "Trouvé grâce aux mots-clés" in rapport
+
+
+def test_volume_envoye_par_question_et_dans_le_rapport(corpus, tmp_path, monkeypatch):
+    from rag.assistant import Assistant
+
+    def deux_passages(self, secteur, question, *a, **k):
+        return [{"id": f"doc1_m{i}", "document_id": 1, "nom": "m.txt", "page": None, "pj": False, "distance": 0.1,
+                 "texte": t} for i, t in enumerate(["x" * 30, "La pression de gonflage à froid est de 1 450 kPa."])]
+
+    monkeypatch.setattr(Assistant, "passages", deux_passages)
+    res = executer("actuel", Reglages(llm_actif=True, top_k=1, seuil_distance=2.0), "txt", QUESTIONS[:1], corpus, False)
+    ligne = res["lignes"][0]
+    assert ligne["passages_envoyes"] == 2 and ligne["caracteres_envoyes"] == 30 + 49
+    res["lignes"].append({**ligne, "id": "A2", "passages_envoyes": 4, "caracteres_envoyes": 200})
+
+    dossier = ecrire_rapport([res], tmp_path / "s")
+    rapport = (dossier / "rapport.md").read_text(encoding="utf-8").splitlines()
+    en_tete = [c.strip() for c in rapport[4].strip("|").split("|")]
+    valeurs = [c.strip() for c in rapport[6].strip("|").split("|")]
+    assert valeurs[en_tete.index("Passages envoyés (moy / max)")] == "3 / 4"
+    assert valeurs[en_tete.index("Caractères envoyés (moy / max)")] == "140 / 200"
+    assert "caracteres_envoyes" in (dossier / "detail.csv").read_text(encoding="utf-8-sig").splitlines()[0]
