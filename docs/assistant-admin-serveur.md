@@ -145,6 +145,7 @@ pas), puis `systemctl restart nh-assistant`.
 - `FUSION_SECTIONS`, `PAR_PAGE`, `CHEVAUCHEMENT`, `TAILLE_MORCEAU`, `TAILLE_MIN` ne s'appliquent qu'aux
   documents déposés **ensuite** : après un changement, **redéposer** les documents déjà indexés.
 - `VOISINS` s'applique **tout de suite**, sans redépôt (simple redémarrage du service).
+- Depuis cette version, les tableaux des documents Word et texte sont lus à leur place avec leurs en-têtes ; les Word et textes déjà indexés sont à redéposer pour en profiter (les PDF ne changent pas).
 - Mode d'emploi du banc de vérification : `assistant/banc/A-LIRE.md`.
 
 ---
