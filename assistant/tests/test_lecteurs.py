@@ -98,19 +98,47 @@ def test_lignes_tableau():
     assert lignes_tableau([]) == []
 
 
+def test_lignes_tableau_cle_valeur_a_deux_colonnes():
+    assert lignes_tableau([["Pression", "12 bar"], ["D\u00e9bit", "30 l/min"]]) == [
+        "Pression : 12 bar", "D\u00e9bit : 30 l/min"]
+    assert lignes_tableau([["Pression", ""], ["", ""], ["Note", "x"]]) == ["Pression", "Note : x"]
+    assert lignes_tableau([["seule", "ligne"]]) == ["seule ; ligne"]      # une seule ligne : inchang\u00e9
+
+
+def test_lignes_tableau_ignore_le_separateur_markdown():
+    assert lignes_tableau([["Code", "Libell\u00e9", "Action"], ["---", ":---:", " - "],
+                           ["HYD-112", "Fuite", "D\u00e9pose"]]) == [
+        "Code : HYD-112 ; Libell\u00e9 : Fuite ; Action : D\u00e9pose"]
+
+
+def test_txt_tableau_markdown_sans_ligne_de_tirets(tmp_path):
+    chemin = tmp_path / "m.txt"
+    chemin.write_text("| Code | Libell\u00e9 | Action |\n|---|---|---|\n| ELE-031 | Alternateur | R\u00e9gulateur |\n",
+                      encoding="utf-8")
+    texte = lire(chemin)[0]["texte"]
+    assert "Code : ELE-031 ; Libell\u00e9 : Alternateur ; Action : R\u00e9gulateur" in texte
+    assert "---" not in texte
+
+
 def test_docx_tableau_a_sa_place_avec_en_tetes(tmp_path):
     doc = Document()
     doc.add_paragraph("Avant le tableau.")
-    t = doc.add_table(rows=3, cols=2)
-    for i, (a, b) in enumerate([("Code", "Action"), ("HYD-112", "Dépose"), ("ELE-031", "Régulateur")]):
-        t.cell(i, 0).text, t.cell(i, 1).text = a, b
+    t = doc.add_table(rows=3, cols=3)
+    for i, ligne in enumerate([("Code", "Libellé", "Action"), ("HYD-112", "Fuite", "Dépose"),
+                               ("ELE-031", "Alternateur", "Régulateur")]):
+        for j, valeur in enumerate(ligne):
+            t.cell(i, j).text = valeur
+    k = doc.add_table(rows=2, cols=2)
+    for i, (a, b) in enumerate([("Pression", "12 bar"), ("Débit", "30 l/min")]):
+        k.cell(i, 0).text, k.cell(i, 1).text = a, b
     doc.add_paragraph("Après le tableau.")
     chemin = tmp_path / "t.docx"
     doc.save(str(chemin))
 
     texte = lire(chemin)[0]["texte"]
-    assert texte.index("Avant") < texte.index("Code : HYD-112 ; Action : Dépose") < texte.index("Après")
-    assert "Code : ELE-031 ; Action : Régulateur" in texte
+    assert texte.index("Avant") < texte.index("Code : HYD-112 ; Libellé : Fuite ; Action : Dépose") < texte.index("Après")
+    assert "Code : ELE-031 ; Libellé : Alternateur ; Action : Régulateur" in texte
+    assert texte.index("Pression : 12 bar") < texte.index("Débit : 30 l/min") < texte.index("Après")
     assert " | " not in texte
 
 

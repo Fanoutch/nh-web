@@ -22,7 +22,8 @@ Règles :
 1. Appuie-toi seulement sur ces extraits ; n'utilise jamais tes connaissances générales.
 2. Si la réponse n'est pas dans les extraits, réponds exactement : « Je ne trouve pas cette information dans les documents du secteur {secteur}. »
 3. Réponds clairement, en quelques phrases, sans recopier les en-têtes des extraits et sans citer les sources : elles sont affichées à part.
-4. Structure ta réponse en Markdown simple quand c'est utile : listes à puces ou numérotées, **gras** pour les points importants. Pas de titres, pas de tableaux."""
+4. Structure ta réponse en Markdown simple quand c'est utile : listes à puces ou numérotées, **gras** pour les points importants. Pas de titres, pas de tableaux.
+5. Si la question porte sur un code, une référence ou une valeur précise qui ne figure pas à l'identique dans les extraits, réponds exactement la phrase de refus ci-dessus."""
 
 PROMPT_QUESTION = """EXTRAITS :
 {extraits}
@@ -137,10 +138,19 @@ class Assistant:
                 continue
             vus.add(m["id"])
             fusion.append(m)
-        limite = self.r.top_k + self.r.top_k_dossier + self.r.top_k_pj
+        # Les résultats vectoriels (sous le seuil) sont tous gardés : les mots-clés ne font qu'ajouter.
+        vectoriels = fusion[:self.r.top_k + self.r.top_k_dossier + self.r.top_k_pj]
         if not self.r.mots_cles:
-            return fusion[:limite]
+            return vectoriels
         try:
+            if not vectoriels:
+                # Garde-fou des questions sans réponse : rien sous le seuil, on n'ajoute par mots-clés
+                # que si la question contient un code présent tel quel dans l'index.
+                connus = self.base.codes_connus(secteur, question)
+                if conversation is not None:
+                    connus |= self.base.codes_connus_conversation(conversation, question)
+                if not connus:
+                    return []
             par_mots = self.base.chercher_mots_cles(secteur, question, self.r.top_k_mots_cles)
             if conversation is not None:
                 par_mots += self.base.chercher_mots_cles_conversation(conversation, question, self.r.top_k_mots_cles)
@@ -150,15 +160,15 @@ class Assistant:
         except Exception as exc:
             log.warning("recherche par mots-clés indisponible, recherche vectorielle seule : %s: %s",
                         type(exc).__name__, exc)
-            return fusion[:limite]
-        return _fusionner(fusion, par_mots, rares)[:limite]
+            return vectoriels
+        return _fusionner(vectoriels, par_mots, rares, self.r.top_k_mots_cles)
 
     def passages(self, secteur: str, question: str, documents_prioritaires: list[int] | None = None,
                  conversation: int | None = None) -> list[dict]:
         """Morceaux transmis au LLM pour cette question (utilisé aussi par le banc d'évaluation)."""
         vecteur = modeles.embedder([question], self.r)[0]
         trouves = self._rassembler(secteur, question, vecteur, documents_prioritaires, conversation)
-        return self._avec_voisins(secteur, trouves, conversation)
+        return _plafonner(self._avec_voisins(secteur, trouves, conversation), self.r.plafond_caracteres)
 
     def _avec_voisins(self, secteur: str, trouves: list[dict], conversation: int | None) -> list[dict]:
         """Ajoute autour de chaque morceau retenu ses voisins du même document, dans l'ordre du document.
@@ -195,9 +205,11 @@ class Assistant:
         return reformulee or question
 
 
-def _fusionner(vecteurs: list[dict], par_mots: list[dict], rares: set[str]) -> list[dict]:
-    """Fusion par rang (RRF). Un morceau trouvé seulement par mots-clés n'est gardé que s'il
-    contient un mot rare de la question (code, sigle) : protège les refus des questions sans réponse."""
+def _fusionner(vecteurs: list[dict], par_mots: list[dict], rares: set[str],
+               max_ajouts: int | None = None) -> list[dict]:
+    """Fusion par rang (RRF). Tous les morceaux vectoriels sont gardés ; un morceau trouvé seulement
+    par mots-clés n'est ajouté que s'il contient un mot rare de la question (code, sigle), et au plus
+    `max_ajouts` d'entre eux (les mieux classés). L'ordre final est celui du score RRF."""
     scores: dict[str, float] = {}
     morceaux: dict[str, dict] = {}
     origines: dict[str, set[str]] = {}
@@ -212,8 +224,25 @@ def _fusionner(vecteurs: list[dict], par_mots: list[dict], rares: set[str]) -> l
         morceaux.setdefault(m["id"], m)
         origines.setdefault(m["id"], set()).add("mots_cles")
     ordre = sorted(scores, key=lambda i: (-scores[i], i))
+    if max_ajouts is not None:
+        ajouts = [i for i in ordre if "vecteurs" not in origines[i]][:max_ajouts]
+        gardes = set(ajouts) | {i for i in ordre if "vecteurs" in origines[i]}
+        ordre = [i for i in ordre if i in gardes]
     return [{**morceaux[i], "origine": "les_deux" if len(origines[i]) == 2 else next(iter(origines[i]))}
             for i in ordre]
+
+
+def _plafonner(morceaux: list[dict], plafond: int) -> list[dict]:
+    """Limite le texte envoyé au LLM à `plafond` caractères (0 = sans plafond). Dans l'ordre : le
+    premier morceau est toujours gardé, puis un morceau n'est ajouté que s'il tient dans le plafond."""
+    if plafond <= 0 or not morceaux:
+        return morceaux
+    gardes, total = [morceaux[0]], len(morceaux[0]["texte"])
+    for m in morceaux[1:]:
+        if total + len(m["texte"]) <= plafond:
+            gardes.append(m)
+            total += len(m["texte"])
+    return gardes
 
 
 def _reponse_fixe(texte: str) -> Iterator[dict]:

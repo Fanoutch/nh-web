@@ -160,3 +160,19 @@ def test_reglages_top_k_mots_cles_invalide(tmp_path):
     f.write_text("ASSISTANT_TOP_K_MOTS_CLES=0\n", encoding="utf-8")
     with pytest.raises(ValueError, match="ASSISTANT_TOP_K_MOTS_CLES"):
         reglages.charger({"ASSISTANT_REGLAGES": str(f), "LLM_ENV": str(tmp_path / "absent.env")})
+
+
+def test_reglages_plafond_caracteres_defaut_et_lecture(tmp_path):
+    assert reglages.charger({"ASSISTANT_REGLAGES": "aucun"}).plafond_caracteres == 10000
+    f = tmp_path / "reglages.env"
+    f.write_text("ASSISTANT_PLAFOND_CARACTERES=0\n", encoding="utf-8")
+    r = reglages.charger({"ASSISTANT_REGLAGES": str(f), "LLM_ENV": str(tmp_path / "absent.env")})
+    assert r.plafond_caracteres == 0
+
+
+def test_reglages_plafond_caracteres_negatif_refuse(tmp_path):
+    f = tmp_path / "reglages.env"
+    f.write_text("ASSISTANT_PLAFOND_CARACTERES=-5\n", encoding="utf-8")
+    with pytest.raises(ValueError) as exc:
+        reglages.charger({"ASSISTANT_REGLAGES": str(f), "LLM_ENV": str(tmp_path / "absent.env")})
+    assert str(exc.value) == "ASSISTANT_PLAFOND_CARACTERES (-5) doit être supérieur ou égal à 0 (0 = sans plafond)."

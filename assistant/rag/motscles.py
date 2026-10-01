@@ -21,11 +21,12 @@ _SEPARATEURS = re.compile(r"[-./]")
 
 
 def _ascii(texte: str) -> str:
-    # Remplacer les apostrophes courbes par un espace pour éviter de coller les mots
-    # (Word produit des U+2019, les questions tapées utilisent le U+0027 droit)
-    texte = texte.replace("'", " ").replace("'", " ").replace("´", " ").replace("ʼ", " ")
+    # Apostrophes typographiques (Word produit des U+2019) remplacées par une espace, comme la droite
+    # U+0027 : sinon « l\u2019huile » donnerait « lhuile ». Écrites en échappements, jamais en littéraux.
+    for apostrophe in ("'", "\u2019", "\u2018", "\u00b4", "\u02bc"):
+        texte = texte.replace(apostrophe, " ")
     # Convertir les ligatures avant NFKD pour éviter qu'elles disparaissent
-    texte = texte.replace("œ", "oe").replace("Œ", "oe").replace("æ", "ae").replace("Æ", "ae")
+    texte = texte.replace("\u0153", "oe").replace("\u0152", "oe").replace("\u00e6", "ae").replace("\u00c6", "ae")
     return unicodedata.normalize("NFKD", texte.lower()).encode("ascii", "ignore").decode()
 
 
@@ -37,6 +38,16 @@ def mots(texte: str) -> list[str]:
     for brut in _MOT.findall(t):
         resultat.extend(p for p in _PARTIE.findall(brut) if p not in MOTS_VIDES)
     return resultat
+
+
+def codes(texte: str) -> set[str]:
+    """Codes du texte (mots reliés par tiret, point ou barre) sous leur forme collée : « HYD-112 » → « hyd112 »."""
+    return {_SEPARATEURS.sub("", code) for code in _CODE.findall(_ascii(texte))}
+
+
+def _fragments_de_codes(texte: str) -> set[str]:
+    """Morceaux des codes du texte (« hyd », « 112 » pour « HYD-112 »)."""
+    return {p for code in _CODE.findall(_ascii(texte)) for p in _PARTIE.findall(code)}
 
 
 class IndexMotsCles:
@@ -53,8 +64,16 @@ class IndexMotsCles:
     def _retirer_un(self, id_: str) -> None:
         compte = self._docs.pop(id_)
         self._longueurs.pop(id_)
-        self._df.subtract(compte.keys())
-        self._df += Counter()  # retire les zéros
+        for terme in compte:   # seulement les mots du morceau retiré, pas tout le vocabulaire
+            reste = self._df[terme] - 1
+            if reste > 0:
+                self._df[terme] = reste
+            else:
+                del self._df[terme]
+
+    def connait(self, terme: str) -> bool:
+        """Vrai si `terme` (forme normalisée, ex. « hyd112 ») figure dans au moins un morceau."""
+        return self._df.get(terme, 0) > 0
 
     def ajouter(self, ids: list[str], textes: list[str]) -> None:
         for id_, texte in zip(ids, textes):
@@ -90,6 +109,11 @@ class IndexMotsCles:
         return scores[:n]
 
     def rares(self, question: str, part_max: float = 0.10) -> set[str]:
-        """Mots de la question présents dans peu de morceaux (au moins un) : codes, sigles."""
+        """Mots de la question présents dans peu de morceaux (au moins un) : codes, sigles.
+
+        Les fragments d'un code de la question ne comptent pas (seule sa forme collée compte) :
+        « HYD-113 » ne doit pas retrouver « HYD-112 » par « hyd »."""
         limite = max(1, math.floor(part_max * len(self._docs)))
-        return {t for t in set(mots(question)) if 0 < self._df.get(t, 0) <= limite}
+        termes = set(mots(question)) - (_fragments_de_codes(question) - codes(question))
+        return {t for t in termes if 0 < self._df.get(t, 0) <= limite}
+

@@ -12,7 +12,7 @@ from pathlib import Path
 import chromadb
 from chromadb.config import Settings
 
-from rag.motscles import IndexMotsCles
+from rag.motscles import IndexMotsCles, codes
 
 
 class BaseVectorielle:
@@ -289,6 +289,27 @@ class BaseVectorielle:
             if collection is None:
                 return set()
             return self._index_de(f"conv_{conversation_id}", collection).rares(question, 0.10)
+
+    def codes_connus(self, secteur: str, question: str) -> set[str]:
+        """Codes de la question (forme collée, ex. « hyd112 ») présents dans l'index du secteur."""
+        demandes = codes(question)
+        if not demandes:
+            return set()
+        with self._verrou:
+            index = self._index_de(f"secteur_{secteur}", self._collection(secteur))
+            return {c for c in demandes if index.connait(c)}
+
+    def codes_connus_conversation(self, conversation_id: int, question: str) -> set[str]:
+        """Idem `codes_connus`, dans les pièces jointes d'une conversation (vide si aucune)."""
+        demandes = codes(question)
+        if not demandes:
+            return set()
+        with self._verrou:
+            collection = self._collection_conversation(conversation_id, creer=False)
+            if collection is None:
+                return set()
+            index = self._index_de(f"conv_{conversation_id}", collection)
+            return {c for c in demandes if index.connait(c)}
 
     def mots_rares(self, secteur: str, question: str) -> set[str]:
         """Mots de la question présents dans moins de 10 % des morceaux du secteur."""

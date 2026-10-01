@@ -340,3 +340,12 @@ def test_mots_rares_conversation(base):
     rares = base.mots_rares_conversation(3, "vol ZX-900")
     assert "zx900" in rares and "vol" not in rares
     assert base.mots_rares_conversation(99, "vol ZX-900") == set()
+
+
+def test_codes_connus_secteur_et_conversation(base):
+    _deux_documents(base)
+    assert base.codes_connus("bmn", "Que faire pour HYD-112 et HYD-113 ?") == {"hyd112"}
+    assert base.codes_connus("bmn", "graissage ?") == set()
+    assert base.codes_connus_conversation(7, "HYD-112 ?") == set()            # pas de pièce jointe
+    base.ajouter_piece_jointe(7, 1, "P.pdf", [{"texte": "plaque ZX-900", "page": 1}], [[1.0, 0.0, 0.0]])
+    assert base.codes_connus_conversation(7, "ZX-900 et HYD-112 ?") == {"zx900"}

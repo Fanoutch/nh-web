@@ -61,6 +61,7 @@ class Reglages:
     voisins: int = 1
     mots_cles: bool = True
     top_k_mots_cles: int = 8
+    plafond_caracteres: int = 10000
 
     @property
     def taille_max(self) -> int:
@@ -98,6 +99,7 @@ _CLES = {  # variable -> (champ de Reglages, conversion)
     "ASSISTANT_VOISINS": ("voisins", int),
     "ASSISTANT_MOTS_CLES": ("mots_cles", _booleen),
     "ASSISTANT_TOP_K_MOTS_CLES": ("top_k_mots_cles", int),
+    "ASSISTANT_PLAFOND_CARACTERES": ("plafond_caracteres", int),
 }
 
 
@@ -163,3 +165,6 @@ def _verifier(r: Reglages) -> None:
         raise ValueError(f"ASSISTANT_VOISINS ({r.voisins}) doit être supérieur ou égal à 0.")
     if r.top_k_mots_cles < 1:
         raise ValueError(f"ASSISTANT_TOP_K_MOTS_CLES ({r.top_k_mots_cles}) doit être supérieur ou égal à 1.")
+    if r.plafond_caracteres < 0:
+        raise ValueError(f"ASSISTANT_PLAFOND_CARACTERES ({r.plafond_caracteres}) doit être supérieur ou égal "
+                         f"à 0 (0 = sans plafond).")
