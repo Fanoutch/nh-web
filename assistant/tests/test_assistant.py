@@ -381,7 +381,7 @@ def test_panne_de_l_index_vectoriel_seul_et_avertissement(tmp_path, journal, mon
 
 def test_fusionner_rrf_et_origine():
     v = [{"id": "a", "texte": "x", "distance": 0.1}, {"id": "b", "texte": "y", "distance": 0.2}]
-    mc = [{"id": "b", "texte": "y", "distance": None}, {"id": "c", "texte": "code hyd112", "distance": None},
+    mc = [{"id": "b", "texte": "y", "distance": None}, {"id": "c", "texte": "code HYD-112", "distance": None},
           {"id": "d", "texte": "rien de rare", "distance": None}]
     f = _fusionner(v, mc, {"hyd112"})
     assert [m["id"] for m in f] == ["b", "a", "c"]                 # b dans les deux listes passe en tête

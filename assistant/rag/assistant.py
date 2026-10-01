@@ -11,7 +11,7 @@ from typing import Iterator
 from rag import lecteurs, modeles
 from rag.base import BaseVectorielle
 from rag.decoupage import chunk_documents
-from rag.motscles import _ascii, _MOT, mots
+from rag.motscles import mots
 from rag.reglages import Reglages
 
 log = logging.getLogger("assistant")
@@ -192,12 +192,6 @@ class Assistant:
         return reformulee or question
 
 
-def _mots_du_morceau(texte: str) -> set[str]:
-    """Mots d'un morceau pour le garde-fou : ceux de l'index, plus les mots collés tels qu'écrits
-    (« HYD112 » sans tiret n'est indexé qu'en « hyd » + « 112 », mais reste un code à reconnaître)."""
-    return set(mots(texte)) | set(_MOT.findall(_ascii(texte)))
-
-
 def _fusionner(vecteurs: list[dict], par_mots: list[dict], rares: set[str]) -> list[dict]:
     """Fusion par rang (RRF). Un morceau trouvé seulement par mots-clés n'est gardé que s'il
     contient un mot rare de la question (code, sigle) : protège les refus des questions sans réponse."""
@@ -209,7 +203,7 @@ def _fusionner(vecteurs: list[dict], par_mots: list[dict], rares: set[str]) -> l
         morceaux.setdefault(m["id"], m)
         origines.setdefault(m["id"], set()).add("vecteurs")
     for rang, m in enumerate(par_mots, start=1):
-        if m["id"] not in morceaux and not (_mots_du_morceau(m["texte"]) & rares):
+        if m["id"] not in morceaux and not (set(mots(m["texte"])) & rares):
             continue
         scores[m["id"]] = scores.get(m["id"], 0.0) + 1 / (RRF_K + rang)
         morceaux.setdefault(m["id"], m)
