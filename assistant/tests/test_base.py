@@ -279,3 +279,49 @@ def test_mots_rares_du_secteur(base):
     base.ajouter_document("bmn", 1, "A.pdf", morceaux, [[1.0, float(i), 0.0] for i in range(20)])
     assert "hyd112" in base.mots_rares("bmn", "vol HYD-112")
     assert "vol" not in base.mots_rares("bmn", "vol HYD-112")
+
+
+def test_mots_cles_lectures_pendant_reindexation(base):
+    _deux_documents(base)
+    base.chercher_mots_cles("bmn", "code", 5)       # index construit
+    exceptions: list = []
+
+    def lecteur():
+        try:
+            for _ in range(50):
+                base.chercher_mots_cles("bmn", "code HYD-112 graissage", 5)
+                base.mots_rares("bmn", "code HYD-112")
+        except Exception as e:
+            exceptions.append(e)
+
+    def redacteur():
+        try:
+            for i in range(50):
+                base.ajouter_document("bmn", 1, "A.pdf", [{"texte": f"code HYD-112 version {i}", "page": 1}],
+                                      [[1.0, 0.0, 0.0]])
+        except Exception as e:
+            exceptions.append(e)
+
+    fils = [threading.Thread(target=lecteur) for _ in range(3)] + [threading.Thread(target=redacteur)]
+    for fil in fils:
+        fil.start()
+    for fil in fils:
+        fil.join()
+    assert exceptions == []
+
+
+def test_mots_cles_supprimer_conversation_vide_l_index(base):
+    base.ajouter_piece_jointe(3, 5, "pj.pdf", [{"texte": "référence PC-HYD-07", "page": None}], [[0.0, 1.0, 0.0]])
+    assert base.chercher_mots_cles_conversation(3, "PC-HYD-07", 5)
+    base.supprimer_conversation(3)
+    assert base.chercher_mots_cles_conversation(3, "PC-HYD-07", 5) == []
+
+
+def test_mots_cles_piece_jointe_reindexee_avec_moins_de_morceaux(base):
+    base.ajouter_piece_jointe(3, 5, "pj.pdf", [{"texte": "alpha", "page": None}, {"texte": "bravo", "page": None}],
+                              [[0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    assert base.chercher_mots_cles_conversation(3, "bravo", 5)
+    base.ajouter_piece_jointe(3, 5, "pj.pdf", [{"texte": "alpha", "page": None}], [[0.0, 1.0, 0.0]])
+    assert base.chercher_mots_cles_conversation(3, "bravo", 5) == []
+    base.ajouter_piece_jointe(3, 5, "pj.pdf", [], [])
+    assert base.chercher_mots_cles_conversation(3, "alpha", 5) == []

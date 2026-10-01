@@ -265,7 +265,8 @@ class BaseVectorielle:
     def _mots_cles(self, nom: str, collection, question: str, n: int, pj: bool) -> list[dict]:
         if collection is None:
             return []
-        trouves = self._index_de(nom, collection).chercher(question, n)
+        with self._verrou:   # les écritures modifient l'index : lecture sous le même verrou
+            trouves = self._index_de(nom, collection).chercher(question, n)
         if not trouves:
             return []
         scores = dict(trouves)
@@ -283,4 +284,5 @@ class BaseVectorielle:
 
     def mots_rares(self, secteur: str, question: str) -> set[str]:
         """Mots de la question présents dans moins de 10 % des morceaux du secteur."""
-        return self._index_de(f"secteur_{secteur}", self._collection(secteur)).rares(question, 0.10)
+        with self._verrou:
+            return self._index_de(f"secteur_{secteur}", self._collection(secteur)).rares(question, 0.10)
