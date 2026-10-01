@@ -282,13 +282,18 @@ def test_mots_rares_du_secteur(base):
 
 
 def test_mots_cles_lectures_pendant_reindexation(base):
-    _deux_documents(base)
-    base.chercher_mots_cles("bmn", "code", 5)       # index construit
+    # Index garni directement (sans ChromaDB) de milliers de morceaux : les itérations sont assez longues
+    # pour que, sans verrou en lecture, « dictionary changed size during iteration » se produise.
+    index = base._index_de("secteur_bmn", base._collection("bmn"))
+    index.ajouter([f"doc2_m{i}" for i in range(1500)], [f"vol maintenance mot{i} code HYD-{i}" for i in range(1500)])
+    ids = [f"doc1_m{i}" for i in range(1500)]
+    textes = [f"graissage rotor mot{i} code HYD-{i}" for i in range(1500)]
     exceptions: list = []
+    fin = threading.Event()
 
     def lecteur():
         try:
-            for _ in range(50):
+            while not fin.is_set():
                 base.chercher_mots_cles("bmn", "code HYD-112 graissage", 5)
                 base.mots_rares("bmn", "code HYD-112")
         except Exception as e:
@@ -296,11 +301,13 @@ def test_mots_cles_lectures_pendant_reindexation(base):
 
     def redacteur():
         try:
-            for i in range(50):
-                base.ajouter_document("bmn", 1, "A.pdf", [{"texte": f"code HYD-112 version {i}", "page": 1}],
-                                      [[1.0, 0.0, 0.0]])
+            for _ in range(5):
+                with base._verrou:   # comme les vraies écritures
+                    base._maj_index("secteur_bmn", "doc1_m", ids, textes)
         except Exception as e:
             exceptions.append(e)
+        finally:
+            fin.set()
 
     fils = [threading.Thread(target=lecteur) for _ in range(3)] + [threading.Thread(target=redacteur)]
     for fil in fils:
