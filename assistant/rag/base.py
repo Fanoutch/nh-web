@@ -12,6 +12,8 @@ from pathlib import Path
 import chromadb
 from chromadb.config import Settings
 
+from rag.motscles import IndexMotsCles, codes
+
 
 class BaseVectorielle:
     def __init__(self, dossier: Path):
@@ -20,6 +22,7 @@ class BaseVectorielle:
         self._client = chromadb.PersistentClient(path=str(dossier), settings=Settings(anonymized_telemetry=False))
         self._verrou = threading.RLock()
         self._collections: dict[str, chromadb.Collection] = {}
+        self._index: dict[str, IndexMotsCles] = {}   # index de mots-clés (BM25), construit au premier usage
 
     def _collection(self, secteur: str):
         # Clé de cache = nom réel de la collection ChromaDB (et non le slug de secteur seul), pour ne
@@ -68,22 +71,28 @@ class BaseVectorielle:
         with self._verrou:
             collection = self._collection(secteur)
             collection.delete(where={"document_id": document_id})
+            nom_index, prefixe = f"secteur_{secteur}", f"doc{document_id}_m"
+            self._maj_index(nom_index, prefixe, [], [])   # avant le retour anticipé : pas de morceau fantôme
             if not morceaux:
                 return
+            ids = [f"{prefixe}{i}" for i in range(len(morceaux))]
+            textes = [m["texte"] for m in morceaux]
             collection.add(
-                ids=[f"doc{document_id}_m{i}" for i in range(len(morceaux))],
+                ids=ids,
                 embeddings=vecteurs,
-                documents=[m["texte"] for m in morceaux],
+                documents=textes,
                 metadatas=[
                     {"document_id": document_id, "nom": nom,
                      "page": m["page"] if m["page"] is not None else -1}
                     for m in morceaux
                 ],
             )
+            self._maj_index(nom_index, prefixe, ids, textes)
 
     def supprimer_document(self, secteur: str, document_id: int) -> None:
         with self._verrou:
             self._collection(secteur).delete(where={"document_id": document_id})
+            self._maj_index(f"secteur_{secteur}", f"doc{document_id}_m", [], [])
 
     def chercher(self, secteur: str, vecteur: list[float], top_k: int,
                  document_ids: list[int] | None = None) -> list[dict]:
@@ -172,18 +181,23 @@ class BaseVectorielle:
         with self._verrou:
             collection = self._collection_conversation(conversation_id, creer=True)
             collection.delete(where={"piece_id": piece_id})
+            nom_index, prefixe = f"conv_{conversation_id}", f"pj{piece_id}_m"
+            self._maj_index(nom_index, prefixe, [], [])
             if not morceaux:
                 return
+            ids = [f"{prefixe}{i}" for i in range(len(morceaux))]
+            textes = [m["texte"] for m in morceaux]
             collection.add(
-                ids=[f"pj{piece_id}_m{i}" for i in range(len(morceaux))],
+                ids=ids,
                 embeddings=vecteurs,
-                documents=[m["texte"] for m in morceaux],
+                documents=textes,
                 metadatas=[
                     {"piece_id": piece_id, "nom": nom,
                      "page": m["page"] if m["page"] is not None else -1}
                     for m in morceaux
                 ],
             )
+            self._maj_index(nom_index, prefixe, ids, textes)
 
     def chercher_conversation(self, conversation_id: int, vecteur: list[float], top_k: int) -> list[dict]:
         collection = self._collection_conversation(conversation_id, creer=False)
@@ -217,6 +231,7 @@ class BaseVectorielle:
             if collection is None:
                 return
             collection.delete(where={"piece_id": piece_id})
+            self._maj_index(f"conv_{conversation_id}", f"pj{piece_id}_m", [], [])
 
     def supprimer_conversation(self, conversation_id: int) -> None:
         nom = f"conv_{conversation_id}"
@@ -226,3 +241,77 @@ class BaseVectorielle:
             except Exception:
                 pass
             self._collections.pop(nom, None)
+            self._index.pop(nom, None)
+
+    def _index_de(self, nom: str, collection) -> IndexMotsCles:
+        """Index BM25 de la collection, construit au premier usage depuis les textes rangés."""
+        if nom in self._index:
+            return self._index[nom]
+        with self._verrou:
+            if nom not in self._index:
+                index = IndexMotsCles()
+                donnees = collection.get(include=["documents"])
+                index.ajouter(donnees["ids"], donnees["documents"])
+                self._index[nom] = index
+            return self._index[nom]
+
+    def _maj_index(self, nom: str, prefixe: str, ids: list[str], textes: list[str]) -> None:
+        """Tient l'index à jour s'il est déjà construit (sinon il sera lu frais au premier usage)."""
+        index = self._index.get(nom)
+        if index is not None:
+            index.retirer(prefixe)
+            index.ajouter(ids, textes)
+
+    def _mots_cles(self, nom: str, collection, question: str, n: int, pj: bool) -> list[dict]:
+        if collection is None:
+            return []
+        with self._verrou:   # les écritures modifient l'index : lecture sous le même verrou
+            trouves = self._index_de(nom, collection).chercher(question, n)
+        if not trouves:
+            return []
+        scores = dict(trouves)
+        morceaux = self._lire_ids(collection, [i for i, _ in trouves], pj)
+        return [{**m, "score_mots_cles": scores[m["id"]]} for m in morceaux]
+
+    def chercher_mots_cles(self, secteur: str, question: str, n: int) -> list[dict]:
+        """Morceaux du secteur les mieux classés par mots-clés (même forme que `chercher`, distance None)."""
+        return self._mots_cles(f"secteur_{secteur}", self._collection(secteur), question, n, False)
+
+    def chercher_mots_cles_conversation(self, conversation_id: int, question: str, n: int) -> list[dict]:
+        """Idem, dans les pièces jointes d'une conversation."""
+        return self._mots_cles(f"conv_{conversation_id}",
+                               self._collection_conversation(conversation_id, creer=False), question, n, True)
+
+    def mots_rares_conversation(self, conversation_id: int, question: str) -> set[str]:
+        """Idem `mots_rares`, dans les pièces jointes d'une conversation (vide si aucune)."""
+        with self._verrou:
+            collection = self._collection_conversation(conversation_id, creer=False)
+            if collection is None:
+                return set()
+            return self._index_de(f"conv_{conversation_id}", collection).rares(question, 0.10)
+
+    def codes_connus(self, secteur: str, question: str) -> set[str]:
+        """Codes de la question (forme collée, ex. « hyd112 ») présents dans l'index du secteur."""
+        demandes = codes(question)
+        if not demandes:
+            return set()
+        with self._verrou:
+            index = self._index_de(f"secteur_{secteur}", self._collection(secteur))
+            return {c for c in demandes if index.connait(c)}
+
+    def codes_connus_conversation(self, conversation_id: int, question: str) -> set[str]:
+        """Idem `codes_connus`, dans les pièces jointes d'une conversation (vide si aucune)."""
+        demandes = codes(question)
+        if not demandes:
+            return set()
+        with self._verrou:
+            collection = self._collection_conversation(conversation_id, creer=False)
+            if collection is None:
+                return set()
+            index = self._index_de(f"conv_{conversation_id}", collection)
+            return {c for c in demandes if index.connait(c)}
+
+    def mots_rares(self, secteur: str, question: str) -> set[str]:
+        """Mots de la question présents dans moins de 10 % des morceaux du secteur."""
+        with self._verrou:
+            return self._index_de(f"secteur_{secteur}", self._collection(secteur)).rares(question, 0.10)

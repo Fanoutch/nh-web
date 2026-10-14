@@ -38,6 +38,9 @@ class AssistantChat extends Component
     /** Taille maximum d'une pièce jointe, en Ko (fixe, 20 Mo — indépendant de la config des documents du secteur). */
     private const TAILLE_MAX_KO = 20 * 1024;
 
+    /** Début de la phrase de refus du service (rag/assistant.py, REPONSE_INTROUVABLE et règle 2 du prompt). */
+    private const DEBUT_REFUS = 'Je ne trouve pas cette information';
+
     public Secteur $secteur;
 
     /** Verrouillée : seul le serveur la modifie (ouvrir / nouvelle / envoyer), jamais le navigateur. */
@@ -397,6 +400,12 @@ class AssistantChat extends Component
         } else {
             $statut = AssistantMessage::COMPLET;
             $contenu = $reponse;
+        }
+
+        // Un refus (« Je ne trouve pas cette information… ») n'a pas de source : le service a pu en
+        // envoyer (passages jugés insuffisants par le LLM), mais les afficher sous un refus égare.
+        if (str_starts_with(trim($reponse), self::DEBUT_REFUS)) {
+            $sources = [];
         }
 
         // Le chemin de dossier d'une source est FIGÉ ici, au moment d'enregistrer le message :

@@ -89,3 +89,17 @@ def test_cache_ignore_une_ligne_illisible(tmp_path):
     e2 = envelopper_embedder(emb, tmp_path, "m")
     assert e2(["a"], None) == [[1.0]]
     assert len(appels) == 1
+
+
+def test_contient_ligne_de_tableau_avec_longs_en_tetes():
+    ligne = ("Tâche concernée par la visite : Inspection des pales ; Échéance réglementaire en heures : 100 h ; "
+             "Tolérance accordée : 10 h ; Autorité de validation : Chef BMN")
+    assert not contient(ligne, "Inspection des pales 100 h 10 h Chef BMN")
+    assert contient(ligne, "Inspection des pales 100 h 10 h Chef BMN", facteur=2.0)
+
+
+def test_evaluer_recherche_tableau_fenetre_elargie():
+    question = q(type_="tableau", passages=("Inspection des pales 100 h 10 h Chef BMN",))
+    ligne = ("Tâche concernée par la visite : Inspection des pales ; Échéance réglementaire en heures : 100 h ; "
+             "Tolérance accordée : 10 h ; Autorité de validation : Chef BMN")
+    assert evaluer_recherche(question, [m(ligne)], {1: "m"})["trouve"] is True

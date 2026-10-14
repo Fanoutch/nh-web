@@ -76,6 +76,8 @@ def test_repondre_sources_puis_texte_en_flux(assistant, journal):
 
 
 def test_rien_de_pertinent_reponse_fixe_sans_llm(assistant, journal):
+    """Chemin de rejet par le seuil seul (mots-clés coupés)."""
+    assistant.r = Reglages(**{**assistant.r.__dict__, "mots_cles": False})
     evenements = list(assistant.repondre("bmn", "BMN", "Comment faire un compost ?", []))
 
     assert evenements == [
@@ -84,6 +86,27 @@ def test_rien_de_pertinent_reponse_fixe_sans_llm(assistant, journal):
         {"type": "fin"},
     ]
     assert journal["flux"] == []
+
+
+def test_rien_de_pertinent_reponse_fixe_sans_llm_mots_cles_actives(tmp_path, journal):
+    """Mots-clés activés : un mot rare de la question (« accumulateur ») ne suffit pas à ramener un
+    morceau quand la recherche vectorielle n'a rien gardé et que la question ne contient aucun code."""
+    r = Reglages(llm_actif=True, top_k=6, seuil_distance=0.5, voisins=0, mots_cles=True, top_k_mots_cles=8)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    textes = [f"vol de maintenance numero {i}" for i in range(19)] + ["accumulateur du circuit HYD-112"]
+    a.base.ajouter_document("bmn", 1, "M.pdf", [{"texte": t, "page": 1} for t in textes], [[1.0, 0.0, 0.0]] * 20)
+
+    evenements = list(a.repondre("bmn", "BMN", "Comment purger un compost accumulateur ?", []))
+
+    assert evenements == [
+        {"type": "sources", "sources": []},
+        {"type": "texte", "texte": "Je ne trouve pas cette information dans les documents du secteur BMN."},
+        {"type": "fin"},
+    ]
+    assert journal["flux"] == []
+    # Même question avec un code présent dans l'index : le morceau est ajouté par mots-clés.
+    passages = a.passages("bmn", "compost HYD-112 ?")
+    assert [(p["id"], p["origine"]) for p in passages] == [("doc1_m19", "mots_cles")]
 
 
 def test_question_de_suite_reformulee_pour_la_recherche(assistant, journal):
@@ -323,3 +346,155 @@ def test_page_a_morceau_commencant_apres_la_page_1():
     assert _page_a(reperes, 0) == 1
     assert _page_a(reperes, 150) == 2
     assert _page_a(reperes, 250) == 3
+
+
+from rag.assistant import _fusionner
+
+
+def _assistant_mots_cles(tmp_path, journal, **reglages_supp):
+    r = Reglages(llm_actif=True, top_k=1, seuil_distance=1.0, voisins=0, mots_cles=True, top_k_mots_cles=3,
+                 **reglages_supp)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    textes = ["vol de maintenance ordonné par le chef"] + [f"compost numéro {i}" for i in range(18)] + \
+             ["code HYD-112 : fuite de l'accumulateur"]
+    a.base.ajouter_document("bmn", 1, "M.pdf", [{"texte": t, "page": 1} for t in textes],
+                            [faux_vecteur(t) for t in textes])
+    return a
+
+
+def test_mots_cles_retrouvent_le_code_rate_par_les_vecteurs(tmp_path, journal):
+    a = _assistant_mots_cles(tmp_path, journal)
+    passages = a.passages("bmn", "vol HYD-112 ?")
+    ids = {p["id"]: p["origine"] for p in passages}
+    assert ids["doc1_m19"] == "mots_cles"
+    assert ids["doc1_m0"] in ("vecteurs", "les_deux")
+
+
+def test_garde_fou_sans_mot_rare_rien_n_est_ajoute(tmp_path, journal):
+    a = _assistant_mots_cles(tmp_path, journal)
+    passages = a.passages("bmn", "compost ?")            # « compost » est partout : pas rare
+    assert all(p["origine"] != "mots_cles" for p in passages)
+
+
+def test_question_sans_mot_utile(tmp_path, journal):
+    a = _assistant_mots_cles(tmp_path, journal)
+    assert [p["origine"] for p in a.passages("bmn", "de la ?")] in ([], ["vecteurs"])
+
+
+def test_mots_cles_desactives_identique_a_aujourd_hui(tmp_path, journal):
+    r = Reglages(llm_actif=True, top_k=6, seuil_distance=1.0, voisins=0, mots_cles=False)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    a.indexer("bmn", 1, str(pdf_texte(tmp_path / "m.pdf", ["Le vol de maintenance est ordonne par le chef BMN."])), "M.pdf")
+    passages = a.passages("bmn", "vol de maintenance ?")
+    assert [p["id"] for p in passages] == ["doc1_m0"] and "origine" not in passages[0]
+
+
+def test_panne_de_l_index_vectoriel_seul_et_avertissement(tmp_path, journal, monkeypatch, caplog):
+    a = _assistant_mots_cles(tmp_path, journal)
+
+    def panne(*args, **kwargs):
+        raise RuntimeError("index illisible")
+
+    monkeypatch.setattr(a.base, "chercher_mots_cles", panne)
+    with caplog.at_level("WARNING"):
+        passages = a.passages("bmn", "vol HYD-112 ?")
+    assert [p["id"] for p in passages] == ["doc1_m0"]
+    assert "recherche par mots-clés indisponible" in caplog.text
+
+
+def test_fusionner_rrf_et_origine():
+    v = [{"id": "a", "texte": "x", "distance": 0.1}, {"id": "b", "texte": "y", "distance": 0.2}]
+    mc = [{"id": "b", "texte": "y", "distance": None}, {"id": "c", "texte": "code HYD-112", "distance": None},
+          {"id": "d", "texte": "rien de rare", "distance": None}]
+    f = _fusionner(v, mc, {"hyd112"})
+    assert [m["id"] for m in f] == ["b", "a", "c"]                 # b dans les deux listes passe en tête
+    assert [m["origine"] for m in f] == ["les_deux", "vecteurs", "mots_cles"]
+
+
+def test_mots_cles_retrouvent_un_code_de_la_piece_jointe(tmp_path, journal):
+    r = Reglages(llm_actif=True, top_k=1, top_k_pj=1, seuil_distance=0.5, voisins=0, mots_cles=True,
+                 top_k_mots_cles=3)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    a.base.ajouter_document("bmn", 1, "M.pdf", [{"texte": "vol de maintenance ordonné", "page": 1}],
+                            [faux_vecteur("vol maintenance")])
+    textes = ["note sur le compost", "plaque ZX-900 : serrage à 40 Nm"]
+    a.base.ajouter_piece_jointe(7, 2, "P.pdf", [{"texte": t, "page": 1} for t in textes],
+                                [faux_vecteur(t) for t in textes])
+    passages = a.passages("bmn", "vol ZX-900 ?", conversation=7)
+    origines = {p["id"]: p["origine"] for p in passages}
+    assert origines["pj2_m1"] == "mots_cles"
+
+
+def test_code_voisin_aucun_morceau_ajoute_par_mots_cles(tmp_path, journal):
+    """« HYD-113 » (absent) ne ramène pas le morceau de « HYD-112 » par ses fragments « hyd »."""
+    a = _assistant_mots_cles(tmp_path, journal)
+    passages = a.passages("bmn", "vol HYD-113 ?")
+    assert "doc1_m19" not in {p["id"] for p in passages}
+    assert all(p["origine"] != "mots_cles" for p in passages)
+
+
+def test_vectoriels_jamais_evinces_par_les_mots_cles(tmp_path, journal):
+    """6 secteur + 3 prioritaires + 3 pièces jointes + 8 morceaux à mot rare : les 12 vectoriels restent."""
+    r = Reglages(llm_actif=True, top_k=6, top_k_dossier=3, top_k_pj=3, seuil_distance=1.0, voisins=0,
+                 mots_cles=True, top_k_mots_cles=8)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    proche = [1.0, 0.0, 0.0]
+    a.base.ajouter_document("bmn", 1, "S.pdf", [{"texte": f"vol de maintenance {i}", "page": 1} for i in range(6)],
+                            [proche] * 6)
+    a.base.ajouter_document("bmn", 9, "P.pdf", [{"texte": f"consigne prioritaire {i}", "page": 1} for i in range(3)],
+                            [[1.0, 0.4, 0.0]] * 3)
+    a.base.ajouter_document("bmn", 2, "C.pdf", [{"texte": f"plaque ZX-900 rubrique {i}", "page": 1} for i in range(8)],
+                            [[0.0, 1.0, 0.0]] * 8)
+    a.base.ajouter_document("bmn", 3, "F.pdf", [{"texte": f"compost numero {i}", "page": 1} for i in range(80)],
+                            [[0.0, 0.0, 1.0]] * 80)
+    a.base.ajouter_piece_jointe(7, 5, "PJ.pdf", [{"texte": f"note jointe {i}", "page": 1} for i in range(3)],
+                                [proche] * 3)
+
+    passages = a.passages("bmn", "vol ZX-900 ?", documents_prioritaires=[9], conversation=7)
+
+    ids = {p["id"] for p in passages}
+    vectoriels = {f"doc1_m{i}" for i in range(6)} | {f"doc9_m{i}" for i in range(3)} | {f"pj5_m{i}" for i in range(3)}
+    assert vectoriels <= ids
+    assert {f"doc2_m{i}" for i in range(8)} <= ids          # mots-clés ajoutés en plus, au plus 8
+    assert len(passages) == 20
+
+
+def test_plafond_zero_ne_change_rien(tmp_path, journal):
+    r = Reglages(llm_actif=True, top_k=3, seuil_distance=1.0, voisins=0, mots_cles=False, plafond_caracteres=0)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    textes = ["vol " + "x" * 500, "vol " + "y" * 500, "vol " + "z" * 500]
+    a.base.ajouter_document("bmn", 1, "M.pdf", [{"texte": t, "page": 1} for t in textes], [[1.0, 0.0, 0.0]] * 3)
+    assert len(a.passages("bmn", "vol ?")) == 3
+
+
+def test_plafond_garde_le_premier_et_respecte_le_total(tmp_path, journal):
+    r = Reglages(llm_actif=True, top_k=4, seuil_distance=1.0, voisins=0, mots_cles=False, plafond_caracteres=300)
+    a = Assistant(r, BaseVectorielle(tmp_path / "chroma"))
+    textes = ["vol " + "a" * 400, "vol " + "b" * 200, "vol " + "c" * 50, "vol " + "d" * 30]
+    vecteurs = [[1.0, 0.0, 0.0], [1.0, 0.1, 0.0], [1.0, 0.2, 0.0], [1.0, 0.3, 0.0]]
+    a.base.ajouter_document("bmn", 1, "M.pdf", [{"texte": t, "page": 1} for t in textes], vecteurs)
+
+    passages = a.passages("bmn", "vol ?")
+
+    assert passages[0]["id"] == "doc1_m0"                       # premier gardé même s'il dépasse
+    assert sum(len(p["texte"]) for p in passages[1:]) <= 300
+    assert [p["id"] for p in passages] == ["doc1_m0"]        # 404 caractères : plus rien ne tient après
+
+    a.r = Reglages(**{**r.__dict__, "plafond_caracteres": 690})
+    ids = [p["id"] for p in a.passages("bmn", "vol ?")]
+    assert ids == ["doc1_m0", "doc1_m1", "doc1_m2"]           # 404 + 204 + 54 = 662 ; + 34 dépasserait 690
+
+
+def test_prompt_refus_si_code_absent_a_l_identique():
+    assert ("5. Si la question porte sur un code, une référence ou une valeur précise qui ne figure pas "
+            "à l'identique dans les extraits, réponds exactement la phrase de refus ci-dessus.") in module.PROMPT_SYSTEME
+
+
+def test_morceau_trouve_par_mots_cles_seuls_n_a_pas_de_voisins(tmp_path, journal):
+    """Régression R05/R17 : les voisins des morceaux « mots-clés » gonflaient le texte jusqu'au plafond et
+    chassaient le morceau qui portait la réponse. Le morceau vectoriel garde ses voisins."""
+    a = _assistant_mots_cles(tmp_path, journal)
+    a.r = Reglages(**{**a.r.__dict__, "voisins": 1})
+    ids = {p["id"] for p in a.passages("bmn", "vol HYD-112 ?")}
+    assert "doc1_m19" in ids and "doc1_m18" not in ids   # code trouvé par mots-clés : pas de voisin
+    assert "doc1_m1" in ids                              # voisin du morceau vectoriel doc1_m0

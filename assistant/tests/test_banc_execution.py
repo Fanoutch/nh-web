@@ -87,8 +87,8 @@ def test_rapport_montre_erreurs_et_illisibles(tmp_path):
     dossier = ecrire_rapport([res], tmp_path / "s")
 
     rapport = (dossier / "rapport.md").read_text(encoding="utf-8").splitlines()
-    en_tete = [c.strip() for c in rapport[2].strip("|").split("|")]
-    ligne = [c.strip() for c in rapport[4].strip("|").split("|")]
+    en_tete = [c.strip() for c in rapport[4].strip("|").split("|")]
+    ligne = [c.strip() for c in rapport[6].strip("|").split("|")]
     assert ligne[en_tete.index("Erreurs")] == "2"
     assert ligne[en_tete.index("Illisibles")] == "1"
 
@@ -103,3 +103,42 @@ def test_banc_refuse_reponses_si_llm_desactive(tmp_path, monkeypatch, capsys):
 
     assert code == 2
     assert "Le LLM est désactivé" in capsys.readouterr().out
+
+
+def test_trouve_par_mots_cles_et_etat_du_rapport(corpus, tmp_path, monkeypatch):
+    from rag.assistant import Assistant
+
+    def passages_mots_cles(self, secteur, question, *a, **k):
+        return [{"id": "doc1_m0", "document_id": 1, "nom": "m.txt", "page": None, "pj": False, "distance": None,
+                 "texte": "La pression de gonflage à froid est de 1 450 kPa.", "origine": "mots_cles"}]
+
+    monkeypatch.setattr(Assistant, "passages", passages_mots_cles)
+    res = executer("actuel", Reglages(llm_actif=True, top_k=1, seuil_distance=2.0), "txt", QUESTIONS[:1], corpus, False)
+    ligne = res["lignes"][0]
+    assert ligne["trouve"] is True and ligne["trouve_par_mots_cles"] is True
+    assert "[mots_cles]" in ligne["retrouves"]
+    rapport = (ecrire_rapport([res], tmp_path / "s") / "rapport.md").read_text(encoding="utf-8")
+    assert rapport.splitlines()[2].startswith("**État : OK**")
+    assert "Trouvé grâce aux mots-clés" in rapport
+
+
+def test_volume_envoye_par_question_et_dans_le_rapport(corpus, tmp_path, monkeypatch):
+    from rag.assistant import Assistant
+
+    def deux_passages(self, secteur, question, *a, **k):
+        return [{"id": f"doc1_m{i}", "document_id": 1, "nom": "m.txt", "page": None, "pj": False, "distance": 0.1,
+                 "texte": t} for i, t in enumerate(["x" * 30, "La pression de gonflage à froid est de 1 450 kPa."])]
+
+    monkeypatch.setattr(Assistant, "passages", deux_passages)
+    res = executer("actuel", Reglages(llm_actif=True, top_k=1, seuil_distance=2.0), "txt", QUESTIONS[:1], corpus, False)
+    ligne = res["lignes"][0]
+    assert ligne["passages_envoyes"] == 2 and ligne["caracteres_envoyes"] == 30 + 49
+    res["lignes"].append({**ligne, "id": "A2", "passages_envoyes": 4, "caracteres_envoyes": 200})
+
+    dossier = ecrire_rapport([res], tmp_path / "s")
+    rapport = (dossier / "rapport.md").read_text(encoding="utf-8").splitlines()
+    en_tete = [c.strip() for c in rapport[4].strip("|").split("|")]
+    valeurs = [c.strip() for c in rapport[6].strip("|").split("|")]
+    assert valeurs[en_tete.index("Passages envoyés (moy / max)")] == "3 / 4"
+    assert valeurs[en_tete.index("Caractères envoyés (moy / max)")] == "140 / 200"
+    assert "caracteres_envoyes" in (dossier / "detail.csv").read_text(encoding="utf-8-sig").splitlines()[0]

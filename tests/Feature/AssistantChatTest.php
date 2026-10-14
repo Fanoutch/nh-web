@@ -78,6 +78,18 @@ it('creates a conversation, streams the answer and saves it with its sources', f
         ->assertSee('Qui lance un vol de maintenance ?');
 });
 
+it('saves no source under a refusal, even when the service sent some', function () {
+    fluxReponse("  \nJe ne trouve pas cette information dans les documents du secteur BMN.");
+    $user = membreSecteur(secteurBmn(), 'utilisateur');
+
+    capturerFlux(fn () => Livewire::actingAs($user)->test(AssistantChat::class, ['secteur' => secteurBmn()])
+        ->set('question', 'À quoi correspond le code HYD-113 ?')->call('envoyer'));
+
+    $reponse = AssistantMessage::where('role', 'assistant')->sole();
+    expect($reponse->statut)->toBe('complet')
+        ->and($reponse->sources)->toBe([]);
+});
+
 it('sends the last exchanges of the conversation for a follow-up question', function () {
     config(['assistant.historique_tours' => 1]);
     fluxReponse('Réponse.');

@@ -220,3 +220,132 @@ def test_get_chroma_ignore_les_identifiants_absents(base):
     _indexer_cinq(base)
     trouves = base._collection("bmn").get(ids=["doc7_m4", "doc7_m9"], include=["documents", "metadatas"])
     assert trouves["ids"] == ["doc7_m4"]
+
+
+def _deux_documents(base):
+    base.ajouter_document("bmn", 1, "A.pdf", [{"texte": "vol de maintenance ordonné", "page": 1},
+                                             {"texte": "code HYD-112 fuite accumulateur", "page": 2}],
+                          [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    base.ajouter_document("bmn", 2, "B.pdf", [{"texte": "graissage rotor de queue 30 jours", "page": 1}],
+                          [[0.0, 0.0, 1.0]])
+
+
+def test_mots_cles_index_construit_depuis_la_collection_existante(tmp_path):
+    base = BaseVectorielle(tmp_path / "chroma")
+    _deux_documents(base)
+    relue = BaseVectorielle(tmp_path / "chroma")          # nouvelle instance : index vide, reconstruit
+    r = relue.chercher_mots_cles("bmn", "code HYD-112 ?", 2)
+    assert r[0]["id"] == "doc1_m1"
+    assert r[0]["distance"] is None and r[0]["score_mots_cles"] > 0
+    assert set(r[0]) >= {"id", "document_id", "nom", "page", "texte", "distance", "pj"}
+    assert r[0]["document_id"] == 1 and r[0]["page"] == 2 and r[0]["pj"] is False
+
+
+def test_mots_cles_suit_ajout_suppression_et_reindexation(base):
+    _deux_documents(base)
+    assert base.chercher_mots_cles("bmn", "graissage", 5)[0]["id"] == "doc2_m0"   # index construit
+    base.supprimer_document("bmn", 2)
+    assert base.chercher_mots_cles("bmn", "graissage", 5) == []
+    base.ajouter_document("bmn", 1, "A.pdf", [{"texte": "nouveau texte sans code", "page": 1}], [[1.0, 0.0, 0.0]])
+    assert base.chercher_mots_cles("bmn", "HYD-112", 5) == []                    # pas de morceau fantôme
+    assert [m["id"] for m in base.chercher_mots_cles("bmn", "nouveau", 5)] == ["doc1_m0"]
+
+
+def test_mots_cles_reindexation_sans_morceau_ne_laisse_pas_de_fantome(base):
+    _deux_documents(base)
+    assert base.chercher_mots_cles("bmn", "HYD-112", 5)                          # index construit
+    base.ajouter_document("bmn", 1, "A.pdf", [], [])
+    assert base.chercher_mots_cles("bmn", "HYD-112", 5) == []
+
+
+def test_mots_cles_secteur_vide_et_conversation_absente(base):
+    assert base.chercher_mots_cles("vide", "HYD-112", 5) == []
+    assert base.chercher_mots_cles_conversation(99, "HYD-112", 5) == []
+    assert base.mots_rares("vide", "HYD-112") == set()
+
+
+def test_mots_cles_conversation(base):
+    base.ajouter_piece_jointe(3, 5, "pj.pdf", [{"texte": "référence PC-HYD-07", "page": None},
+                                              {"texte": "autre chose", "page": None}],
+                              [[0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    r = base.chercher_mots_cles_conversation(3, "plaque PC-HYD-07", 5)
+    assert r[0]["id"] == "pj5_m0" and r[0]["pj"] is True and r[0]["document_id"] is None
+    base.supprimer_piece_jointe(3, 5)
+    assert base.chercher_mots_cles_conversation(3, "PC-HYD-07", 5) == []
+
+
+def test_mots_rares_du_secteur(base):
+    morceaux = [{"texte": "vol de maintenance", "page": 1} for _ in range(19)] + [{"texte": "code HYD-112", "page": 2}]
+    base.ajouter_document("bmn", 1, "A.pdf", morceaux, [[1.0, float(i), 0.0] for i in range(20)])
+    assert "hyd112" in base.mots_rares("bmn", "vol HYD-112")
+    assert "vol" not in base.mots_rares("bmn", "vol HYD-112")
+
+
+def test_mots_cles_lectures_pendant_reindexation(base):
+    # Index garni directement (sans ChromaDB) de milliers de morceaux : les itérations sont assez longues
+    # pour que, sans verrou en lecture, « dictionary changed size during iteration » se produise.
+    index = base._index_de("secteur_bmn", base._collection("bmn"))
+    index.ajouter([f"doc2_m{i}" for i in range(1500)], [f"vol maintenance mot{i} code HYD-{i}" for i in range(1500)])
+    ids = [f"doc1_m{i}" for i in range(1500)]
+    textes = [f"graissage rotor mot{i} code HYD-{i}" for i in range(1500)]
+    exceptions: list = []
+    fin = threading.Event()
+
+    def lecteur():
+        try:
+            while not fin.is_set():
+                base.chercher_mots_cles("bmn", "code HYD-112 graissage", 5)
+                base.mots_rares("bmn", "code HYD-112")
+        except Exception as e:
+            exceptions.append(e)
+
+    def redacteur():
+        try:
+            for _ in range(5):
+                with base._verrou:   # comme les vraies écritures
+                    base._maj_index("secteur_bmn", "doc1_m", ids, textes)
+        except Exception as e:
+            exceptions.append(e)
+        finally:
+            fin.set()
+
+    fils = [threading.Thread(target=lecteur) for _ in range(3)] + [threading.Thread(target=redacteur)]
+    for fil in fils:
+        fil.start()
+    for fil in fils:
+        fil.join()
+    assert exceptions == []
+
+
+def test_mots_cles_supprimer_conversation_vide_l_index(base):
+    base.ajouter_piece_jointe(3, 5, "pj.pdf", [{"texte": "référence PC-HYD-07", "page": None}], [[0.0, 1.0, 0.0]])
+    assert base.chercher_mots_cles_conversation(3, "PC-HYD-07", 5)
+    base.supprimer_conversation(3)
+    assert base.chercher_mots_cles_conversation(3, "PC-HYD-07", 5) == []
+
+
+def test_mots_cles_piece_jointe_reindexee_avec_moins_de_morceaux(base):
+    base.ajouter_piece_jointe(3, 5, "pj.pdf", [{"texte": "alpha", "page": None}, {"texte": "bravo", "page": None}],
+                              [[0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    assert base.chercher_mots_cles_conversation(3, "bravo", 5)
+    base.ajouter_piece_jointe(3, 5, "pj.pdf", [{"texte": "alpha", "page": None}], [[0.0, 1.0, 0.0]])
+    assert base.chercher_mots_cles_conversation(3, "bravo", 5) == []
+    base.ajouter_piece_jointe(3, 5, "pj.pdf", [], [])
+    assert base.chercher_mots_cles_conversation(3, "alpha", 5) == []
+
+
+def test_mots_rares_conversation(base):
+    textes = [{"texte": "vol de maintenance", "page": 1} for _ in range(9)] + [{"texte": "plaque ZX-900", "page": 2}]
+    base.ajouter_piece_jointe(3, 5, "P.pdf", textes, [[1.0, float(i), 0.0] for i in range(10)])
+    rares = base.mots_rares_conversation(3, "vol ZX-900")
+    assert "zx900" in rares and "vol" not in rares
+    assert base.mots_rares_conversation(99, "vol ZX-900") == set()
+
+
+def test_codes_connus_secteur_et_conversation(base):
+    _deux_documents(base)
+    assert base.codes_connus("bmn", "Que faire pour HYD-112 et HYD-113 ?") == {"hyd112"}
+    assert base.codes_connus("bmn", "graissage ?") == set()
+    assert base.codes_connus_conversation(7, "HYD-112 ?") == set()            # pas de pièce jointe
+    base.ajouter_piece_jointe(7, 1, "P.pdf", [{"texte": "plaque ZX-900", "page": 1}], [[1.0, 0.0, 0.0]])
+    assert base.codes_connus_conversation(7, "ZX-900 et HYD-112 ?") == {"zx900"}

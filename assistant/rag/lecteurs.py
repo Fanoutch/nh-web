@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Callable
 
 from docx import Document as DocumentWord
+from docx.table import Table
+from docx.text.paragraph import Paragraph
 from pypdf import PdfReader
 
 
@@ -47,13 +49,62 @@ def _lire_pdf(chemin: Path) -> list[dict]:
     ]
 
 
+_SEPARATEUR_MARKDOWN = re.compile(r"^[\s:-]*-[\s:-]*$")
+
+
+def lignes_tableau(lignes: list[list[str]]) -> list[str]:
+    """Une ligne de tableau → « En-tête : valeur ; … » (1re ligne = en-têtes, cellules vides omises).
+
+    Tableau à exactement 2 colonnes et plusieurs lignes = tableau clé / valeur : chaque ligne, la 1re
+    comprise, devient « clé : valeur ». Les lignes faites seulement de « - », « : » et d'espaces (le
+    séparateur « |---|---| » des tableaux Markdown) sont ignorées."""
+    lignes = [[c.strip() for c in l] for l in lignes]
+    lignes = [l for l in lignes if not all(_SEPARATEUR_MARKDOWN.match(c) or not c for c in l) or not any(l)]
+    if not lignes:
+        return []
+    if len(lignes) == 1:
+        return [" ; ".join(c for c in lignes[0] if c)] if any(lignes[0]) else []
+    if all(len(l) == 2 for l in lignes):
+        return [" : ".join(c for c in l if c) for l in lignes if any(l)]
+    entetes = [e or f"Colonne {i}" for i, e in enumerate(lignes[0], start=1)]
+    return [" ; ".join(f"{e} : {v}" for e, v in zip(entetes, l) if v) for l in lignes[1:] if any(l)]
+
+
 def _lire_docx(chemin: Path) -> list[dict]:
+    """Corps du document dans l'ordre : paragraphes et tableaux à leur place."""
     document = DocumentWord(str(chemin))
-    blocs = [p.text for p in document.paragraphs if p.text.strip()]
-    for tableau in document.tables:
-        for ligne in tableau.rows:
-            blocs.append(" | ".join(cellule.text.strip() for cellule in ligne.cells))
+    blocs = []
+    for element in document.element.body.iterchildren():
+        balise = element.tag.rsplit("}", 1)[-1]
+        if balise == "p":
+            texte = Paragraph(element, document).text
+            if texte.strip():
+                blocs.append(texte)
+        elif balise == "tbl":
+            lignes = [[cellule.text for cellule in ligne.cells] for ligne in Table(element, document).rows]
+            blocs.extend(lignes_tableau(lignes))
     return [{"page": None, "texte": nettoyer("\n\n".join(blocs))}]
+
+
+def _tableaux_texte(texte: str) -> str:
+    """Réécrit les blocs d'au moins 2 lignes consécutives contenant chacune au moins deux « | »."""
+    lignes, sortie, bloc = texte.split("\n"), [], []
+
+    def vider():
+        if len(bloc) >= 2:
+            sortie.extend(lignes_tableau([l.strip().strip("|").split("|") for l in bloc]))
+        else:
+            sortie.extend(bloc)
+        bloc.clear()
+
+    for ligne in lignes:
+        if ligne.count("|") >= 2:
+            bloc.append(ligne)
+        else:
+            vider()
+            sortie.append(ligne)
+    vider()
+    return "\n".join(sortie)
 
 
 def _decoder(octets: bytes) -> str:
@@ -68,9 +119,9 @@ def _lire_txt(chemin: Path) -> list[dict]:
     octets = chemin.read_bytes()
     texte = _decoder(octets)
     if "\f" not in texte:
-        return [{"page": None, "texte": nettoyer(texte)}]
+        return [{"page": None, "texte": nettoyer(_tableaux_texte(texte))}]
     return [
-        {"page": numero, "texte": nettoyer(bloc)}
+        {"page": numero, "texte": nettoyer(_tableaux_texte(bloc))}
         for numero, bloc in enumerate(texte.split("\f"), start=1)
     ]
 
