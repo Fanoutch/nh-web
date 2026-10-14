@@ -179,6 +179,9 @@ class Assistant:
             return trouves
         vus, resultat = {m["id"] for m in trouves}, []
         for m in trouves:
+            if m.get("origine") == "mots_cles":
+                resultat.append(m)  # trouvé par un mot précis : pas de voisins, ils ne feraient que gonfler le texte
+                continue
             if m.get("pj"):
                 avant, apres = self.base.voisins_conversation(conversation, m["id"], self.r.voisins)
             else:

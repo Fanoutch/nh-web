@@ -488,3 +488,13 @@ def test_plafond_garde_le_premier_et_respecte_le_total(tmp_path, journal):
 def test_prompt_refus_si_code_absent_a_l_identique():
     assert ("5. Si la question porte sur un code, une référence ou une valeur précise qui ne figure pas "
             "à l'identique dans les extraits, réponds exactement la phrase de refus ci-dessus.") in module.PROMPT_SYSTEME
+
+
+def test_morceau_trouve_par_mots_cles_seuls_n_a_pas_de_voisins(tmp_path, journal):
+    """Régression R05/R17 : les voisins des morceaux « mots-clés » gonflaient le texte jusqu'au plafond et
+    chassaient le morceau qui portait la réponse. Le morceau vectoriel garde ses voisins."""
+    a = _assistant_mots_cles(tmp_path, journal)
+    a.r = Reglages(**{**a.r.__dict__, "voisins": 1})
+    ids = {p["id"] for p in a.passages("bmn", "vol HYD-112 ?")}
+    assert "doc1_m19" in ids and "doc1_m18" not in ids   # code trouvé par mots-clés : pas de voisin
+    assert "doc1_m1" in ids                              # voisin du morceau vectoriel doc1_m0
