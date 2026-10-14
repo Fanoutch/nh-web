@@ -15,6 +15,10 @@ Ne modifiez jamais le code sur place.
 
 ## Ce qu'il faut avoir
 
+Les documents d'essai (`banc/corpus/` et `banc/sources/`) ne sont **pas dans git** : ils arrivent avec la zip
+de livraison et restent sur le poste (le fichier `banc/.gitignore` les tient hors des commits). Si
+`banc/corpus/` est absent, ne rien recréer : le signaler.
+
 - Python uniquement (pas de php ni de node). On travaille dans le dossier `assistant/`.
 - Le fichier `llm.env` (à la racine de nh-web) rempli : adresse du LLM et du modèle d'embedding.
 - Les 3 vrais PDF, copiés dans `banc/corpus/pdf/` **sous ces noms exacts** (ils ne sont jamais enregistrés dans git) :
