@@ -18,6 +18,8 @@ use Throwable;
  */
 class AssistantClient
 {
+    use Concerns\ParleAuService;
+
     public const INDISPONIBLE = "L'assistant est indisponible pour le moment, réessayez plus tard.";
 
     /** @return list<string> extensions acceptées, ex. ['docx', 'pdf', 'txt'] */
@@ -94,42 +96,7 @@ class AssistantClient
             ->withOptions(['stream' => true])
             ->post('/questions', $corpsRequete));
 
-        $terminee = false;
-        $surEvenementSuivi = function (array $evenement) use ($surEvenement, &$terminee) {
-            if (in_array($evenement['type'] ?? null, ['fin', 'erreur'], true)) {
-                $terminee = true;
-            }
-            $surEvenement($evenement);
-        };
-
-        try {
-            $corps = $reponse->toPsrResponse()->getBody();
-            $tampon = '';
-            while (! $corps->eof()) {
-                $tampon .= $corps->read(1024);
-                while (($fin = strpos($tampon, "\n")) !== false) {
-                    $this->transmettre(substr($tampon, 0, $fin), $surEvenementSuivi);
-                    $tampon = substr($tampon, $fin + 1);
-                    if ($doitArreter !== null && $doitArreter()) {
-                        $corps->close();
-
-                        return;
-                    }
-                }
-            }
-            $this->transmettre($tampon, $surEvenementSuivi);
-            if ($doitArreter !== null && $doitArreter()) {
-                $corps->close();
-
-                return;
-            }
-        } catch (Throwable $e) {
-            throw new AssistantIndisponible(self::INDISPONIBLE, 'Flux interrompu : '.$e->getMessage());
-        }
-
-        if (! $terminee) {
-            throw new AssistantIndisponible(self::INDISPONIBLE, 'Flux interrompu : fin de réponse manquante');
-        }
+        $this->lireFlux($reponse, $surEvenement, $doitArreter);
     }
 
     /** Indexe une pièce jointe déposée dans une conversation ; retourne le nombre de morceaux créés. */
@@ -163,41 +130,5 @@ class AssistantClient
     public function supprimerConversation(int $conversationId): void
     {
         $this->envoyer(fn () => $this->http(30)->delete('/conversations/'.$conversationId));
-    }
-
-    private function transmettre(string $ligne, callable $surEvenement): void
-    {
-        $ligne = trim($ligne);
-        if ($ligne !== '' && is_array($evenement = json_decode($ligne, true))) {
-            $surEvenement($evenement);
-        }
-    }
-
-    private function http(int $timeout): PendingRequest
-    {
-        return Http::baseUrl(config('assistant.url'))
-            ->withHeaders(['X-Assistant-Jeton' => (string) config('assistant.jeton')])
-            ->acceptJson()
-            ->connectTimeout(5)
-            ->timeout($timeout);
-    }
-
-    /** @param  callable(): Response  $requete */
-    private function envoyer(callable $requete, bool $accepter422 = false): Response
-    {
-        try {
-            $reponse = $requete();
-        } catch (ConnectionException $e) {
-            throw new AssistantIndisponible(self::INDISPONIBLE, $e->getMessage());
-        }
-
-        if ($reponse->successful() || ($accepter422 && $reponse->status() === 422)) {
-            return $reponse;
-        }
-
-        throw new AssistantIndisponible(
-            self::INDISPONIBLE,
-            'HTTP '.$reponse->status().' : '.mb_substr((string) ($reponse->json('detail.detail') ?? $reponse->body()), 0, 500),
-        );
     }
 }
