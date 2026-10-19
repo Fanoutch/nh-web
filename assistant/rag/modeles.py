@@ -119,6 +119,20 @@ def discuter(messages: list[dict], r: Reglages, temperature: float) -> str:
         raise ModeleIndisponible("Réponse du LLM inattendue : " + json.dumps(donnees)[:300]) from exc
 
 
+def discuter_avec_outils(messages: list[dict], outils: list[dict], r: Reglages, temperature: float) -> dict:
+    """Un tour d'agent : renvoie le message de l'assistant tel quel (`content`, éventuellement `tool_calls`)."""
+    url = _url_chat(r)
+    charge = _charge_chat(messages, r, temperature, False)
+    if outils:
+        charge["tools"] = outils
+    donnees = _json(_post(url, r.llm_cle_api, charge, r), url)
+    try:
+        message = donnees["choices"][0]["message"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise ModeleIndisponible("Réponse du LLM inattendue : " + json.dumps(donnees)[:300]) from exc
+    return message if isinstance(message, dict) else {"content": str(message)}
+
+
 def discuter_en_flux(messages: list[dict], r: Reglages, temperature: float) -> Iterator[str]:
     """Fragments de texte au fil de l'eau (format « data: {...} » d'OpenAI)."""
     reponse = _post(_url_chat(r), r.llm_cle_api, _charge_chat(messages, r, temperature, True),

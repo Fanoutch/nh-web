@@ -211,3 +211,24 @@ def test_tls_verification_coupee(appels):
     modeles.discuter([{"role": "user", "content": "q"}], r, 0.3)
 
     assert appels["requetes"][0]["verify"] is False
+
+
+def test_discuter_avec_outils_envoie_les_outils_et_renvoie_le_message(appels):
+    message = {"role": "assistant", "content": None,
+               "tool_calls": [{"id": "a", "type": "function", "function": {"name": "x", "arguments": "{}"}}]}
+    appels["reponses"].append(FausseReponse({"choices": [{"message": message}]}))
+    outils = [{"type": "function", "function": {"name": "x"}}]
+    assert modeles.discuter_avec_outils([{"role": "user", "content": "?"}], outils, R_LLM, 0) == message
+    assert appels["requetes"][0]["json"]["tools"] == outils
+
+
+def test_discuter_avec_outils_sans_outils_n_envoie_pas_le_champ(appels):
+    appels["reponses"].append(FausseReponse({"choices": [{"message": {"content": "ok"}}]}))
+    modeles.discuter_avec_outils([{"role": "user", "content": "?"}], [], R_LLM, 0)
+    assert "tools" not in appels["requetes"][0]["json"]
+
+
+def test_discuter_avec_outils_reponse_inattendue(appels):
+    appels["reponses"].append(FausseReponse({"oups": 1}))
+    with pytest.raises(modeles.ModeleIndisponible):
+        modeles.discuter_avec_outils([{"role": "user", "content": "?"}], [], R_LLM, 0)
