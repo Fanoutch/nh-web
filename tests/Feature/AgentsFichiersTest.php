@@ -98,7 +98,7 @@ it('refuses two brought files with the same name', function () {
 })->throws(FichierAgentRefuse::class);
 
 it('measures the size of an agent and warns from 500 Mo only', function () {
-    $this->gestion->deposerReference($this->agent, UploadedFile::fake()->create('a.xlsx', 100));
+    $this->gestion->deposerReference($this->agent, UploadedFile::fake()->createWithContent('a.xlsx', str_repeat('x', 100 * 1024)));
     expect($this->gestion->tailleOctets($this->agent))->toBe(100 * 1024)
         ->and($this->gestion->alerteTaille($this->agent))->toBeFalse();
 
@@ -108,13 +108,13 @@ it('measures the size of an agent and warns from 500 Mo only', function () {
 
 it('does not count the files of another agent', function () {
     $autre = Agent::create(['user_id' => $this->user->id, 'nom' => 'Autre']);
-    $this->gestion->deposerReference($autre, UploadedFile::fake()->create('a.xlsx', 100));
+    $this->gestion->deposerReference($autre, UploadedFile::fake()->createWithContent('a.xlsx', str_repeat('x', 100 * 1024)));
 
     expect($this->gestion->tailleOctets($this->agent))->toBe(0);
 });
 
 it('deletes nothing on its own: only putting to sleep empties the work files, never references', function () {
-    $this->gestion->deposerReference($this->agent, UploadedFile::fake()->create('stock.xlsx', 1));
+    $this->gestion->deposerReference($this->agent, UploadedFile::fake()->createWithContent('stock.xlsx', 'contenu'));
     $execution = $this->gestion->preparerExecution($this->agent, $this->user, AgentExecution::EXECUTION, 'x');
     $execution->update(['created_at' => now()->subDays(90)]); // plus de 30 jours : rien ne part
 

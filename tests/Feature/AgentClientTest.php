@@ -78,7 +78,9 @@ it('stops reading the stream when asked', function () {
 
     app(AgentClient::class)->executer(executionDeTest(), function () use (&$recus) {
         $recus++;
-    }, fn () => $recus >= 1);
+    }, function () use (&$recus) {
+        return $recus >= 1;
+    });
 
     expect($recus)->toBe(1);
 });
