@@ -40,3 +40,7 @@ Thumbs.db
 
 # Tests navigateur : environnement Python dedie (jamais dans git)
 /.venv-tests/
+
+# Python
+__pycache__/
+*.pyc
