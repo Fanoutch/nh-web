@@ -1282,3 +1282,19 @@ inutile au bureau. Voir `docs/tests-navigateur.md`.
 - « L'assistant est indisponible » : `systemctl status nh-assistant`, `/sante`, `tail /var/log/nh-assistant.log`.
 - Les signalements des utilisateurs (bouton « Signaler ») sont dans le journal d'audit (`/admin/audit-log`, categorie `assistant`), avec le detail technique.
 - Reconstruire la base vectorielle : arreter le service, supprimer `ASSISTANT_CHROMA_DIR`, redemarrer, puis redeposer (ou « Remplacer ») les documents.
+
+
+## 16. Agents (Excel / Word)
+
+Les agents utilisent le service `nh-assistant` : memes redemarrages et memes reglages que la section 15.
+
+```bash
+php artisan migrate                      # 5 migrations des agents
+php artisan agents:entretien             # met en veille les agents non lances depuis 3 mois, supprime les brouillons vides
+php artisan test tests/Feature/Agent*    # tests du site
+cd assistant && .venv/bin/python -m pytest -q                 # tests du service (outils, boucle, routes)
+cd assistant && .venv/bin/python -m banc_agents.banc          # le modele choisit-il les bons outils ? (rapport dans banc_agents/resultats/)
+```
+
+Reglages (fichier `config/agents.php`) : extensions acceptees, 20 Mo par fichier, alerte a 500 Mo par agent,
+veille apres 3 mois, prevenir 7 jours avant. Voir `docs/agents-admin-serveur.md` et `docs/agents-utilisateur.md`.
