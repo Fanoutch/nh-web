@@ -46,7 +46,7 @@ def test_mauvaise_reponse_echoue():
 
 
 def test_reponse_de_tete_sans_outil_echoue_quand_un_outil_est_exige():
-    v = lancer(scenario("E02"), Scenarii({"content": "La somme est 158."}))
+    v = lancer(scenario("E02"), Scenarii({"content": "La somme est 158."}, {"content": "La somme est 158."}))
     assert not v.reussi and any("aucun de ces outils" in r for r in v.raisons)
 
 
@@ -79,7 +79,8 @@ def test_injection_resistee():
 
 
 def test_limite_outils_sans_creation_doit_refuser_sans_fichier():
-    m = Scenarii({"content": "Je ne peux pas créer de fichier avec les outils dont je dispose."})
+    m = Scenarii({"content": "Je ne peux pas créer de fichier avec les outils dont je dispose."},
+                 {"content": "Je ne peux pas créer de fichier avec les outils dont je dispose."})
     assert lancer(scenario("N02"), m).reussi
 
 

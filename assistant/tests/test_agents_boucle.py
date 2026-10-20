@@ -50,10 +50,10 @@ def lancer(modele, ctx, **kw):
 
 
 def test_sortie_standard_jusqu_a_la_reponse(ctx):
-    m = FauxModele(std("excel_decrire", {"fichier": "stock.xlsx"}, "c1"), {"content": "Deux articles."})
+    m = FauxModele(std("excel_lire", {"fichier": "stock.xlsx"}, "c1"), {"content": "Deux articles."})
     ev = lancer(m, ctx)
     assert [e["type"] for e in ev] == ["etape", "fin"]
-    assert ev[0]["outil"] == "excel_decrire" and ev[0]["statut"] == "ok"
+    assert ev[0]["outil"] == "excel_lire" and ev[0]["statut"] == "ok"
     assert ev[1]["statut"] == "termine" and ev[1]["message"] == "Deux articles." and ev[1]["tours"] == 2
     # le résultat est renvoyé au modèle au format standard, avec l'identifiant de l'appel
     dernier = m.recus[1][0][-1]
@@ -62,16 +62,16 @@ def test_sortie_standard_jusqu_a_la_reponse(ctx):
 
 
 def test_sortie_texte_tool_calls(ctx):
-    m = FauxModele(texte("excel_decrire", {"fichier": "stock.xlsx"}), {"content": "Fini."})
+    m = FauxModele(texte("excel_lire", {"fichier": "stock.xlsx"}), {"content": "Fini."})
     ev = lancer(m, ctx)
     assert ev[0]["type"] == "etape" and ev[-1]["statut"] == "termine"
     dernier = m.recus[1][0][-1]
-    assert dernier["role"] == "user" and dernier["content"].startswith("Résultat de l'outil excel_decrire")
+    assert dernier["role"] == "user" and dernier["content"].startswith("Résultat de l'outil excel_lire")
 
 
 def test_le_modele_recoit_consignes_demande_et_outils_autorises(ctx):
     ctx.outils_autorises = {"excel_decrire"}
-    m = FauxModele({"content": "Rien à faire."})
+    m = FauxModele({"content": "Rien à faire."}, {"content": "Rien à faire."})
     lancer(m, ctx)
     messages, declares = m.recus[0]
     assert messages[0]["role"] == "system" and "Consigne X." in messages[0]["content"]
@@ -135,7 +135,7 @@ def test_outil_hors_liste_refuse_par_le_registre(ctx):
 
 
 def test_reponse_illisible_puis_relance_reussie(ctx):
-    m = FauxModele({"content": "[TOOL_CALLS][{cassé"}, std("excel_decrire", {"fichier": "stock.xlsx"}),
+    m = FauxModele({"content": "[TOOL_CALLS][{cassé"}, std("excel_lire", {"fichier": "stock.xlsx"}),
                    {"content": "Voilà."})
     ev = lancer(m, ctx)
     assert ev[-1]["statut"] == "termine"
@@ -169,7 +169,7 @@ def test_fichiers_produits_dans_la_fin(ctx):
 
 
 def test_cle_et_jeton_ne_sont_jamais_dans_les_evenements(ctx):
-    m = FauxModele(std("excel_decrire", {}), {"content": "ok"})
+    m = FauxModele(std("excel_lire", {"fichier": "stock.xlsx"}), {"content": "ok"})
     brut = json.dumps(lancer(m, ctx))
     assert "Authorization" not in brut and "cle" not in brut.lower().replace("clé", "")
 
@@ -197,8 +197,52 @@ def test_format_standard_plusieurs_appels_un_message_outil_par_appel(ctx):
 
 
 def test_la_demande_est_accompagnee_de_la_fiche_des_fichiers(ctx):
-    m = FauxModele({"content": "ok"})
+    m = FauxModele({"content": "ok"}, {"content": "ok"})
     lancer(m, ctx)
     envoye = m.recus[0][0][-1]["content"]
     assert envoye.startswith("Que contient le stock ?")
     assert "stock.xlsx (classeur)" in envoye and "feuille « Stock »" in envoye and "colonnes Réf, Stock" in envoye
+
+
+def test_json_nu_dans_le_texte_est_reconnu_comme_appel_d_outil(ctx):
+    nu = {"content": json.dumps([{"name": "excel_lire", "arguments": {"fichier": "stock.xlsx"}}])}
+    m = FauxModele(nu, {"content": "Voilà."})
+    ev = lancer(m, ctx)
+    assert ev[0]["type"] == "etape" and ev[0]["outil"] == "excel_lire" and ev[-1]["statut"] == "termine"
+
+
+def test_json_nu_d_un_outil_inconnu_reste_un_texte(ctx):
+    texte_json = json.dumps([{"name": "outil_invente", "arguments": {}}])
+    m = FauxModele({"content": texte_json}, {"content": texte_json})
+    ev = lancer(m, ctx)
+    assert [e["type"] for e in ev] == ["fin"] and ev[0]["message"] == texte_json
+
+
+def test_annonce_d_un_outil_sans_l_appeler_donne_une_relance(ctx):
+    m = FauxModele({"content": "Je vais utiliser excel_filtrer pour compter. Patientez."},
+                   std("excel_filtrer", {"fichier": "stock.xlsx"}), {"content": "Il y en a 2."})
+    ev = lancer(m, ctx)
+    assert ev[0]["outil"] == "excel_filtrer" and ev[-1]["message"] == "Il y en a 2."
+    assert "sans l'appeler" in m.recus[1][0][-1]["content"]
+
+
+def test_reponse_sans_avoir_lu_les_fichiers_donne_une_relance_puis_est_acceptee(ctx):
+    m = FauxModele({"content": "Voici les pièces : A, B."}, {"content": "Je n'ai pas pu vérifier."})
+    ev = lancer(m, ctx)
+    assert [e["type"] for e in ev] == ["fin"] and ev[0]["message"] == "Je n'ai pas pu vérifier."
+    assert "aucune donnée" in m.recus[1][0][-1]["content"]
+
+
+def test_decrire_seul_ne_compte_pas_comme_une_lecture(ctx):
+    m = FauxModele(std("excel_decrire", {"fichier": "stock.xlsx"}), {"content": "Inventé."},
+                   std("excel_lire", {"fichier": "stock.xlsx"}), {"content": "Vrai."})
+    ev = lancer(m, ctx)
+    assert ev[-1]["message"] == "Vrai."
+
+
+def test_sans_fichier_aucune_relance_de_lecture(tmp_path):
+    ctx = Contexte(dossier_execution=tmp_path, fichiers_autorises=[], outils_autorises=set(TOUS),
+                   dossier_sortie=tmp_path / "sortie")
+    m = FauxModele({"content": "Bonjour, je sais lire Excel et Word."})
+    ev = lancer(m, ctx)
+    assert ev[0]["statut"] == "termine" and len(m.recus) == 1

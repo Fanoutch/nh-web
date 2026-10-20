@@ -28,6 +28,12 @@ Règles :
 - Si une colonne, une feuille ou un fichier attendu est absent, dites-le : ne devinez pas.
 - Quand le travail est terminé, répondez en français, sans appeler d'outil, en résumant ce qui a été fait."""
 
+RELANCE_SANS_APPEL = ("Vous annoncez un outil sans l'appeler. Appelez-le maintenant, avec ses arguments.")
+RELANCE_SANS_DONNEES = ("Vous n'avez lu aucune donnée dans les fichiers : n'inventez rien. Utilisez d'abord un outil "
+                        "de lecture (excel_lire, excel_selectionner, excel_filtrer, excel_rapprocher, word_lire, "
+                        "word_chercher ou word_tableau), puis répondez d'après son résultat.")
+OUTILS_DE_DESCRIPTION = {"excel_decrire", "word_decrire"}
+
 RELANCE_ILLISIBLE = ("Votre dernière réponse n'était pas exploitable. Appelez un outil avec un JSON valide, "
                      "ou répondez en texte simple si le travail est terminé.")
 
@@ -58,6 +64,8 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
     deja_vus: set[str] = set()
     echecs: dict[str, int] = {}
     relance_faite = False
+    relances: set[str] = set()
+    outils_appeles: set[str] = set()
 
     for tour in range(1, MAX_TOURS + 1):
         if arreter():
@@ -68,7 +76,7 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
                        contexte, tour - 1)
             return
         message = modele(messages, outils)
-        decode = decoder(message)
+        decode = decoder(message, set(contexte.outils_autorises))
 
         if decode.illisible:
             if relance_faite:
@@ -81,6 +89,18 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
             continue
 
         if not decode.appels:
+            # Un petit modèle annonce un outil sans l'appeler, ou répond sans avoir lu les fichiers : une relance chacun.
+            if not outils_appeles and any(n in decode.texte for n in contexte.outils_autorises) and "sans_appel" not in relances:
+                relances.add("sans_appel")
+                messages += [{"role": "assistant", "content": message.get("content") or ""},
+                             {"role": "user", "content": RELANCE_SANS_APPEL}]
+                continue
+            if (contexte.fichiers_autorises and not (outils_appeles - OUTILS_DE_DESCRIPTION)
+                    and "sans_donnees" not in relances):
+                relances.add("sans_donnees")
+                messages += [{"role": "assistant", "content": message.get("content") or ""},
+                             {"role": "user", "content": RELANCE_SANS_DONNEES}]
+                continue
             yield _fin("termine", decode.texte, contexte, tour)
             return
 
@@ -98,6 +118,7 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
                                     "il tourne en rond. Reformulez la demande.", contexte, tour)
                 return
             deja_vus.add(cle)
+            outils_appeles.add(appel.nom)
             reponse = executer(appel.nom, appel.arguments, contexte)
             yield {"type": "etape", "tour": tour, "outil": appel.nom, "arguments": appel.arguments,
                    "statut": reponse.statut, "resume": reponse.resume}

@@ -93,7 +93,7 @@ SCENARIOS: list[Scenario] = [
              {"word_decrire", "word_tableau", "word_lire"}, [{"word_tableau"}], CREATION,
              lambda r: contient(r, "Q-777"), fichiers=["procedure.docx"]),
     Scenario("W04", "word-lecture", "Quelle pression faut-il appliquer pendant le contrôle final, et combien de temps ?",
-             {"word_decrire", "word_chercher", "word_lire"}, [{"word_chercher", "word_lire"}], CREATION,
+             {"word_decrire", "word_chercher", "word_lire", "word_tableau"}, [{"word_chercher", "word_lire"}], CREATION,
              lambda r: contient(r, "4 bars", "10 minutes"), fichiers=["procedure.docx"]),
     Scenario("W05", "word-creation", "Rédige un compte rendu Word avec un titre « Pièces à commander » et la liste des pièces "
              "de stock.xlsx dont le stock est inférieur à 5.",

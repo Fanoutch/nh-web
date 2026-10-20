@@ -119,7 +119,9 @@ def excel_lire(ctx: Contexte, fichier: str, feuille: str | None = None, colonnes
 
 
 _CONDITION = {"type": "object", "description": "Condition : {colonne, operateur, valeur} ou "
-              "{logique: et|ou, clauses: [...]}. Opérateurs : = != < <= > >= contient vide non_vide"}
+              "{logique: et|ou, clauses: [...]}. Opérateurs : = != < <= > >= contient vide non_vide. "
+              "Exemple : {\"colonne\": \"Stock\", \"operateur\": \"<\", \"valeur\": 5}. "
+              "Sans condition (toutes les lignes) : omettez ce champ, n'envoyez pas d'objet vide."}
 
 
 @outil("excel_selectionner",

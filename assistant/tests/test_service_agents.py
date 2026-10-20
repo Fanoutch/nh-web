@@ -44,7 +44,7 @@ def corps(dossiers, **plus):
     entree, sortie = dossiers
     base = {"execution_id": 1, "consignes": "Sois bref.", "demande": "Décris le stock.",
             "dossier_execution": str(entree), "fichiers": ["stock.xlsx"], "dossier_sortie": str(sortie),
-            "outils": ["excel_decrire", "excel_creer"]}
+            "outils": ["excel_decrire", "excel_creer", "excel_lire"]}
     base.update(plus)
     return base
 
@@ -64,7 +64,7 @@ def test_jeton_obligatoire(dossiers):
 
 
 def test_execution_en_flux(dossiers):
-    s = Scenario(std("excel_decrire", {"fichier": "stock.xlsx"}), {"content": "Un article."})
+    s = Scenario(std("excel_lire", {"fichier": "stock.xlsx"}), {"content": "Un article."})
     r = client(s).post("/agents/executions", headers=JETON, json=corps(dossiers))
     assert r.status_code == 200 and r.headers["content-type"].startswith("application/x-ndjson")
     ev = evenements(r)
@@ -72,11 +72,11 @@ def test_execution_en_flux(dossiers):
     assert ev[1]["statut"] == "termine" and ev[1]["message"] == "Un article."
     messages, declares = s.recus[0]
     assert "Sois bref." in messages[0]["content"]
-    assert [o["function"]["name"] for o in declares] == ["excel_creer", "excel_decrire"]
+    assert [o["function"]["name"] for o in declares] == ["excel_creer", "excel_decrire", "excel_lire"]
 
 
 def test_outil_hors_liste_refuse(dossiers):
-    s = Scenario(std("excel_lire", {"fichier": "stock.xlsx"}), {"content": "ok"})
+    s = Scenario(std("excel_filtrer", {"fichier": "stock.xlsx"}), {"content": "ok"}, {"content": "ok"})
     ev = evenements(client(s).post("/agents/executions", headers=JETON, json=corps(dossiers)))
     assert ev[0]["statut"] == "erreur" and "pas autorisé" in ev[0]["resume"]
 
@@ -114,7 +114,7 @@ def test_erreur_imprevue_donne_un_evenement_lisible(dossiers):
 
 def test_arret_demande_avant_le_premier_tour_est_oublie_au_lancement(dossiers):
     # un arrêt d'une exécution précédente de même numéro ne doit pas couper la suivante
-    c = client(Scenario({"content": "Fait."}))
+    c = client(Scenario({"content": "Fait."}, {"content": "Fait."}))
     assert c.post("/agents/executions/1/arret", headers=JETON).json() == {"ok": True}
     fin = evenements(c.post("/agents/executions", headers=JETON, json=corps(dossiers)))[-1]
     assert fin["statut"] == "termine"

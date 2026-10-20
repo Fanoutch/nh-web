@@ -6,6 +6,7 @@ celui des HIL de la dispo.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Iterator
 
@@ -119,13 +120,26 @@ def discuter(messages: list[dict], r: Reglages, temperature: float) -> str:
         raise ModeleIndisponible("Réponse du LLM inattendue : " + json.dumps(donnees)[:300]) from exc
 
 
-def discuter_avec_outils(messages: list[dict], outils: list[dict], r: Reglages, temperature: float) -> dict:
-    """Un tour d'agent : renvoie le message de l'assistant tel quel (`content`, éventuellement `tool_calls`)."""
+_PANNES_PASSAGERES = (" 429 ", " 500 ", " 502 ", " 503 ", " 504 ", "injoignable")
+
+
+def discuter_avec_outils(messages: list[dict], outils: list[dict], r: Reglages, temperature: float,
+                         pause: float = 2.0, essais: int = 3) -> dict:
+    """Un tour d'agent : renvoie le message de l'assistant tel quel (`content`, éventuellement `tool_calls`).
+    Une panne passagère du serveur (502, 503, 504, 429, injoignable) est retentée ; le reste remonte tout de suite."""
     url = _url_chat(r)
     charge = _charge_chat(messages, r, temperature, False)
     if outils:
         charge["tools"] = outils
-    donnees = _json(_post(url, r.llm_cle_api, charge, r), url)
+    for essai in range(1, essais + 1):
+        try:
+            reponse = _post(url, r.llm_cle_api, charge, r)
+            break
+        except ModeleIndisponible as exc:
+            if essai == essais or not any(m in str(exc) for m in _PANNES_PASSAGERES):
+                raise
+            time.sleep(pause * essai)
+    donnees = _json(reponse, url)
     try:
         message = donnees["choices"][0]["message"]
     except (KeyError, IndexError, TypeError) as exc:

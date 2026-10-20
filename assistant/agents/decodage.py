@@ -78,7 +78,7 @@ def _depuis_texte(contenu: str) -> Decodage:
     return Decodage(appels=appels, texte=avant, format="texte")
 
 
-def decoder(message: dict) -> Decodage:
+def decoder(message: dict, noms_connus: set[str] | None = None) -> Decodage:
     """`message` = le message de l'assistant renvoyé par le LLM (`content`, éventuellement `tool_calls`)."""
     contenu = message.get("content") or ""
     if message.get("tool_calls"):
@@ -87,4 +87,24 @@ def decoder(message: dict) -> Decodage:
         return decode
     if MARQUEUR in contenu:
         return _depuis_texte(contenu)
-    return Decodage(texte=contenu.strip())
+    nu = _json_nu(contenu, noms_connus)
+    return nu if nu is not None else Decodage(texte=contenu.strip())
+
+
+def _json_nu(contenu: str, noms_connus: set[str] | None) -> Decodage | None:
+    """Certains modèles écrivent la demande d'outil en JSON simple, sans marqueur : [{"name": ..., "arguments": ...}].
+    Reconnu seulement si TOUT le texte est ce JSON et que chaque nom est un outil connu (jamais une supposition)."""
+    brut = contenu.strip()
+    if not noms_connus or not brut or brut[0] not in "[{":
+        return None
+    try:
+        valeur = json.loads(brut)
+    except json.JSONDecodeError:
+        return None
+    liste = [valeur] if isinstance(valeur, dict) else valeur
+    if not isinstance(liste, list) or not liste:
+        return None
+    if not all(isinstance(e, dict) and e.get("name") in noms_connus for e in liste):
+        return None
+    decode = _depuis_texte(MARQUEUR + brut)
+    return decode if not decode.illisible else None

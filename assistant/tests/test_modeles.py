@@ -232,3 +232,30 @@ def test_discuter_avec_outils_reponse_inattendue(appels):
     appels["reponses"].append(FausseReponse({"oups": 1}))
     with pytest.raises(modeles.ModeleIndisponible):
         modeles.discuter_avec_outils([{"role": "user", "content": "?"}], [], R_LLM, 0)
+
+
+def test_discuter_avec_outils_reessaie_apres_une_panne_passagere(appels):
+    appels["reponses"] += [FausseReponse({"detail": "x"}, statut=502), FausseReponse({"detail": "x"}, statut=503),
+                           FausseReponse({"choices": [{"message": {"content": "ok"}}]})]
+
+    message = modeles.discuter_avec_outils([{"role": "user", "content": "?"}], [], R_LLM, 0, pause=0)
+
+    assert message["content"] == "ok" and len(appels["requetes"]) == 3
+
+
+def test_discuter_avec_outils_abandonne_apres_trois_pannes(appels):
+    appels["reponses"] += [FausseReponse({"detail": "x"}, statut=502) for _ in range(3)]
+
+    with pytest.raises(modeles.ModeleIndisponible):
+        modeles.discuter_avec_outils([{"role": "user", "content": "?"}], [], R_LLM, 0, pause=0)
+
+    assert len(appels["requetes"]) == 3
+
+
+def test_discuter_avec_outils_ne_reessaie_pas_une_erreur_de_requete(appels):
+    appels["reponses"].append(FausseReponse({"detail": "mauvaise requête"}, statut=400))
+
+    with pytest.raises(modeles.ModeleIndisponible):
+        modeles.discuter_avec_outils([{"role": "user", "content": "?"}], [], R_LLM, 0, pause=0)
+
+    assert len(appels["requetes"]) == 1
