@@ -93,3 +93,33 @@ def test_source_modifiee_est_signalee():
 def test_arret_de_l_agent_est_un_echec():
     s = scenario("N01")
     assert any("s'est arrêté" in x for x in evaluer(s, Resultat("stop", "arret", [], [], True)))
+
+
+def test_remplir_le_modele_word_reussit_avec_les_bons_outils_et_le_bon_contenu():
+    m = Scenarii(
+        appel("excel_filtrer", fichier="stock.xlsx", calcul="somme", colonne="Stock"),
+        appel("word_regenerer", fichier_source="modele-courrier.docx", nom_sortie="courrier",
+              modifications=[{"remplacer": "{{TOTAL}}", "par": "158"}, {"remplacer": "{{DATE}}", "par": "20/10/2026"}]),
+        {"content": "Courrier rempli."})
+    v = lancer(scenario("W08"), m)
+    assert v.reussi, v.raisons
+
+
+def test_remplir_le_modele_word_echoue_si_un_marqueur_reste():
+    m = Scenarii(
+        appel("excel_filtrer", fichier="stock.xlsx", calcul="somme", colonne="Stock"),
+        appel("word_regenerer", fichier_source="modele-courrier.docx", nom_sortie="courrier",
+              modifications=[{"remplacer": "{{TOTAL}}", "par": "158"}]),
+        {"content": "Courrier rempli."})
+    v = lancer(scenario("W08"), m)
+    assert not v.reussi and any("pas celui attendu" in r for r in v.raisons)
+
+
+def test_remplir_le_tableau_du_modele():
+    m = Scenarii(
+        appel("excel_selectionner", fichier="stock.xlsx", condition={"colonne": "Stock", "operateur": "<", "valeur": 5}),
+        appel("word_regenerer", fichier_source="modele-courrier.docx", nom_sortie="courrier", modifications=[
+            {"remplir_tableau": 1, "mode": "remplacer", "lignes": [["A-104", "Rondelle plate 8", 3], ["D-010", "Filtre à huile", 2]]}]),
+        {"content": "Tableau rempli."})
+    v = lancer(scenario("W09"), m)
+    assert v.reussi, v.raisons

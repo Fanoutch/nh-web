@@ -60,9 +60,25 @@ de confirmer. **Rien ne change tant que vous n'avez pas cliqué sur « Oui, enre
 - **Excel / CSV** : décrire un classeur, lire des lignes, compter / additionner / moyenner (avec regroupement),
   sélectionner des lignes selon une condition, ajouter une colonne calculée, rapprocher deux fichiers (noms écrits
   différemment : les cas douteux vous sont soumis), créer un classeur, produire une version modifiée.
-- **Word** : lire le plan et le texte, chercher un mot, lire un tableau, créer un document.
+- **Word** : lire le plan et le texte, chercher un mot, lire un tableau, créer un document neuf, et **remplir un
+  modèle** existant (voir le paragraphe 5 bis).
 - **Limites** : 20 Mo et 100 000 lignes par classeur. L'agent ne lit pas les images, ne lance jamais de macro et ne
   calcule jamais « de tête » : les calculs sont faits par le programme, pas par le modèle.
+
+## 5 bis. Remplir un modèle Word avec des données Excel (fini le copier-coller)
+
+1. Préparez votre modèle Word une fois pour toutes. À la place de ce qui change, écrivez un **marqueur entre doubles
+   accolades** : `{{DATE}}`, `{{TOTAL}}`, `{{NOM}}`… Pour une liste de pièces, gardez un tableau avec sa ligne
+   d'en-tête (les lignes sont ajoutées en reprenant la mise en forme de la dernière).
+2. Glissez le modèle **et** le classeur Excel dans le chat, puis dites ce que vous voulez : « Dans mon courrier,
+   mets le total du stock à la place de `{{TOTAL}}`, la date du jour à la place de `{{DATE}}`, et remplis le tableau
+   avec les pièces dont le stock est inférieur à 5. »
+3. **Les chiffres et les lignes sont copiés par le programme**, depuis le classeur : l'agent ne les retape jamais,
+   il ne peut donc pas se tromper en les recopiant. Vous récupérez un **nouveau** document ; votre modèle reste intact.
+4. Si un marqueur est introuvable ou si une donnée manque, l'agent le dit et **ne produit rien** (tout ou rien) :
+   il vous liste les marqueurs trouvés dans le modèle.
+
+Vous pouvez aussi lui demander de remplacer ou compléter une **section entière** sous un titre du modèle.
 
 ## 6. Bon à savoir
 

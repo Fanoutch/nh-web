@@ -9,7 +9,7 @@ import re
 
 from outils.classeur import ErreurClasseur, charger
 from outils.registre import Contexte
-from outils.word import charger_blocs
+from outils.word import _MARQUEUR, charger_blocs
 
 MAX_FICHIERS = 20
 MAX_FEUILLES = 10
@@ -42,7 +42,8 @@ def _fiche_word(ctx: Contexte, nom: str) -> dict:
     blocs = charger_blocs(ctx, nom)
     tableaux = [b for b in blocs if b.genre == "tableau"]
     statut = "ok" if blocs else "avertissement"
-    return {"nom": nom, "type": "word", "statut": statut, "blocs": len(blocs),
+    marqueurs = sorted({m for b in blocs for m in _MARQUEUR.findall(b.texte if b.genre != "tableau" else " ".join(c for l in b.lignes for c in l))})
+    return {"nom": nom, "type": "word", "statut": statut, "blocs": len(blocs), "marqueurs": marqueurs[:20],
             "titres": [_net(b.texte) for b in blocs if b.genre == "titre"][:8],
             "tableaux": [{"numero": t.numero, "lignes": max(0, len(t.lignes) - 1),
                           "colonnes": [_net(c) for c in (t.lignes[0] if t.lignes else [])[:MAX_COLONNES]]}
@@ -67,6 +68,8 @@ def _ligne(f: dict) -> str:
         if f["titres"]:
             morceaux.append("titres : " + " | ".join(f["titres"]))
         morceaux += [f"tableau {t['numero']} : colonnes " + ", ".join(t["colonnes"]) for t in f["tableaux"]]
+        if f.get("marqueurs"):
+            morceaux.append("marqueurs à remplir : " + ", ".join(f["marqueurs"]))
         return f"- {f['nom']} (document Word) — " + " ; ".join(morceaux)
     morceaux = [f"feuille « {x['nom']} » ({x['lignes']} lignes) : colonnes " + (", ".join(x["colonnes"]) or "(vide)")
                 + (" …" if x["colonnes_tronquees"] else "") for x in f["feuilles"]]

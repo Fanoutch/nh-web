@@ -84,8 +84,8 @@ def lancer(s: Scenario, modele: Modele, essai: int = 1) -> Verdict:
                 appels.append(ev["outil"])
             elif ev["type"] == "fin":
                 message, statut = ev["message"], ev["statut"]
-        resultat = Resultat(message, statut, appels, list(ctx.fichiers_produits), _empreintes(entree) == avant)
-    raisons = evaluer(s, resultat)
+        resultat = Resultat(message, statut, appels, list(ctx.fichiers_produits), _empreintes(entree) == avant, sortie)
+        raisons = evaluer(s, resultat)           # avant la suppression du dossier temporaire : certains contrôles lisent les fichiers produits
     return Verdict(s, essai, not raisons, raisons, appels, message, statut)
 
 

@@ -233,6 +233,7 @@ class AgentsPage extends Component
             'word_chercher' => 'Recherche dans le document',
             'word_tableau' => 'Lecture d\'un tableau',
             'word_creer' => 'Création d\'un document Word',
+            'word_regenerer' => 'Remplissage d\'un modèle Word',
             'agent_proposer' => 'Proposition de changement',
             'agent_historique' => 'Consultation de l\'historique',
             default => $outil,

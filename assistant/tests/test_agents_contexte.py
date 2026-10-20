@@ -81,3 +81,14 @@ def test_bornes_sur_le_nombre_de_fichiers_et_de_colonnes(ctx):
 
     assert texte.count("(classeur)") == 20
     assert "c39" in texte and "c40" not in texte and " …" in texte
+
+
+def test_word_marqueurs_a_remplir_sont_dans_la_fiche(ctx):
+    d = Document()
+    d.add_paragraph("Bonjour {{NOM}}, le {{DATE}}.")
+    t = d.add_table(rows=1, cols=1)
+    t.cell(0, 0).text = "{{REF}}"
+    d.save(ctx.dossier_execution / "m.docx")
+    ctx.fichiers_autorises.append("m.docx")
+
+    assert "marqueurs à remplir : {{DATE}}, {{NOM}}, {{REF}}" in decrire_fichiers(ctx)
