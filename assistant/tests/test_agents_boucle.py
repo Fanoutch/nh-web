@@ -172,3 +172,25 @@ def test_cle_et_jeton_ne_sont_jamais_dans_les_evenements(ctx):
     m = FauxModele(std("excel_decrire", {}), {"content": "ok"})
     brut = json.dumps(lancer(m, ctx))
     assert "Authorization" not in brut and "cle" not in brut.lower().replace("clé", "")
+
+
+def test_format_texte_plusieurs_appels_un_seul_message_utilisateur(ctx):
+    deux = {"content": "[TOOL_CALLS]" + json.dumps([
+        {"name": "excel_decrire", "arguments": {"fichier": "stock.xlsx"}},
+        {"name": "excel_lire", "arguments": {"fichier": "stock.xlsx"}}])}
+    m = FauxModele(deux, {"content": "Fini."})
+    ev = lancer(m, ctx)
+    assert ev[-1]["statut"] == "termine"
+    roles = [x["role"] for x in m.recus[1][0]]
+    assert roles == ["system", "user", "assistant", "user"]       # alternance stricte, jamais deux « user » de suite
+    dernier = m.recus[1][0][-1]["content"]
+    assert "excel_decrire" in dernier and "excel_lire" in dernier
+
+
+def test_format_standard_plusieurs_appels_un_message_outil_par_appel(ctx):
+    deux = {"content": None, "tool_calls": [
+        {"id": "a", "function": {"name": "excel_decrire", "arguments": json.dumps({"fichier": "stock.xlsx"})}},
+        {"id": "b", "function": {"name": "excel_lire", "arguments": json.dumps({"fichier": "stock.xlsx"})}}]}
+    m = FauxModele(deux, {"content": "Fini."})
+    lancer(m, ctx)
+    assert [x["role"] for x in m.recus[1][0]] == ["system", "user", "assistant", "tool", "tool"]

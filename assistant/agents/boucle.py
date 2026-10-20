@@ -84,6 +84,7 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
         else:
             messages.append({"role": "assistant", "content": message.get("content") or ""})
 
+        resultats_texte: list[str] = []     # format texte : tous les résultats du tour en UN seul message
         for appel in decode.appels:
             cle = _cle(appel)
             if cle in deja_vus:
@@ -98,13 +99,15 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
             if decode.format == "standard":
                 messages.append({"role": "tool", "tool_call_id": appel.identifiant, "content": texte})
             else:
-                messages.append({"role": "user", "content": f"Résultat de l'outil {appel.nom} : {texte}"})
+                resultats_texte.append(f"Résultat de l'outil {appel.nom} : {texte}")
             if reponse.statut != "ok":
                 echecs[appel.nom] = echecs.get(appel.nom, 0) + 1
                 if echecs[appel.nom] >= MAX_ECHECS_PAR_OUTIL:
                     yield _fin("arret", f"L'outil « {appel.nom} » a échoué deux fois ({reponse.resume}) : "
                                         "le travail est arrêté.", contexte, tour)
                     return
+        if resultats_texte:     # certains serveurs (Mistral) exigent l'alternance stricte utilisateur / assistant
+            messages.append({"role": "user", "content": "\n".join(resultats_texte)})
 
     yield _fin("arret", f"Le travail dépasse {MAX_TOURS} étapes : il a été arrêté. Précisez ou découpez la demande.",
                contexte, MAX_TOURS)
