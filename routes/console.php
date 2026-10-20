@@ -11,3 +11,6 @@ Artisan::command('inspire', function () {
 // Onglet BMN : purge quotidienne des dispos générées (nécessite `schedule:run` en cron ;
 // la purge est aussi déclenchée après chaque génération réussie, en secours).
 Schedule::command('bmn:purge')->dailyAt('03:00');
+
+// Agents : mise en veille des agents non lancés depuis 3 mois (même cron `schedule:run` que ci-dessus).
+Schedule::command('agents:entretien')->dailyAt('03:15');

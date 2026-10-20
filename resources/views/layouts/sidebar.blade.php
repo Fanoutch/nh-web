@@ -39,6 +39,8 @@
     ]);
 
     $processingCount = \App\Models\Import::where('status', 'processing')->count();
+    // Agents « À faire » (rappel arrivé, veille proche) : pastille sur l'entrée de menu.
+    $agentsAFaire = $user ? $user->agents()->where('etat', 'actif')->with('rappel')->get()->filter->aFaire()->count() : 0;
 
     $pnLink = ($user?->isPersonnelNavigant() || $user?->isAdmin()) ? [[
         'route' => 'personnel-navigant.index',
@@ -90,6 +92,9 @@
                ])>
                 {!! $link['icon'] !!}
                 <span class="flex-1">{{ $link['label'] }}</span>
+                @if ($link['route'] === 'agents.index' && $agentsAFaire > 0)
+                    <span class="font-mono text-[10px] font-semibold bg-accent text-sidebar-bg px-1.5 py-0.5 rounded" title="Agents à lancer">{{ $agentsAFaire }}</span>
+                @endif
                 @if ($link['route'] === 'imports.index' && $processingCount > 0)
                     <span class="font-mono text-[10px] font-semibold bg-accent-soft-strong text-accent px-1.5 py-0.5 rounded">
                         {{ $processingCount }}

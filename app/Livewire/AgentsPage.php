@@ -270,6 +270,7 @@ class AgentsPage extends Component
             'produits' => $produits,
             'peutLancer' => $agent !== null && $agent->etat === Agent::ACTIF && $apports->isNotEmpty()
                 && $apports->every(fn (AgentFichierReference $a) => ($a->lecture['statut'] ?? null) !== 'erreur'),
+            'alerteTaille' => $agent !== null && app(GestionFichiersAgent::class)->alerteTaille($agent),
             'prenom' => Str::before($utilisateur->name, ' '),
         ]);
     }

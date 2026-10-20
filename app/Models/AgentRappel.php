@@ -14,6 +14,17 @@ class AgentRappel extends Model
 
     protected $table = 'agent_rappels';
 
+    /** Prochaine échéance à partir d'aujourd'hui, ou null pour une périodicité inconnue. */
+    public static function echeanceApres(string $periodicite): ?\Illuminate\Support\Carbon
+    {
+        return match ($periodicite) {
+            'hebdomadaire' => now()->addWeek(),
+            'mensuel' => now()->addMonth(),
+            'trimestriel' => now()->addMonths(3),
+            default => null,
+        };
+    }
+
     protected $fillable = ['agent_id', 'periodicite', 'prochaine_echeance', 'notifie_at'];
 
     protected function casts(): array

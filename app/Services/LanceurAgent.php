@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Agent;
 use App\Models\AgentExecution;
+use App\Models\AgentRappel;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
@@ -115,6 +116,11 @@ class LanceurAgent
         if ($rejouerRecette && $reussi) {
             $agent->update(['dernier_lancement_at' => now(), 'veille_prevenue_at' => null]);
             $this->fichiers->consommerApports($agent);
+            // Le rappel est honoré : la prochaine échéance repart d'aujourd'hui (l'agent sort de « À faire »).
+            $rappel = $agent->rappel;
+            if ($rappel !== null && ($prochaine = AgentRappel::echeanceApres($rappel->periodicite)) !== null) {
+                $rappel->update(['prochaine_echeance' => $prochaine->toDateString(), 'notifie_at' => null]);
+            }
         }
 
         return $execution;

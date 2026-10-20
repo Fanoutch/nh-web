@@ -89,12 +89,8 @@ class ApplicationProposition
 
             return 'C\'est enregistré : plus aucun rappel pour cet agent.';
         }
-        $echeance = match ($p['periodicite'] ?? '') {
-            'hebdomadaire' => now()->addWeek(),
-            'mensuel' => now()->addMonth(),
-            'trimestriel' => now()->addMonths(3),
-            default => throw new LancementImpossible('Cette périodicité n\'est pas reconnue.'),
-        };
+        $echeance = AgentRappel::echeanceApres((string) ($p['periodicite'] ?? ''))
+            ?? throw new LancementImpossible('Cette périodicité n\'est pas reconnue.');
         AgentRappel::updateOrCreate(['agent_id' => $agent->id], [
             'periodicite' => $p['periodicite'], 'prochaine_echeance' => $echeance->toDateString(), 'notifie_at' => null,
         ]);

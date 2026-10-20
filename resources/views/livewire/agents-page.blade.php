@@ -24,7 +24,7 @@
                     <button type="button" wire:key="afaire-{{ $a->id }}" wire:click="selectionner({{ $a->id }})"
                             class="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-[13px] bg-accent-soft border border-accent-soft-border hover:border-accent transition">
                         <span class="truncate text-ink-primary">{{ $a->nom }}</span>
-                        <span class="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[10.5px] font-semibold text-sidebar-bg">Rappel</span>
+                        <span class="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[10.5px] font-semibold text-sidebar-bg">{{ $a->motifAFaire() }}</span>
                     </button>
                 @endforeach
             @endif
@@ -89,6 +89,12 @@
                     <button type="button" wire:click="reactiver" class="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-[13px] font-medium text-sidebar-bg hover:bg-accent-hover transition">Réactiver l'agent</button>
                 @endif
             </div>
+
+            @if ($alerteTaille)
+                <div class="border-b border-danger-border bg-danger-soft px-4 py-2 text-[12.5px] text-danger">
+                    Cet agent occupe plus de {{ config('agents.alerte_mo') }} Mo. Pensez à supprimer d'anciens fichiers de référence : rien n'est supprimé automatiquement.
+                </div>
+            @endif
 
             <div class="flex-1 overflow-y-auto px-4 py-5" x-ref="fil"
                  x-on:scroll="collePresDuBas = ($el.scrollHeight - $el.scrollTop - $el.clientHeight) <= 80"

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -77,12 +78,41 @@ class Agent extends Model
         return $this->hasOne(AgentRappel::class);
     }
 
-    /** Dans « À faire » : le rappel est arrivé à échéance (la veille proche s'ajoutera à l'étape 6). */
+    /** Dernier usage : seul un LANCEMENT compte (écrire dans le chat ou modifier l'agent n'est pas un usage). */
+    public function dernierUsage(): Carbon
+    {
+        return $this->dernier_lancement_at ?? $this->created_at;
+    }
+
+    /** Date à laquelle l'agent passera en veille s'il n'est pas lancé. */
+    public function veilleLe(): Carbon
+    {
+        return $this->dernierUsage()->copy()->addMonths((int) config('agents.veille_mois'));
+    }
+
+    /**
+     * Pourquoi l'agent est dans « À faire » : son rappel est arrivé, ou sa mise en veille approche
+     * (notification à 2 mois et 3 semaines). Null = rien à faire.
+     */
+    public function motifAFaire(): ?string
+    {
+        if ($this->etat !== self::ACTIF) {
+            return null;
+        }
+        if ($this->rappel !== null && $this->rappel->prochaine_echeance->lte(now()->startOfDay())) {
+            return 'Rappel';
+        }
+        $jours = (int) ceil(now()->diffInDays($this->veilleLe(), false));
+        if ($jours <= (int) config('agents.prevenir_jours_avant')) {
+            return $jours <= 0 ? 'Veille imminente' : 'Veille dans '.$jours.' j';
+        }
+
+        return null;
+    }
+
     public function aFaire(): bool
     {
-        return $this->etat === self::ACTIF
-            && $this->rappel !== null
-            && $this->rappel->prochaine_echeance->lte(now()->startOfDay());
+        return $this->motifAFaire() !== null;
     }
 
     public function estEnVeille(): bool
