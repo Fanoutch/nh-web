@@ -94,6 +94,12 @@ Vous avez un Excel avec une ligne par personne (ou par client, par pièce…) et
 - Tous les documents sont dans « Fichiers produits », avec un bouton **Tout télécharger (.zip)**.
 - Si une cellule est vide, le champ reste vide dans le document **et l'agent vous le signale**. Si un marqueur n'a pas
   de colonne, il ne produit rien et vous liste les colonnes disponibles.
+- **Pas de marqueurs ? Votre Word peut être un exemple déjà rempli** pour une personne (un certificat de « Jean Bon
+  Chevalier », par exemple). Le programme repère les valeurs de cette personne qui se trouvent aussi dans l'Excel (nom,
+  prénom, date, fonction…) et les remplace, pour chaque ligne, par les valeurs de la colonne correspondante. Le compte
+  rendu dit **ce qui a été remplacé et ce qui ne l'a pas été** : un numéro de certificat ou une date de naissance qui
+  n'existe pas dans l'Excel (ou écrit autrement) reste tel quel dans le modèle. Dites alors à l'agent quel texte
+  remplacer par quelle colonne.
 
 ## 6. Bon à savoir
 

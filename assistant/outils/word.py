@@ -607,13 +607,28 @@ MAX_PUBLIPOSTAGE = 50
 _ACCOLADE_SIMPLE = re.compile(r"\{([^{}]+)\}")
 
 
+def _exemples_auto(texte_modele: str, entetes: list, lignes: list) -> dict[str, int]:
+    """Modèle sans marqueur = document déjà rempli pour UNE personne : on cherche la ligne du classeur dont le plus
+    de valeurs apparaissent telles quelles dans le texte, et on en tire {texte d'exemple: indice de colonne}."""
+    meilleur: dict[str, int] = {}
+    for ligne in lignes:
+        trouves: dict[str, int] = {}
+        for indice in range(len(entetes)):
+            valeur = _texte_cellule(ligne[indice]) if indice < len(ligne) else ""
+            if len(valeur) >= 3 and not valeur.isdigit() and valeur in texte_modele and valeur not in trouves:
+                trouves[valeur] = indice
+        if len(trouves) > len(meilleur):
+            meilleur = trouves
+    return meilleur if len(meilleur) >= 2 else {}
+
+
 @outil("word_publipostage",
        "Produit UN document Word PAR LIGNE d'un classeur Excel, à partir d'un modèle Word contenant des marqueurs "
        "{{Colonne}} (le nom du marqueur est le nom d'une colonne ; accents et majuscules sans importance). Le programme "
        f"copie lui-même les valeurs ({MAX_PUBLIPOSTAGE} documents au plus). Le modèle et le classeur ne sont jamais modifiés. "
        "« condition » limite les lignes (comme excel_selectionner). « nom_fichier » donne le nom de chaque document, avec "
        "des colonnes entre accolades simples : \"courrier-{Nom}\" (par défaut : nom du modèle + première colonne). « correspondances » associe un marqueur à une colonne "
-       "quand les noms diffèrent : {\"{{NOM}}\": \"Nom complet\"}. Tout ou rien.",
+       "quand les noms diffèrent : {\"{{NOM}}\": \"Nom complet\"}. Modèle sans marqueur (document déjà rempli pour une personne) : « correspondances » donne le texte d'exemple à remplacer et sa colonne, ex. {\"Bon Chevalier\": \"Nom\"}. Tout ou rien.",
        {"type": "object", "properties": {
            "fichier_modele": {"type": "string"}, "fichier_excel": {"type": "string"}, "feuille": {"type": "string"},
            "condition": {"type": "object"}, "nom_fichier": {"type": "string"},
@@ -634,21 +649,38 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
         return erreur(f"{len(lignes)} lignes : au plus {MAX_PUBLIPOSTAGE} documents par appel.", "Ajoutez une condition pour traiter la liste par groupes.")
 
     modele = DocumentWord(str(source))
+    texte_modele = "\n".join(p.text for p in _paragraphes(modele))
     marqueurs = sorted({m for p in _paragraphes(modele) for m in _MARQUEUR.findall(p.text)})
-    if not marqueurs:
-        return erreur(f"Le modèle « {fichier_modele} » ne contient aucun marqueur {{{{Colonne}}}}.",
-                      "Écrivez dans le modèle, à la place de ce qui change, des marqueurs comme {{Nom}} ou {{Date}}.")
     explicites = correspondances if isinstance(correspondances, dict) else {}
+    # Un modèle sans marqueur peut être un document déjà rempli pour une personne : chaque texte d'exemple donné dans
+    # « correspondances » (ex. « Bon Chevalier » -> colonne « Nom ») est alors remplacé par la valeur de chaque ligne.
+    exemples = sorted((k for k in explicites if isinstance(k, str) and k.strip() and k not in marqueurs
+                       and not _MARQUEUR.fullmatch(k)), key=len, reverse=True)
+    auto: dict[str, int] = {}
+    if not marqueurs:
+        auto = {t: i for t, i in _exemples_auto(texte_modele, c.entetes, c.lignes).items()
+                if t not in exemples and not any(t in e for e in exemples)}
+    if not marqueurs and not exemples and not auto:
+        return erreur(f"Le modèle « {fichier_modele} » ne contient aucun marqueur {{{{Colonne}}}} et je n'y reconnais pas les valeurs d'une ligne de « {fichier_excel} ».",
+                      "Soit le modèle contient des marqueurs comme {{Nom}} ; soit, pour un document déjà rempli pour une personne, "
+                      "lisez-le (word_lire), puis donnez dans « correspondances » chaque texte à remplacer et sa colonne : "
+                      "{\"Bon Chevalier\": \"Nom\", \"Jean\": \"Prénom\"}.")
+    introuvables = [e for e in exemples if e not in texte_modele]
+    if introuvables:
+        return erreur("Texte(s) à remplacer introuvable(s) dans le modèle : " + ", ".join(f"« {e} »" for e in introuvables) + ".",
+                      "Recopiez le texte exactement comme dans le modèle (word_lire ou word_chercher).")
     colonne_de, absents = {}, []
-    for m in marqueurs:
-        voulu = explicites.get(m, m[2:-2].strip())
+    for m in marqueurs + exemples:
+        voulu = explicites.get(m, m[2:-2].strip() if m in marqueurs else m)
         try:
             colonne_de[m] = trouver_colonne(voulu, c.entetes)
         except ErreurCondition:
             absents.append(m)
     if absents:
-        return erreur("Marqueur(s) du modèle sans colonne correspondante : " + ", ".join(absents) + ".",
+        return erreur("Marqueur(s) ou texte(s) du modèle sans colonne correspondante : " + ", ".join(absents) + ".",
                       "Colonnes de « " + fichier_excel + " » : " + ", ".join(c.entetes) + ". Renommez le marqueur ou donnez « correspondances ».")
+    colonne_de.update(auto)
+    ordre = sorted(colonne_de, key=len, reverse=True)       # le plus long d'abord : « Bon Chevalier » avant « Chevalier »
 
     motif = nom_fichier or f"{source.stem}-{{{c.entetes[0]}}}"          # par défaut : la première colonne du classeur
     try:
@@ -667,7 +699,8 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
             ctx.fichiers_produits.append(nom)
             crees.append(nom)
             document = DocumentWord(str(sortie))
-            for m, indice in colonne_de.items():
+            for m in ordre:
+                indice = colonne_de[m]
                 valeur = _texte_cellule(ligne[indice])
                 if valeur == "":
                     vides[m] = vides.get(m, 0) + 1
@@ -683,8 +716,15 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
                       "Vérifiez que le modèle s'ouvre normalement dans Word.")
     avertissement = ("" if not vides else " Attention, des cellules vides ont laissé un champ vide : "
                      + ", ".join(f"{m} ({n} document(s))" for m, n in sorted(vides.items())) + ".")
+    non_remplacees = [e for e in c.entetes if e not in {c.entetes[i] for i in colonne_de.values()}]
+    if auto or (exemples and not marqueurs):
+        avertissement += (" Le modèle est un exemple rempli : ont été remplacés " + ", ".join(
+            f"« {t} » (colonne {c.entetes[i]})" for t, i in sorted({**auto, **{e: colonne_de[e] for e in exemples}}.items(), key=lambda kv: -len(kv[0])))
+            + ". Colonnes dont la valeur n'a pas été retrouvée dans le modèle (donc rien de remplacé pour elles) : "
+            + (", ".join(non_remplacees) or "aucune")
+            + ". Le reste du texte du modèle (numéro, dates de naissance…) est resté tel quel : signalez-le à l'utilisateur.")
     return ok(f"{len(crees)} document(s) produit(s) à partir de « {fichier_modele} » et « {fichier_excel} ».{avertissement}",
               {"fichiers_produits": crees, "nombre": len(crees), "marqueurs": {m: c.entetes[i] for m, i in colonne_de.items()},
                "valeurs_vides": vides},
-              "Les documents sont prêts à être téléchargés. Les originaux sont intacts.",
+              "Les documents sont prêts à être téléchargés. Les originaux sont intacts." + avertissement,
               [{"nom": n, "type": "docx", "intermediaire": False} for n in crees])

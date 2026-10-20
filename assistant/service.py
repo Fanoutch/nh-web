@@ -84,7 +84,7 @@ def creer_app(reglages: Reglages | None = None, assistant=None, modele_agent=Non
     def modele(messages, outils_declares):
         if modele_agent is not None:
             return modele_agent(messages, outils_declares)
-        return modeles.discuter_avec_outils(messages, outils_declares, r, 0)
+        return modeles.discuter_avec_outils_robuste(messages, outils_declares, r, 0)
 
     def verifier_jeton(x_assistant_jeton: str | None = Header(default=None)) -> None:
         # Comparaison en temps constant ; jeton configuré vide = tout refusé.

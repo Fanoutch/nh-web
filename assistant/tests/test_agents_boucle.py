@@ -246,3 +246,10 @@ def test_sans_fichier_aucune_relance_de_lecture(tmp_path):
     m = FauxModele({"content": "Bonjour, je sais lire Excel et Word."})
     ev = lancer(m, ctx)
     assert ev[0]["statut"] == "termine" and len(m.recus) == 1
+
+
+def test_reponse_vide_donne_un_message_clair_et_non_un_blanc(ctx):
+    evenements = lancer(FauxModele({"content": ""}, {"content": ""}, {"content": ""}), ctx)
+
+    fin = evenements[-1]
+    assert fin["statut"] == "arret" and "rien répondu" in fin["message"]

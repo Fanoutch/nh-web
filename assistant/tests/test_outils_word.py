@@ -738,3 +738,38 @@ def test_publipostage_hors_liste_refuse(ctxp):
     r = publier(ctxp)
 
     assert r.statut == "erreur" and "pas autorisé" in r.resume and ctxp.fichiers_produits == []
+
+
+# --- modèle déjà rempli pour une personne (sans marqueur) ---------------------------------------------------------
+@pytest.fixture
+def ctxe(ctxp):
+    d = Document()
+    d.add_paragraph("Certificat n° 2026-04827")
+    d.add_paragraph("Délivré à Anne Martin, Cheffe, valable jusqu'au 31 décembre 2028. Fait le 31 décembre 2028.")
+    t = d.add_table(rows=1, cols=2)
+    t.cell(0, 0).text, t.cell(0, 1).text = "Nom", "Martin"
+    d.save(ctxp.dossier_execution / "fiche.docx")
+    return ctxp
+
+
+def test_modele_exemple_les_valeurs_de_la_ligne_sont_remplacees_par_le_code(ctxe):
+    r = publier(ctxe)
+
+    assert r.statut == "ok" and r.donnees["nombre"] == 3
+    durand = next(texte_complet(ctxe, n) for n in r.donnees["fichiers_produits"] if "Durand" in n)
+    assert "Délivré à Paul Durand, Technicien" in durand and "Martin" not in durand and "Anne" not in durand
+    assert "n° 2026-04827" in durand                                             # non lié à une colonne : intact
+    assert "Le modèle est un exemple rempli" in r.resume and "Colonnes dont la valeur n'a pas été retrouvée" in r.resume
+
+
+def test_modele_exemple_texte_donne_par_le_modele_complete_la_detection(ctxe):
+    r = publier(ctxe, correspondances={"2026-04827": "Matricule"})
+
+    assert r.statut == "ok"
+    assert "n° M-002" in next(texte_complet(ctxe, n) for n in r.donnees["fichiers_produits"] if "Durand" in n)
+
+
+def test_modele_exemple_texte_introuvable_refuse(ctxe):
+    r = publier(ctxe, correspondances={"Zoé Inconnue": "Nom"})
+
+    assert r.statut == "erreur" and "introuvable" in r.resume and ctxe.fichiers_produits == []

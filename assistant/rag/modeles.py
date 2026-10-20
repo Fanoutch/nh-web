@@ -147,6 +147,33 @@ def discuter_avec_outils(messages: list[dict], outils: list[dict], r: Reglages, 
     return message if isinstance(message, dict) else {"content": str(message)}
 
 
+_INVISIBLES = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff"))
+
+
+def _est_vide(message: dict) -> bool:
+    """Ni appel d'outil ni texte visible : certains serveurs renvoient seulement un caractère invisible (U+200B)."""
+    texte = str(message.get("content") or "").translate(_INVISIBLES).strip()
+    return not texte and not message.get("tool_calls")
+
+
+def discuter_avec_outils_robuste(messages: list[dict], outils: list[dict], r: Reglages, temperature: float,
+                                 pause: float = 1.0) -> dict:
+    """Comme `discuter_avec_outils`, avec les caractères invisibles retirés du texte rendu. Une première réponse vide
+    est rendue telle quelle (la boucle relance le modèle avec un message) ; si le modèle a DÉJÀ répondu à vide plus tôt
+    dans la conversation, la demande est refaite à température croissante (4 essais au plus)."""
+    deja_vides = sum(1 for m in messages if m.get("role") == "assistant" and _est_vide(m))
+    temperatures = (temperature, temperature + 0.3, temperature + 0.6, temperature + 0.9) if deja_vides else (temperature,)
+    message: dict = {}
+    for chaleur in temperatures:
+        message = discuter_avec_outils(messages, outils, r, chaleur)
+        if not _est_vide(message):
+            break
+        time.sleep(pause)
+    if isinstance(message.get("content"), str):
+        message = {**message, "content": message["content"].translate(_INVISIBLES)}
+    return message
+
+
 def discuter_en_flux(messages: list[dict], r: Reglages, temperature: float) -> Iterator[str]:
     """Fragments de texte au fil de l'eau (format « data: {...} » d'OpenAI)."""
     reponse = _post(_url_chat(r), r.llm_cle_api, _charge_chat(messages, r, temperature, True),

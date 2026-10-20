@@ -259,3 +259,33 @@ def test_discuter_avec_outils_ne_reessaie_pas_une_erreur_de_requete(appels):
         modeles.discuter_avec_outils([{"role": "user", "content": "?"}], [], R_LLM, 0, pause=0)
 
     assert len(appels["requetes"]) == 1
+
+
+def test_premiere_reponse_vide_rendue_telle_quelle_sans_caracteres_invisibles(appels):
+    appels["reponses"].append(FausseReponse({"choices": [{"message": {"content": "\u200b"}}]}))
+
+    message = modeles.discuter_avec_outils_robuste([{"role": "user", "content": "?"}], [], R_LLM, 0, pause=0)
+
+    assert message["content"] == "" and len(appels["requetes"]) == 1
+
+
+def test_apres_une_reponse_vide_la_demande_est_refaite_a_temperature_croissante(appels):
+    appels["reponses"] += [FausseReponse({"choices": [{"message": {"content": "\u200b"}}]}),
+                           FausseReponse({"choices": [{"message": {"content": "\u200b"}}]}),
+                           FausseReponse({"choices": [{"message": {"content": "\u200bBonjour"}}]})]
+    conversation = [{"role": "user", "content": "?"}, {"role": "assistant", "content": ""},
+                    {"role": "user", "content": "Appelez un outil."}]
+
+    message = modeles.discuter_avec_outils_robuste(conversation, [], R_LLM, 0, pause=0)
+
+    assert message["content"] == "Bonjour" and len(appels["requetes"]) == 3
+    assert [q["json"]["temperature"] for q in appels["requetes"]] == [0, 0.3, 0.6]
+
+
+def test_reponse_toujours_vide_rendue_apres_quatre_essais(appels):
+    appels["reponses"] += [FausseReponse({"choices": [{"message": {"content": "\u200b"}}]}) for _ in range(4)]
+    conversation = [{"role": "user", "content": "?"}, {"role": "assistant", "content": ""}, {"role": "user", "content": "!"}]
+
+    message = modeles.discuter_avec_outils_robuste(conversation, [], R_LLM, 0, pause=0)
+
+    assert message["content"] == "" and len(appels["requetes"]) == 4
