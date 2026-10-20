@@ -11,9 +11,18 @@ use Illuminate\Support\Facades\Storage;
  */
 class AgentFichierReference extends Model
 {
+    public const REFERENCE = 'reference';
+
+    public const APPORT = 'apport';
+
     protected $table = 'agent_fichiers_reference';
 
-    protected $fillable = ['agent_id', 'nom', 'chemin', 'taille', 'role'];
+    protected $fillable = ['agent_id', 'type', 'nom', 'chemin', 'taille', 'role', 'lecture'];
+
+    protected function casts(): array
+    {
+        return ['lecture' => 'array'];
+    }
 
     public function agent(): BelongsTo
     {

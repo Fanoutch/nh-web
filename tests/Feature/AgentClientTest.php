@@ -42,7 +42,7 @@ it('sends the execution with the token, the files and the allowed tools only', f
             && $r->header('X-Assistant-Jeton') === ['secret']
             && $r['execution_id'] === $execution->id
             && $r['fichiers'] === ['stock.xlsx']
-            && $r['outils'] === ['excel_decrire', 'excel_lire']
+            && $r['outils'] === ['excel_decrire', 'excel_lire', 'agent_proposer', 'agent_historique']
             && $r['consignes'] === 'Soyez bref.'
             && $r['dossier_execution'] === Storage::disk('local')->path($execution->dossierEntree())
             && $r['dossier_sortie'] === Storage::disk('local')->path($execution->dossierSortie());

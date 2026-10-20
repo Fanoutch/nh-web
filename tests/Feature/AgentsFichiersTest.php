@@ -67,41 +67,68 @@ it('removes a reference file and its row', function () {
     expect($this->agent->fichiersReference()->count())->toBe(0);
 });
 
-it('prepares an execution folder with copies of references and brought files', function () {
+it('prepares an execution folder with copies of references and waiting documents', function () {
     $this->gestion->deposerReference($this->agent, UploadedFile::fake()->create('stock.xlsx', 1));
+    $this->gestion->deposerApport($this->agent, UploadedFile::fake()->create('besoins.xlsx', 1));
 
-    $execution = $this->gestion->preparerExecution(
-        $this->agent, $this->user, AgentExecution::EXECUTION, 'Faites la commande.',
-        [UploadedFile::fake()->create('besoins.xlsx', 1)],
-    );
+    $execution = $this->gestion->preparerExecution($this->agent, $this->user, AgentExecution::EXECUTION, 'Faites la commande.');
 
     expect($execution->etat)->toBe(AgentExecution::EN_COURS)
         ->and($execution->fichiers_apportes)->toBe(['besoins.xlsx'])
         ->and($execution->debut_at)->not->toBeNull();
     Storage::disk('local')->assertExists($execution->dossierEntree().'/stock.xlsx');
     Storage::disk('local')->assertExists($execution->dossierEntree().'/besoins.xlsx');
-    // l'original de référence n'a pas bougé
+    // les originaux n'ont pas bougé
     Storage::disk('local')->assertExists('agents/'.$this->agent->id.'/references/stock.xlsx');
+    Storage::disk('local')->assertExists('agents/'.$this->agent->id.'/apports/besoins.xlsx');
 });
 
-it('refuses a brought file named like a reference, without creating an execution', function () {
+it('refuses a waiting document named like a reference', function () {
     $this->gestion->deposerReference($this->agent, UploadedFile::fake()->create('stock.xlsx', 1));
 
-    try {
-        $this->gestion->preparerExecution($this->agent, $this->user, AgentExecution::EXECUTION, 'x',
-            [UploadedFile::fake()->create('STOCK.xlsx', 1)]);
-    } catch (FichierAgentRefuse $e) {
-        expect($e->getMessage())->toContain('déjà pris');
-    }
+    $this->gestion->deposerApport($this->agent, UploadedFile::fake()->create('STOCK.xlsx', 1));
+})->throws(FichierAgentRefuse::class, 'déjà pris');
 
-    expect(AgentExecution::count())->toBe(0);
+it('replaces a waiting document deposited again under the same name', function () {
+    $this->gestion->deposerApport($this->agent, UploadedFile::fake()->createWithContent('b.xlsx', 'v1'));
+    $this->gestion->deposerApport($this->agent, UploadedFile::fake()->createWithContent('b.xlsx', 'version corrigée'));
+
+    expect($this->agent->apports()->count())->toBe(1);
+    expect(Storage::disk('local')->get('agents/'.$this->agent->id.'/apports/b.xlsx'))->toBe('version corrigée');
 });
 
-it('refuses two brought files with the same name', function () {
-    $this->gestion->preparerExecution($this->agent, $this->user, AgentExecution::EXECUTION, 'x', [
-        UploadedFile::fake()->create('a.xlsx', 1), UploadedFile::fake()->create('a.xlsx', 1),
-    ]);
-})->throws(FichierAgentRefuse::class);
+it('consumes the waiting documents after a successful run but keeps references', function () {
+    $this->gestion->deposerReference($this->agent, UploadedFile::fake()->create('stock.xlsx', 1));
+    $this->gestion->deposerApport($this->agent, UploadedFile::fake()->create('besoins.xlsx', 1));
+
+    $this->gestion->consommerApports($this->agent);
+
+    expect($this->agent->apports()->count())->toBe(0)->and($this->agent->fichiersReference()->count())->toBe(1);
+    Storage::disk('local')->assertMissing('agents/'.$this->agent->id.'/apports/besoins.xlsx');
+});
+
+it('asks the service to read the waiting documents and keeps the structure', function () {
+    config(['assistant.jeton' => 'secret']);
+    \Illuminate\Support\Facades\Http::fake(['*/agents/fichiers/lire' => \Illuminate\Support\Facades\Http::response(['fichiers' => [
+        ['nom' => 'besoins.xlsx', 'statut' => 'ok', 'feuilles' => [['nom' => 'Besoins', 'lignes' => 412, 'colonnes' => ['Réf', 'Besoin']]]],
+    ]])]);
+    $this->gestion->deposerApport($this->agent, UploadedFile::fake()->create('besoins.xlsx', 1));
+
+    $this->gestion->lireApports($this->agent, app(\App\Services\AgentClient::class));
+
+    $lecture = $this->agent->apports()->first()->lecture;
+    expect($lecture['statut'])->toBe('ok')->and($lecture['feuilles'][0]['lignes'])->toBe(412);
+    \Illuminate\Support\Facades\Http::assertSent(fn ($r) => $r['dossier'] === Storage::disk('local')->path('agents/'.$this->agent->id.'/apports')
+        && $r['fichiers'] === ['besoins.xlsx']);
+});
+
+it('does not call the service when there is nothing waiting', function () {
+    \Illuminate\Support\Facades\Http::fake();
+
+    $this->gestion->lireApports($this->agent, app(\App\Services\AgentClient::class));
+
+    \Illuminate\Support\Facades\Http::assertNothingSent();
+});
 
 it('measures the size of an agent and warns from 500 Mo only', function () {
     $this->gestion->deposerReference($this->agent, UploadedFile::fake()->createWithContent('a.xlsx', str_repeat('x', 100 * 1024)));

@@ -19,8 +19,9 @@ class AgentClient
      *
      * @param  callable(array): void  $surEvenement
      * @param  ?callable(): bool  $doitArreter
+     * @param  array{consignes?: string, historique?: list<array{role: string, content: string}>, donnees_agent?: array}  $options
      */
-    public function executer(AgentExecution $execution, callable $surEvenement, ?callable $doitArreter = null): void
+    public function executer(AgentExecution $execution, callable $surEvenement, ?callable $doitArreter = null, array $options = []): void
     {
         $agent = $execution->agent;
         $disque = Storage::disk('local');
@@ -30,7 +31,9 @@ class AgentClient
             ->withOptions(['stream' => true])
             ->post('/agents/executions', [
                 'execution_id' => $execution->id,
-                'consignes' => (string) $agent->consignes,
+                'consignes' => (string) ($options['consignes'] ?? $agent->consignes),
+                'historique' => $options['historique'] ?? [],
+                'donnees_agent' => (object) ($options['donnees_agent'] ?? []),
                 'demande' => $execution->demande,
                 'dossier_execution' => $disque->path($execution->dossierEntree()),
                 'fichiers' => array_map('basename', $disque->files($execution->dossierEntree())),
@@ -39,6 +42,21 @@ class AgentClient
             ]));
 
         $this->lireFlux($reponse, $surEvenement, $doitArreter);
+    }
+
+    /**
+     * Confirmation de lecture : structure de chaque fichier d'un dossier (feuilles, lignes, colonnes ; jamais les valeurs).
+     *
+     * @param  list<string>  $noms
+     * @return list<array<string, mixed>>
+     */
+    public function lireFichiers(string $dossierAbsolu, array $noms): array
+    {
+        $reponse = $this->envoyer(fn () => $this->http(60)->post('/agents/fichiers/lire', [
+            'dossier' => $dossierAbsolu, 'fichiers' => $noms,
+        ]));
+
+        return $reponse->json('fichiers', []);
     }
 
     /** Demande l'arrêt d'une exécution en cours (bouton « Arrêter »). */

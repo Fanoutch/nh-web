@@ -21,9 +21,15 @@ class AgentExecution extends Model
 
     public const ARRET = 'arret';
 
+    public const EN_ATTENTE = 'en_attente';
+
+    public const ACCEPTEE = 'acceptee';
+
+    public const REFUSEE = 'refusee';
+
     protected $fillable = [
         'agent_id', 'user_id', 'mode', 'etat', 'demande', 'fichiers_apportes', 'fichiers_produits',
-        'etapes', 'message', 'detail', 'arret_demande', 'debut_at', 'fin_at',
+        'etapes', 'message', 'detail', 'proposition', 'proposition_etat', 'arret_demande', 'debut_at', 'fin_at',
     ];
 
     protected function casts(): array
@@ -32,6 +38,7 @@ class AgentExecution extends Model
             'fichiers_apportes' => 'array',
             'fichiers_produits' => 'array',
             'etapes' => 'array',
+            'proposition' => 'array',
             'arret_demande' => 'boolean',
             'debut_at' => 'datetime',
             'fin_at' => 'datetime',

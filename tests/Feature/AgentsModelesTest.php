@@ -21,14 +21,14 @@ it('starts an agent as a draft with every tool allowed', function () {
     $agent = agentDe(User::factory()->create())->fresh();
 
     expect($agent->etat)->toBe(Agent::BROUILLON)
-        ->and($agent->outilsAutorises())->toBe(Agent::OUTILS)
+        ->and($agent->outilsAutorises())->toBe(array_merge(Agent::OUTILS, Agent::GESTION))
         ->and($agent->dernier_lancement_at)->toBeNull();
 });
 
 it('limits the allowed tools to existing ones, in a stable order', function () {
     $agent = agentDe(User::factory()->create(), ['outils' => ['excel_lire', 'rm_rf', 'excel_decrire']]);
 
-    expect($agent->fresh()->outilsAutorises())->toBe(['excel_decrire', 'excel_lire']);
+    expect($agent->fresh()->outilsAutorises())->toBe(['excel_decrire', 'excel_lire', 'agent_proposer', 'agent_historique']);
 });
 
 it('stores the recipe as JSON', function () {

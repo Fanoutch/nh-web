@@ -37,59 +37,101 @@ class GestionFichiersAgent
     public function deposerReference(Agent $agent, UploadedFile $fichier, ?string $role = null): AgentFichierReference
     {
         $nom = $this->valider($fichier);
-        if ($agent->fichiersReference()->where('nom', $nom)->exists()) {
-            throw new FichierAgentRefuse('Un fichier de référence nommé « '.$nom.' » existe déjà pour cet agent. Supprimez-le d\'abord ou renommez le nouveau.');
+        if ($this->nomPris($agent, $nom)) {
+            throw new FichierAgentRefuse('Un fichier nommé « '.$nom.' » existe déjà pour cet agent. Supprimez-le d\'abord ou renommez le nouveau.');
         }
         $chemin = $fichier->storeAs($agent->dossier().'/references', $nom, 'local');
 
-        return $agent->fichiersReference()->create([
-            'nom' => $nom, 'chemin' => $chemin, 'taille' => $fichier->getSize(), 'role' => $role,
+        return $agent->tousFichiers()->create([
+            'type' => AgentFichierReference::REFERENCE, 'nom' => $nom, 'chemin' => $chemin,
+            'taille' => $fichier->getSize(), 'role' => $role,
         ]);
+    }
+
+    /**
+     * Dépose un document en attente du prochain lancement. Redéposer un document du même nom le REMPLACE
+     * (l'utilisateur a corrigé son fichier) ; un nom déjà pris par une référence est refusé.
+     */
+    public function deposerApport(Agent $agent, UploadedFile $fichier): AgentFichierReference
+    {
+        $nom = $this->valider($fichier);
+        $ancien = $agent->apports()->whereRaw('lower(nom) = ?', [strtolower($nom)])->first();
+        if ($ancien === null && $this->nomPris($agent, $nom)) {
+            throw new FichierAgentRefuse('Le nom « '.$nom.' » est déjà pris par un fichier de référence de cet agent. Renommez le document puis déposez-le de nouveau.');
+        }
+        if ($ancien !== null) {
+            $this->supprimerFichier($ancien);
+        }
+        $chemin = $fichier->storeAs($agent->dossier().'/apports', $nom, 'local');
+
+        return $agent->tousFichiers()->create([
+            'type' => AgentFichierReference::APPORT, 'nom' => $nom, 'chemin' => $chemin, 'taille' => $fichier->getSize(),
+        ]);
+    }
+
+    private function nomPris(Agent $agent, string $nom): bool
+    {
+        return $agent->tousFichiers()->whereRaw('lower(nom) = ?', [strtolower($nom)])->exists();
     }
 
     public function supprimerReference(AgentFichierReference $reference): void
     {
-        Storage::disk('local')->delete($reference->chemin);
-        $reference->delete();
+        $this->supprimerFichier($reference);
+    }
+
+    public function supprimerFichier(AgentFichierReference $fichier): void
+    {
+        Storage::disk('local')->delete($fichier->chemin);
+        $fichier->delete();
     }
 
     /**
-     * Crée l'exécution et son dossier d'entrée : copie des références, puis dépôt des fichiers apportés.
-     * Les originaux ne sont jamais touchés (l'agent lit une copie).
-     *
-     * @param  list<UploadedFile>  $apports
+     * Confirmation de lecture des documents en attente : le service lit la STRUCTURE (feuilles, lignes, colonnes),
+     * jamais les valeurs, et le résultat est gardé sur chaque document. Un service indisponible laisse la lecture vide.
      */
-    public function preparerExecution(Agent $agent, User $user, string $mode, string $demande, array $apports = []): AgentExecution
+    public function lireApports(Agent $agent, AgentClient $client): void
     {
-        $noms = [];
-        foreach ($apports as $apport) {
-            $nom = $this->valider($apport);
-            if (in_array(strtolower($nom), array_map('strtolower', $noms), true)
-                || $agent->fichiersReference()->whereRaw('lower(nom) = ?', [strtolower($nom)])->exists()) {
-                throw new FichierAgentRefuse('Le nom « '.$nom.' » est déjà pris par un autre fichier de cet agent. Renommez le fichier puis déposez-le de nouveau.');
-            }
-            $noms[] = $nom;
+        $apports = $agent->apports()->get();
+        if ($apports->isEmpty()) {
+            return;
         }
+        $fiches = collect($client->lireFichiers(Storage::disk('local')->path($agent->dossier().'/apports'), $apports->pluck('nom')->all()))
+            ->keyBy('nom');
+        foreach ($apports as $apport) {
+            $apport->update(['lecture' => $fiches->get($apport->nom)]);
+        }
+    }
 
+    /**
+     * Crée l'exécution et son dossier d'entrée : copie des références puis des documents en attente.
+     * Les originaux ne sont jamais touchés (l'agent lit une copie).
+     */
+    public function preparerExecution(Agent $agent, User $user, string $mode, string $demande): AgentExecution
+    {
         $execution = $agent->executions()->create([
             'user_id' => $user->id,
             'mode' => $mode,
             'etat' => AgentExecution::EN_COURS,
             'demande' => $demande,
-            'fichiers_apportes' => $noms,
+            'fichiers_apportes' => $agent->apports()->pluck('nom')->all(),
             'debut_at' => now(),
         ]);
 
         $disque = Storage::disk('local');
         $disque->makeDirectory($execution->dossierEntree());
-        foreach ($agent->fichiersReference as $reference) {
-            $disque->copy($reference->chemin, $execution->dossierEntree().'/'.$reference->nom);
-        }
-        foreach ($apports as $i => $apport) {
-            $apport->storeAs($execution->dossierEntree(), $noms[$i], 'local');
+        foreach ($agent->tousFichiers()->get() as $fichier) {
+            $disque->copy($fichier->chemin, $execution->dossierEntree().'/'.$fichier->nom);
         }
 
         return $execution;
+    }
+
+    /** Les documents en attente ont servi à un lancement réussi : on les retire (la copie reste dans l'exécution). */
+    public function consommerApports(Agent $agent): void
+    {
+        foreach ($agent->apports()->get() as $apport) {
+            $this->supprimerFichier($apport);
+        }
     }
 
     /** Taille de tout ce que l'agent garde sur le disque, en octets. */
