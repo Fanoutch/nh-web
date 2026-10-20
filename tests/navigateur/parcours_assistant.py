@@ -16,6 +16,7 @@ Garde-fous :
 
 Lancement : scripts/tests-navigateur.sh
 """
+import json
 import os
 import re
 import signal
@@ -38,6 +39,8 @@ EMAIL = "banc-navigateur@example.test"
 MOT_DE_PASSE = "banc-navigateur-mdp-42"
 NOM_DOCUMENT = "banc-navigateur.pdf"
 NOM_DOSSIER = "Banc navigateur - dossier"
+NOM_CLASSEUR_AGENT = "besoins-banc.csv"
+NOM_AGENT = "Nouvel agent"
 
 # Même base que phpunit.xml : jamais la base de développement (distante, données réelles).
 ENV_TEST = {
@@ -145,6 +148,23 @@ class FauxAssistant(BaseHTTPRequestHandler):
         self.rfile.read(int(self.headers.get("Content-Length") or 0))
         if self.path.startswith("/questions"):
             time.sleep(30)  # la réponse ne vient pas : on reste sur « l'assistant réfléchit »
+            return
+        if self.path.startswith("/agents/executions") and not self.path.endswith("/arret"):
+            # Un tour d'agent complet : une étape (avec une proposition à confirmer) puis la fin.
+            etape = {"type": "etape", "tour": 1, "outil": "excel_decrire", "arguments": {}, "statut": "ok",
+                     "resume": "1 classeur lu", "proposition": {"type": "consignes", "consignes": "Consignes du banc."}}
+            fin = {"type": "fin", "statut": "termine", "message": "Réponse du banc : tout est lu.", "tours": 2, "fichiers": []}
+            corps = (json.dumps(etape) + "\n" + json.dumps(fin) + "\n").encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson")
+            self.send_header("Content-Length", str(len(corps)))
+            self.end_headers()
+            self.wfile.write(corps)
+            return
+        if self.path.startswith("/agents/fichiers/lire"):
+            fiche = {"nom": NOM_CLASSEUR_AGENT, "type": "classeur", "statut": "ok", "autres_feuilles": 0, "message": "",
+                     "feuilles": [{"nom": "Besoins", "lignes": 3, "colonnes": ["Réf", "Besoin"], "colonnes_tronquees": False}]}
+            self._json(json.dumps({"fichiers": [fiche]}).encode())
             return
         self._json(b"{}")
 
@@ -268,6 +288,48 @@ def parcours(page, erreurs_console, res):
         expect(page.locator("tr", has_text=NOM_DOSSIER)).to_have_count(0, timeout=8000)
 
     res.etape("Suppression du dossier", supprimer_dossier)
+
+    # ---- Parcours agents ------------------------------------------------------------------
+    def ouvrir_agents():
+        page.goto(f"{URL}/agents")
+        page.wait_for_function("window.Livewire && window.Alpine", timeout=10000)
+        expect(page.get_by_text("Mes agents").first).to_be_visible()
+        page.get_by_role("button", name=re.compile("Nouvel agent")).first.click()
+        expect(page.get_by_text("Glissez vos classeurs Excel ou documents Word")).to_be_visible(timeout=8000)
+
+    res.etape("Onglet Agents : « Nouvel agent » ouvre le chat de conception", ouvrir_agents)
+
+    def tour_agent():
+        champ = page.locator("textarea[aria-label=\"Votre message à l'agent\"]")
+        champ.fill("Lis mes fichiers.")
+        page.locator("form[wire\\:submit='envoyer'] button[type=submit]").click()
+        expect(page.get_by_text("Réponse du banc : tout est lu.")).to_be_visible(timeout=15000)
+        expect(champ).to_have_value("")
+        expect(page.get_by_text("L'agent a travaillé (1 étape)")).to_be_visible()
+        expect(page.get_by_text("Remplacer les consignes permanentes de l'agent")).to_be_visible()
+
+    res.etape("Message à l'agent : étapes, réponse et carte de confirmation affichées", tour_agent)
+
+    def confirmer():
+        page.get_by_role("button", name="Oui, enregistrer").click()
+        expect(page.get_by_text("✓ Enregistré")).to_be_visible(timeout=8000)
+
+    res.etape("Confirmation d'une proposition : « Enregistré » affiché", confirmer)
+
+    def deposer():
+        fichier = Path("/tmp") / NOM_CLASSEUR_AGENT
+        fichier.write_text("Réf,Besoin\nA,1\nB,2\nC,3\n", encoding="utf-8")
+        page.locator("input[type=file]").set_input_files(str(fichier))
+        expect(page.get_by_text("Feuille « Besoins » : 3 lignes").first).to_be_visible(timeout=10000)
+        expect(page.get_by_text(NOM_CLASSEUR_AGENT).first).to_be_visible()
+
+    res.etape("Dépôt d'un document : confirmation de lecture affichée", deposer)
+
+    def supprimer_agent():
+        page.get_by_label(re.compile("Supprimer l'agent")).first.click(force=True)
+        expect(page.get_by_text("Aucun agent pour l'instant")).to_be_visible(timeout=8000)
+
+    res.etape("Suppression de l'agent (avec confirmation)", supprimer_agent)
 
     def console_propre_fin():
         console_propre()

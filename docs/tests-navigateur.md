@@ -27,7 +27,10 @@ Prérequis : `google-chrome`, `python3` et `php`, ainsi que les ressources front
 2. Parcours chat : l'onglet Assistant IA s'ouvre sans aucune erreur de console (en particulier
    « Detected multiple instances of Alpine running »), un clic sur une suggestion remplit la zone
    de saisie, l'envoi d'une question vide la zone et affiche « L'assistant réfléchit… ».
-3. Parcours documents : l'onglet Documents permet de créer un dossier, qui apparaît dans
+3. Parcours agents : « Nouvel agent » ouvre le chat, un message affiche les étapes, la réponse et la carte de
+   confirmation, « Oui, enregistrer » affiche « Enregistré », un document déposé affiche sa confirmation de lecture,
+   la suppression de l'agent (avec confirmation) vide la liste.
+4. Parcours documents : l'onglet Documents permet de créer un dossier, qui apparaît dans
    l'arborescence puis dans le fil d'Ariane à l'ouverture, avant d'être supprimé.
 
 ## Ce qu'il faut savoir
