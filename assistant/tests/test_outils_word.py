@@ -236,3 +236,74 @@ def test_une_consigne_cachee_dans_le_document_reste_une_donnee(ctx):
 
     assert r.statut == "ok" and "IGNORE" in r.donnees["blocs"][0]["texte"]
     assert ctx.fichiers_produits == [] and not ctx.dossier_sortie.exists()
+
+
+# --- création ------------------------------------------------------------------
+def _creer(ctx, contenu, nom="compte-rendu"):
+    return executer("word_creer", {"nom": nom, "contenu": contenu}, ctx)
+
+
+def test_creer_un_document_que_word_decrire_relit(ctx):
+    r = _creer(ctx, [
+        {"type": "titre", "niveau": 1, "texte": "Compte rendu"},
+        {"type": "paragraphe", "texte": "Tout est conforme."},
+        {"type": "liste", "elements": ["Filtre", "Joint"]},
+        {"type": "liste", "elements": ["Étape 1", "Étape 2"], "numerotee": True},
+        {"type": "tableau", "colonnes": ["Réf.", "Qté"], "lignes": [["A-104", 12], ["B-220", None]]},
+    ])
+
+    assert r.statut == "ok" and r.donnees["fichier_produit"] == "compte-rendu.docx"
+    assert ctx.fichiers_produits == ["compte-rendu.docx"] and r.artefacts[0]["type"] == "docx"
+    # l'outil de lecture relit ce qui vient d'être produit
+    lu = executer("word_tableau", {"fichier": "compte-rendu.docx", "numero": 1}, ctx)
+    assert lu.donnees["en_tete"] == ["Réf.", "Qté"] and lu.donnees["lignes"] == [["A-104", "12"], ["B-220", ""]]
+    plan = executer("word_decrire", {"fichier": "compte-rendu.docx"}, ctx)
+    assert plan.donnees["titres"][0]["texte"] == "Compte rendu"
+
+
+def test_creer_ne_remplace_jamais_un_fichier_existant(ctx):
+    ctx.fichiers_autorises.append("rapport.docx")
+    (ctx.dossier_execution / "rapport.docx").write_bytes(b"original")
+
+    r1 = _creer(ctx, [{"type": "paragraphe", "texte": "a"}], nom="rapport.docx")
+    r2 = _creer(ctx, [{"type": "paragraphe", "texte": "b"}], nom="rapport.docx")
+
+    assert r1.donnees["fichier_produit"] == "rapport-2.docx" and r2.donnees["fichier_produit"] == "rapport-3.docx"
+    assert (ctx.dossier_execution / "rapport.docx").read_bytes() == b"original"
+
+
+def test_creer_nettoie_le_nom_et_force_docx(ctx):
+    r = _creer(ctx, [{"type": "paragraphe", "texte": "a"}], nom="../../etc/passwd.xlsx")
+
+    assert r.donnees["fichier_produit"].endswith(".docx") and "/" not in r.donnees["fichier_produit"]
+    assert (ctx.dossier_sortie / r.donnees["fichier_produit"]).is_file()
+
+
+def test_creer_accepte_des_caracteres_interdits_sans_planter(ctx):
+    r = _creer(ctx, [{"type": "paragraphe", "texte": "ok\x00\x08 fin"}])
+
+    assert r.statut == "ok"
+    assert executer("word_lire", {"fichier": r.donnees["fichier_produit"]}, ctx).donnees["blocs"][0]["texte"] == "ok fin"
+
+
+@pytest.mark.parametrize("contenu, attendu", [
+    ([], "liste non vide"),
+    ("texte", "liste non vide"),
+    (["pas un objet"], "n'est pas un objet"),
+    ([{"type": "image"}], "type inconnu"),
+    ([{"type": "liste", "elements": []}], "elements"),
+    ([{"type": "tableau", "lignes": []}], "colonnes"),
+    ([{"type": "tableau", "colonnes": ["a"], "lignes": [["1", "2"]]}], "plus de valeurs"),
+    ([{"type": "paragraphe", "texte": "x"}] * 1001, "1000 blocs"),
+])
+def test_creer_erreurs_lisibles_sans_fichier_cree(ctx, contenu, attendu):
+    r = _creer(ctx, contenu)
+
+    assert r.statut == "erreur" and attendu in r.resume
+    assert ctx.fichiers_produits == [] and not ctx.dossier_sortie.exists()
+
+
+def test_creer_hors_liste_refuse(ctx):
+    ctx.outils_autorises = {"word_lire"}
+    r = _creer(ctx, [{"type": "paragraphe", "texte": "a"}])
+    assert r.statut == "erreur" and "pas autorisé" in r.resume and ctx.fichiers_produits == []

@@ -190,15 +190,15 @@ def excel_filtrer(ctx: Contexte, fichier: str, feuille: str | None = None, condi
 
 # --------------------------------------------------------------------------- écriture (fichiers neufs uniquement)
 
-def _nom_sortie(ctx: Contexte, souhaite: str | None, defaut: str) -> str:
+def _nom_sortie(ctx: Contexte, souhaite: str | None, defaut: str, extension: str = ".xlsx") -> str:
     base = Path(souhaite or defaut).name
     base = re.sub(r"[^\w.\- àâäéèêëîïôöùûüçÀÉÈÊ]", "_", base).strip(". ") or defaut
-    base = Path(base).stem + ".xlsx"
+    base = Path(base).stem + extension
     existants = set(ctx.fichiers_produits) | set(ctx.fichiers_autorises)
     nom, n = base, 1
     while nom in existants or (ctx.dossier_sortie / nom).exists():
         n += 1
-        nom = f"{Path(base).stem}-{n}.xlsx"
+        nom = f"{Path(base).stem}-{n}{extension}"
     return nom
 
 

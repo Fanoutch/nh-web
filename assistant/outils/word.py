@@ -15,6 +15,7 @@ from docx.table import Table
 from docx.text.paragraph import Paragraph
 
 from .classeur import ErreurClasseur, resoudre
+from .excel import _nom_sortie
 from .registre import Contexte, Reponse, erreur, ok, outil
 from .texte import normaliser
 
@@ -24,6 +25,8 @@ MAX_CARACTERES_MODELE = 10_000  # texte renvoyé par appel, comme le plafond de 
 MAX_PARAGRAPHE = 2_000        # un paragraphe plus long est coupé, avec une marque
 MAX_LIGNES_TABLEAU = 200
 MAX_RESULTATS = 50
+MAX_BLOCS_CREES = 1_000
+MAX_LIGNES_CREEES = 2_000
 LIMITE_DEZIPPE = 200 * 1024 * 1024   # garde-fou contre un fichier « bombe » (zip qui gonfle)
 
 
@@ -217,3 +220,74 @@ def word_tableau(ctx: Contexte, fichier: str, numero: int, depuis: int = 0, limi
                "lignes": [[_court(c) for c in l] for l in page], "total_lignes": len(corps),
                "suivant": suivant if suivant < len(corps) else None},
               f"Suite : word_tableau(fichier=..., numero={numero}, depuis={suivant})." if suivant < len(corps) else "Fin du tableau.")
+
+
+_CARACTERES_INTERDITS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")   # refusés par le format Word (XML)
+
+
+def _propre(valeur) -> str:
+    return _CARACTERES_INTERDITS.sub("", "" if valeur is None else str(valeur))
+
+
+@outil("word_creer",
+       "Crée un document Word (.docx) NEUF. « contenu » est une liste de blocs dans l'ordre : "
+       "{type: \"titre\", niveau: 1 à 4, texte}, {type: \"paragraphe\", texte}, "
+       "{type: \"liste\", elements: [...], numerotee?: true}, {type: \"tableau\", colonnes: [...], lignes: [[...]]}. "
+       "Le fichier est écrit dans les fichiers produits ; aucun document existant n'est modifié.",
+       {"type": "object", "properties": {
+           "nom": {"type": "string"},
+           "contenu": {"type": "array", "items": {"type": "object"}}}, "required": ["nom", "contenu"]})
+def word_creer(ctx: Contexte, nom: str, contenu: list) -> Reponse:
+    if not isinstance(contenu, list) or not contenu:
+        return erreur("« contenu » doit être une liste non vide de blocs.",
+                      "Exemple : [{\"type\": \"titre\", \"niveau\": 1, \"texte\": \"Compte rendu\"}, "
+                      "{\"type\": \"paragraphe\", \"texte\": \"...\"}].")
+    if len(contenu) > MAX_BLOCS_CREES:
+        return erreur(f"Le document dépasse {MAX_BLOCS_CREES} blocs.", "Découpez le contenu en plusieurs documents.")
+    document = DocumentWord()
+    for i, bloc in enumerate(contenu, start=1):
+        if not isinstance(bloc, dict):
+            return erreur(f"Le bloc {i} n'est pas un objet.", "Chaque bloc a un « type » : titre, paragraphe, liste ou tableau.")
+        genre = bloc.get("type")
+        if genre == "titre":
+            niveau = _entier(bloc.get("niveau"), 1, 1, 4)
+            document.add_heading(_propre(bloc.get("texte")), level=niveau)
+        elif genre == "paragraphe":
+            document.add_paragraph(_propre(bloc.get("texte")))
+        elif genre == "liste":
+            elements = bloc.get("elements")
+            if not isinstance(elements, list) or not elements:
+                return erreur(f"Le bloc {i} (liste) n'a pas d'« elements ».", "Donnez une liste de textes.")
+            style = "List Number" if bloc.get("numerotee") else "List Bullet"
+            for element in elements:
+                document.add_paragraph(_propre(element), style=style)
+        elif genre == "tableau":
+            colonnes, lignes = bloc.get("colonnes"), bloc.get("lignes", [])
+            if not isinstance(colonnes, list) or not colonnes:
+                return erreur(f"Le bloc {i} (tableau) n'a pas de « colonnes ».", "Donnez la liste des titres de colonnes.")
+            if not isinstance(lignes, list) or not all(isinstance(l, list) for l in lignes):
+                return erreur(f"Les « lignes » du bloc {i} doivent être une liste de lignes.", "")
+            if len(lignes) > MAX_LIGNES_CREEES:
+                return erreur(f"Le tableau du bloc {i} dépasse {MAX_LIGNES_CREEES} lignes.", "Découpez-le en plusieurs tableaux.")
+            if any(len(l) > len(colonnes) for l in lignes):
+                return erreur(f"Une ligne du bloc {i} a plus de valeurs que de colonnes ({len(colonnes)}).",
+                              "Corrigez les lignes et relancez l'outil.")
+            table = document.add_table(rows=1 + len(lignes), cols=len(colonnes))
+            table.style = "Table Grid"
+            for j, c in enumerate(colonnes):
+                table.cell(0, j).text = _propre(c)
+                for run in table.cell(0, j).paragraphs[0].runs:
+                    run.bold = True
+            for r, ligne in enumerate(lignes, start=1):
+                for j, valeur in enumerate(ligne):
+                    table.cell(r, j).text = _propre(valeur)
+        else:
+            return erreur(f"Le bloc {i} a un type inconnu : « {genre} ».",
+                          "Types possibles : titre, paragraphe, liste, tableau.")
+    fichier = _nom_sortie(ctx, nom, "nouveau.docx", ".docx")
+    ctx.dossier_sortie.mkdir(parents=True, exist_ok=True)
+    document.save(ctx.dossier_sortie / fichier)
+    ctx.fichiers_produits.append(fichier)
+    return ok(f"Document « {fichier} » créé ({len(contenu)} bloc(s)).", {"fichier_produit": fichier, "blocs": len(contenu)},
+              "Le fichier est prêt à être téléchargé.",
+              [{"nom": fichier, "type": "docx", "intermediaire": False, "blocs": len(contenu)}])

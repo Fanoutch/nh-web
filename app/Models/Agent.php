@@ -22,7 +22,7 @@ class Agent extends Model
     public const OUTILS = [
         'excel_decrire', 'excel_lire', 'excel_filtrer', 'excel_selectionner',
         'excel_colonne', 'excel_rapprocher', 'excel_creer', 'excel_regenerer',
-        'word_decrire', 'word_lire', 'word_chercher', 'word_tableau',
+        'word_decrire', 'word_lire', 'word_chercher', 'word_tableau', 'word_creer',
     ];
 
     protected $fillable = [
