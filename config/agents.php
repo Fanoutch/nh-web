@@ -11,7 +11,7 @@
 */
 
 return [
-    'extensions' => ['xlsx', 'xlsm', 'csv'],
+    'extensions' => ['xlsx', 'xlsm', 'csv', 'docx'],
     'taille_max_mo' => 20,           // par fichier
     'alerte_mo' => 500,              // par agent : prévenir, sans rien supprimer
     'veille_mois' => 3,              // sans lancement : l'agent passe « en veille »

@@ -22,9 +22,15 @@ it('stores a reference file in the private folder of the agent', function () {
     Storage::disk('local')->assertExists('agents/'.$this->agent->id.'/references/stock.xlsx');
 });
 
+it('accepts a Word document', function () {
+    $reference = $this->gestion->deposerReference($this->agent, UploadedFile::fake()->create('procedure.docx', 10));
+
+    expect($reference->nom)->toBe('procedure.docx');
+});
+
 it('refuses a wrong extension with a message saying what to do', function () {
     $this->gestion->deposerReference($this->agent, UploadedFile::fake()->create('note.pdf', 10));
-})->throws(FichierAgentRefuse::class, 'Déposez un classeur .xlsx, .xlsm, .csv');
+})->throws(FichierAgentRefuse::class, 'Déposez un classeur ou un document Word : .xlsx, .xlsm, .csv, .docx');
 
 it('refuses a file over 20 Mo', function () {
     $this->gestion->deposerReference($this->agent, UploadedFile::fake()->create('gros.xlsx', 20 * 1024 + 1));

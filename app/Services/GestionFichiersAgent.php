@@ -22,7 +22,7 @@ class GestionFichiersAgent
         $extension = strtolower(pathinfo($nom, PATHINFO_EXTENSION));
         if ($nom === '' || str_starts_with($nom, '.') || ! in_array($extension, config('agents.extensions'), true)) {
             throw new FichierAgentRefuse(
-                'Le fichier « '.$nom.' » n\'est pas accepté. Déposez un classeur '
+                'Le fichier « '.$nom.' » n\'est pas accepté. Déposez un classeur ou un document Word : '
                 .implode(', ', array_map(fn ($e) => '.'.$e, config('agents.extensions'))).'.'
             );
         }

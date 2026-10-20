@@ -29,7 +29,7 @@ class Classeur:
     lignes: list[list]
 
 
-def resoudre(ctx: Contexte, nom: str) -> Path:
+def resoudre(ctx: Contexte, nom: str, extensions: tuple[str, ...] = EXTENSIONS) -> Path:
     """Chemin d'un fichier de l'exécution (déposé ou produit), après tous les contrôles."""
     if not isinstance(nom, str) or not nom or Path(nom).name != nom:
         raise ErreurClasseur(f"« {nom} » n'est pas un nom de fichier valide : donnez le nom seul, sans dossier.")
@@ -44,9 +44,9 @@ def resoudre(ctx: Contexte, nom: str) -> Path:
         raise ErreurClasseur(f"Le fichier « {nom} » est introuvable.")
     if chemin.resolve().parent != base.resolve():
         raise ErreurClasseur(f"Le fichier « {nom} » est en dehors du dossier de l'exécution : il est refusé.")
-    if chemin.suffix.lower() not in EXTENSIONS:
-        raise ErreurClasseur(f"Le format de « {nom} » n'est pas pris en charge. "
-                             f"Formats acceptés : {', '.join(EXTENSIONS)}.")
+    if chemin.suffix.lower() not in extensions:
+        raise ErreurClasseur(f"Le format de « {nom} » n'est pas pris en charge par cet outil. "
+                             f"Formats acceptés : {', '.join(extensions)}.")
     if chemin.stat().st_size > LIMITE_OCTETS:
         raise ErreurClasseur(f"Le fichier « {nom} » est trop volumineux "
                              f"(limite : {LIMITE_OCTETS // (1024 * 1024)} Mo).")

@@ -18,10 +18,11 @@ class Agent extends Model
 
     public const EN_VEILLE = 'en_veille';
 
-    /** Les huit outils Excel du service (assistant/outils/excel.py). */
+    /** Les outils du service : Excel (assistant/outils/excel.py) et lecture de Word (assistant/outils/word.py). */
     public const OUTILS = [
         'excel_decrire', 'excel_lire', 'excel_filtrer', 'excel_selectionner',
         'excel_colonne', 'excel_rapprocher', 'excel_creer', 'excel_regenerer',
+        'word_decrire', 'word_lire', 'word_chercher', 'word_tableau',
     ];
 
     protected $fillable = [
