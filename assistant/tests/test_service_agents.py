@@ -139,3 +139,37 @@ def test_fichier_produit_dans_la_fin(dossiers):
     fin = evenements(client(s).post("/agents/executions", headers=JETON, json=corps(dossiers)))[-1]
     assert fin["statut"] == "termine" and fin["fichiers"]
     assert (dossiers[1] / fin["fichiers"][0]).exists()
+
+
+def test_lire_fichiers_donne_la_structure_sans_les_valeurs(dossiers):
+    entree, _ = dossiers
+    r = client(Scenario()).post("/agents/fichiers/lire", headers=JETON,
+                                json={"dossier": str(entree), "fichiers": ["stock.xlsx", "absent.xlsx"]})
+
+    assert r.status_code == 200
+    ok_, absent = r.json()["fichiers"]
+    assert ok_["statut"] == "ok" and ok_["feuilles"][0]["colonnes"] == ["Réf", "Stock"] and ok_["feuilles"][0]["lignes"] == 1
+    assert '"A"' not in json.dumps(ok_)          # la valeur d'une cellule n'est jamais renvoyée
+    assert absent["statut"] == "erreur"
+
+
+def test_lire_fichiers_signale_un_classeur_vide_ou_illisible(dossiers, tmp_path):
+    entree, _ = dossiers
+    openpyxl.Workbook().save(entree / "vide.xlsx")
+    (entree / "casse.xlsx").write_bytes(b"pas un classeur")
+
+    r = client(Scenario()).post("/agents/fichiers/lire", headers=JETON,
+                                json={"dossier": str(entree), "fichiers": ["vide.xlsx", "casse.xlsx"]})
+
+    vide, casse = r.json()["fichiers"]
+    assert vide["statut"] == "avertissement" and "aucune ligne" in vide["message"]
+    assert casse["statut"] == "erreur" and "illisible" in casse["message"]
+
+
+def test_lire_fichiers_exige_le_jeton_et_des_entrees_valides(dossiers, tmp_path):
+    entree, _ = dossiers
+    c = client(Scenario())
+    assert c.post("/agents/fichiers/lire", json={"dossier": str(entree), "fichiers": []}).status_code == 401
+    assert c.post("/agents/fichiers/lire", headers=JETON, json={"dossier": "relatif", "fichiers": []}).status_code == 422
+    assert c.post("/agents/fichiers/lire", headers=JETON,
+                  json={"dossier": str(entree), "fichiers": ["../x.xlsx"]}).status_code == 422

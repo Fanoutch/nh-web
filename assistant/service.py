@@ -21,6 +21,7 @@ from pydantic import BaseModel
 
 import outils  # noqa: F401 — enregistre les outils Excel
 from agents.boucle import executer_boucle
+from agents.contexte import analyser
 from outils.registre import REGISTRE, Contexte
 from rag import lecteurs, modeles
 from rag.assistant import MESSAGE_INDISPONIBLE, Assistant
@@ -65,6 +66,12 @@ class ExecutionEntrante(BaseModel):
     fichiers: list[str]             # leurs noms : rien d'autre n'est lisible
     dossier_sortie: str             # fichiers produits
     outils: list[str]               # outils autorisés par la recette de l'agent
+    donnees_agent: dict = {}        # historique des lancements, etc. (aucun secret)
+
+
+class FichiersALire(BaseModel):
+    dossier: str
+    fichiers: list[str]
 
 
 def creer_app(reglages: Reglages | None = None, assistant=None, modele_agent=None) -> FastAPI:
@@ -185,7 +192,8 @@ def creer_app(reglages: Reglages | None = None, assistant=None, modele_agent=Non
             raise HTTPException(status_code=422, detail={
                 "code": "outil", "message": "Outil inconnu : " + ", ".join(inconnus) + "."})
         contexte = Contexte(dossier_execution=entree, fichiers_autorises=list(e.fichiers),
-                            outils_autorises=set(e.outils), dossier_sortie=sortie)
+                            outils_autorises=set(e.outils), dossier_sortie=sortie,
+                            donnees_agent=e.donnees_agent)
         historique = [m.model_dump() for m in e.historique]
         with verrou_arrets:
             arrets.discard(e.execution_id)
@@ -211,6 +219,18 @@ def creer_app(reglages: Reglages | None = None, assistant=None, modele_agent=Non
                     arrets.discard(e.execution_id)
 
         return StreamingResponse(flux(), media_type="application/x-ndjson")
+
+    @app.post("/agents/fichiers/lire", dependencies=protege)
+    def lire_fichiers(f: FichiersALire):
+        """Confirmation de lecture d'un dépôt : structure de chaque fichier (jamais de valeurs de cellules)."""
+        dossier = Path(f.dossier)
+        if not dossier.is_absolute() or not dossier.is_dir():
+            raise HTTPException(status_code=422, detail={"code": "dossier", "message": "Le dossier est introuvable."})
+        if any(Path(nom).name != nom or nom in ("", ".", "..") for nom in f.fichiers):
+            raise HTTPException(status_code=422, detail={"code": "fichier", "message": "Un nom de fichier est invalide."})
+        contexte = Contexte(dossier_execution=dossier, fichiers_autorises=list(f.fichiers), outils_autorises=set(),
+                            dossier_sortie=dossier / "_sortie")
+        return {"fichiers": [analyser(contexte, nom) for nom in f.fichiers]}
 
     @app.post("/agents/executions/{execution_id}/arret", dependencies=protege)
     def arreter_agent(execution_id: int):

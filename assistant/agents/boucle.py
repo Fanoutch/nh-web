@@ -120,8 +120,13 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
             deja_vus.add(cle)
             outils_appeles.add(appel.nom)
             reponse = executer(appel.nom, appel.arguments, contexte)
-            yield {"type": "etape", "tour": tour, "outil": appel.nom, "arguments": appel.arguments,
-                   "statut": reponse.statut, "resume": reponse.resume}
+            etape = {"type": "etape", "tour": tour, "outil": appel.nom, "arguments": appel.arguments,
+                     "statut": reponse.statut, "resume": reponse.resume}
+            if reponse.statut == "ok" and isinstance(reponse.donnees.get("proposition"), dict):
+                etape["proposition"] = reponse.donnees["proposition"]       # à confirmer par l'utilisateur, côté site
+            if reponse.artefacts:
+                etape["artefacts"] = reponse.artefacts
+            yield etape
             texte = json.dumps(reponse.en_dict(), ensure_ascii=False)
             if decode.format == "standard":
                 messages.append({"role": "tool", "tool_call_id": appel.identifiant, "content": texte})

@@ -41,6 +41,7 @@ class Contexte:
     outils_autorises: set[str]       # outils que la recette de l'agent autorise
     dossier_sortie: Path             # fichiers produits pendant l'exécution
     fichiers_produits: list[str] = field(default_factory=list)
+    donnees_agent: dict = field(default_factory=dict)   # ce que le site transmet de l'agent (historique…) ; jamais de secret
 
 
 REGISTRE: dict[str, tuple[Callable, dict]] = {}
