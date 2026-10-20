@@ -600,3 +600,91 @@ def word_regenerer(ctx: Contexte, fichier_source: str, modifications: list, nom_
               {"fichier_produit": nom, "modifications": comptes},
               "Le fichier est prêt à être téléchargé. L'original est intact.",
               [{"nom": nom, "type": "docx", "intermediaire": False, "modifications": len(comptes)}])
+
+
+# --- Un document par ligne d'un classeur (publipostage) -------------------------------------------------------------
+MAX_PUBLIPOSTAGE = 50
+_ACCOLADE_SIMPLE = re.compile(r"\{([^{}]+)\}")
+
+
+@outil("word_publipostage",
+       "Produit UN document Word PAR LIGNE d'un classeur Excel, à partir d'un modèle Word contenant des marqueurs "
+       "{{Colonne}} (le nom du marqueur est le nom d'une colonne ; accents et majuscules sans importance). Le programme "
+       f"copie lui-même les valeurs ({MAX_PUBLIPOSTAGE} documents au plus). Le modèle et le classeur ne sont jamais modifiés. "
+       "« condition » limite les lignes (comme excel_selectionner). « nom_fichier » donne le nom de chaque document, avec "
+       "des colonnes entre accolades simples : \"courrier-{Nom}\" (par défaut : nom du modèle + première colonne). « correspondances » associe un marqueur à une colonne "
+       "quand les noms diffèrent : {\"{{NOM}}\": \"Nom complet\"}. Tout ou rien.",
+       {"type": "object", "properties": {
+           "fichier_modele": {"type": "string"}, "fichier_excel": {"type": "string"}, "feuille": {"type": "string"},
+           "condition": {"type": "object"}, "nom_fichier": {"type": "string"},
+           "correspondances": {"type": "object"}}, "required": ["fichier_modele", "fichier_excel"]})
+@_garde
+def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, feuille: str | None = None,
+                      condition=None, nom_fichier: str | None = None, correspondances=None) -> Reponse:
+    source = _resoudre_word(ctx, fichier_modele)
+    try:
+        c = charger(ctx, fichier_excel, feuille)
+        test = compiler_condition(condition, c.entetes)
+    except ErreurCondition as exc:
+        return erreur(str(exc), "Corrigez la condition ou le nom de la colonne (voir excel_decrire).")
+    lignes = [l for l in c.lignes if test(l)]
+    if not lignes:
+        return erreur(f"Aucune ligne de « {fichier_excel} » ne correspond : aucun document n'est produit.", "Vérifiez la condition avec excel_selectionner.")
+    if len(lignes) > MAX_PUBLIPOSTAGE:
+        return erreur(f"{len(lignes)} lignes : au plus {MAX_PUBLIPOSTAGE} documents par appel.", "Ajoutez une condition pour traiter la liste par groupes.")
+
+    modele = DocumentWord(str(source))
+    marqueurs = sorted({m for p in _paragraphes(modele) for m in _MARQUEUR.findall(p.text)})
+    if not marqueurs:
+        return erreur(f"Le modèle « {fichier_modele} » ne contient aucun marqueur {{{{Colonne}}}}.",
+                      "Écrivez dans le modèle, à la place de ce qui change, des marqueurs comme {{Nom}} ou {{Date}}.")
+    explicites = correspondances if isinstance(correspondances, dict) else {}
+    colonne_de, absents = {}, []
+    for m in marqueurs:
+        voulu = explicites.get(m, m[2:-2].strip())
+        try:
+            colonne_de[m] = trouver_colonne(voulu, c.entetes)
+        except ErreurCondition:
+            absents.append(m)
+    if absents:
+        return erreur("Marqueur(s) du modèle sans colonne correspondante : " + ", ".join(absents) + ".",
+                      "Colonnes de « " + fichier_excel + " » : " + ", ".join(c.entetes) + ". Renommez le marqueur ou donnez « correspondances ».")
+
+    motif = nom_fichier or f"{source.stem}-{{{c.entetes[0]}}}"          # par défaut : la première colonne du classeur
+    try:
+        champs = {k: trouver_colonne(k, c.entetes) for k in _ACCOLADE_SIMPLE.findall(motif)}
+    except ErreurCondition as exc:
+        return erreur(f"Le nom de fichier demandé utilise une colonne inconnue. {exc}", "Corrigez « nom_fichier ».")
+
+    crees, vides = [], {}
+    try:
+        ctx.dossier_sortie.mkdir(parents=True, exist_ok=True)
+        for n, ligne in enumerate(lignes, start=1):
+            base = _ACCOLADE_SIMPLE.sub(lambda mm: _texte_cellule(ligne[champs[mm.group(1)]]) or str(n), motif)
+            nom = _nom_sortie(ctx, base, f"{source.stem}-{n}.docx", ".docx")
+            sortie = ctx.dossier_sortie / nom
+            shutil.copyfile(source, sortie)
+            ctx.fichiers_produits.append(nom)
+            crees.append(nom)
+            document = DocumentWord(str(sortie))
+            for m, indice in colonne_de.items():
+                valeur = _texte_cellule(ligne[indice])
+                if valeur == "":
+                    vides[m] = vides.get(m, 0) + 1
+                for p in _paragraphes(document):
+                    _remplacer_dans_paragraphe(p, m, valeur)
+            document.save(sortie)
+    except Exception as exc:  # noqa: BLE001 — tout ou rien : on retire ce qui a été écrit
+        for nom in crees:
+            (ctx.dossier_sortie / nom).unlink(missing_ok=True)
+            if nom in ctx.fichiers_produits:
+                ctx.fichiers_produits.remove(nom)
+        return erreur(f"Les documents n'ont pas pu être produits ({type(exc).__name__}) : aucun fichier n'a été gardé.",
+                      "Vérifiez que le modèle s'ouvre normalement dans Word.")
+    avertissement = ("" if not vides else " Attention, des cellules vides ont laissé un champ vide : "
+                     + ", ".join(f"{m} ({n} document(s))" for m, n in sorted(vides.items())) + ".")
+    return ok(f"{len(crees)} document(s) produit(s) à partir de « {fichier_modele} » et « {fichier_excel} ».{avertissement}",
+              {"fichiers_produits": crees, "nombre": len(crees), "marqueurs": {m: c.entetes[i] for m, i in colonne_de.items()},
+               "valeurs_vides": vides},
+              "Les documents sont prêts à être téléchargés. Les originaux sont intacts.",
+              [{"nom": n, "type": "docx", "intermediaire": False} for n in crees])

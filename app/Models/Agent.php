@@ -23,7 +23,7 @@ class Agent extends Model
     public const OUTILS = [
         'excel_decrire', 'excel_lire', 'excel_filtrer', 'excel_selectionner',
         'excel_colonne', 'excel_rapprocher', 'excel_creer', 'excel_regenerer',
-        'word_decrire', 'word_lire', 'word_chercher', 'word_tableau', 'word_creer', 'word_regenerer',
+        'word_decrire', 'word_lire', 'word_chercher', 'word_tableau', 'word_creer', 'word_regenerer', 'word_publipostage',
     ];
 
     /** Outils de gestion : toujours accordés, l'agent ne fait que PROPOSER (l'utilisateur confirme, le site enregistre). */

@@ -345,3 +345,51 @@ it('does not download a file through another agent\'s execution', function () {
 
     $this->actingAs($this->user)->get(route('agents.fichier', [$this->agent, $e, 'a.xlsx']))->assertNotFound();
 });
+
+// --- plusieurs fichiers produits (un document par personne) ----------------------------------------------------
+it('offers a zip and keeps the page readable when an agent produces many files', function () {
+    $noms = array_map(fn ($i) => "fiche-$i.docx", range(1, 12));
+    $e = $this->agent->executions()->create(['user_id' => $this->user->id, 'mode' => 'conception', 'etat' => 'termine', 'demande' => 'Un fichier par personne',
+        'message' => '12 documents produits.', 'fichiers_produits' => $noms]);
+    foreach ($noms as $nom) {
+        Storage::disk('local')->put($e->dossierSortie()."/$nom", "contenu $nom");
+    }
+
+    Livewire::actingAs($this->user)->test(AgentsPage::class)->call('selectionner', $this->agent->id)
+        ->assertSee('Télécharger fiche-1.docx')->assertDontSee('Télécharger fiche-9.docx')
+        ->assertSee('… et 8 autre(s) fichier(s)')->assertSee('Tout télécharger (12 fichiers, .zip)')
+        ->assertSee('fiche-12.docx');          // la liste « Fichiers produits » les garde tous
+});
+
+it('downloads all the produced files of a turn in one zip, for the owner only', function () {
+    $e = $this->agent->executions()->create(['user_id' => $this->user->id, 'mode' => 'conception', 'etat' => 'termine', 'demande' => 'x',
+        'fichiers_produits' => ['a.docx', 'b.docx', 'fantome.docx']]);
+    Storage::disk('local')->put($e->dossierSortie().'/a.docx', 'AAA');
+    Storage::disk('local')->put($e->dossierSortie().'/b.docx', 'BBB');
+    Storage::disk('local')->put($e->dossierEntree().'/secret.xlsx', 'secret');
+
+    $reponse = $this->actingAs($this->user)->get(route('agents.zip', [$this->agent, $e]))->assertOk();
+    $chemin = $reponse->baseResponse->getFile()->getPathname();
+    $zip = new ZipArchive;
+    $zip->open($chemin);
+    $contenu = [];
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $contenu[$zip->getNameIndex($i)] = $zip->getFromIndex($i);
+    }
+    $zip->close();
+
+    expect($contenu)->toBe(['a.docx' => 'AAA', 'b.docx' => 'BBB']);          // ni le fichier fantôme, ni les fichiers d'entrée
+    $autre = User::factory()->create();
+    $this->actingAs($autre)->get(route('agents.zip', [$this->agent, $e]))->assertForbidden();
+    $this->actingAs(User::factory()->create(['is_admin' => true]))->get(route('agents.zip', [$this->agent, $e]))->assertForbidden();
+});
+
+it('has no zip for a turn that produced nothing, nor through another agent', function () {
+    $vide = $this->agent->executions()->create(['user_id' => $this->user->id, 'mode' => 'conception', 'etat' => 'termine', 'demande' => 'x']);
+    $this->actingAs($this->user)->get(route('agents.zip', [$this->agent, $vide]))->assertNotFound();
+
+    $autre = Agent::create(['user_id' => $this->user->id, 'nom' => 'Autre']);
+    $e = $autre->executions()->create(['user_id' => $this->user->id, 'mode' => 'conception', 'etat' => 'termine', 'demande' => 'x', 'fichiers_produits' => ['a.docx']]);
+    Storage::disk('local')->put($e->dossierSortie().'/a.docx', 'x');
+    $this->actingAs($this->user)->get(route('agents.zip', [$this->agent, $e]))->assertNotFound();
+});

@@ -60,8 +60,8 @@ de confirmer. **Rien ne change tant que vous n'avez pas cliqué sur « Oui, enre
 - **Excel / CSV** : décrire un classeur, lire des lignes, compter / additionner / moyenner (avec regroupement),
   sélectionner des lignes selon une condition, ajouter une colonne calculée, rapprocher deux fichiers (noms écrits
   différemment : les cas douteux vous sont soumis), créer un classeur, produire une version modifiée.
-- **Word** : lire le plan et le texte, chercher un mot, lire un tableau, créer un document neuf, et **remplir un
-  modèle** existant (voir le paragraphe 5 bis).
+- **Word** : lire le plan et le texte, chercher un mot, lire un tableau, créer un document neuf, **remplir un
+  modèle** existant et produire **un document par ligne d'un Excel** (voir le paragraphe 5 bis).
 - **Limites** : 20 Mo et 100 000 lignes par classeur. L'agent ne lit pas les images, ne lance jamais de macro et ne
   calcule jamais « de tête » : les calculs sont faits par le programme, pas par le modèle.
 
@@ -79,6 +79,21 @@ de confirmer. **Rien ne change tant que vous n'avez pas cliqué sur « Oui, enre
    il vous liste les marqueurs trouvés dans le modèle.
 
 Vous pouvez aussi lui demander de remplacer ou compléter une **section entière** sous un titre du modèle.
+
+### Un document par personne (publipostage)
+
+Vous avez un Excel avec une ligne par personne (ou par client, par pièce…) et un modèle Word ? Écrivez :
+« J'ai besoin d'un fichier par personne de ma liste, à partir de mon modèle. »
+
+- Dans le modèle, chaque marqueur porte **le nom d'une colonne** de l'Excel : `{{Nom}}`, `{{Prénom}}`, `{{Service}}`…
+  (les majuscules et les accents n'ont pas d'importance). Si les noms diffèrent, dites à l'agent quel marqueur
+  correspond à quelle colonne.
+- L'agent crée **un document par ligne** (50 au plus par demande ; au-delà, ajoutez une condition, par exemple « les
+  personnes du service BMN »). Chaque document contient les données de **sa** personne, copiées par le programme.
+- Les fichiers sont nommés d'après la première colonne (« fiche-Martin.docx »), ou comme vous le demandez.
+- Tous les documents sont dans « Fichiers produits », avec un bouton **Tout télécharger (.zip)**.
+- Si une cellule est vide, le champ reste vide dans le document **et l'agent vous le signale**. Si un marqueur n'a pas
+  de colonne, il ne produit rien et vous liste les colonnes disponibles.
 
 ## 6. Bon à savoir
 

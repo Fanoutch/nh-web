@@ -577,3 +577,164 @@ def test_les_classeurs_d_origine_ne_sont_pas_modifies_par_le_transfert(ctxx):
     regenerer(ctxx, [{"remplacer": "{{NOM}}", "valeur_excel": {"fichier": "stock.xlsx", "calcul": "somme", "colonne": "Stock"}}])
 
     assert hashlib.sha256(chemin.read_bytes()).hexdigest() == avant
+
+
+# --- un document par ligne d'un classeur (publipostage) ----------------------------------------------------------
+def fabriquer_fiche(chemin):
+    d = Document()
+    d.sections[0].header.paragraphs[0].text = "Service {{Service}}"
+    d.add_heading("Fiche de {{Prénom}} {{NOM}}", level=1)
+    p = d.add_paragraph()
+    p.add_run("Poste : ")
+    p.add_run("{{Po").bold = True
+    p.add_run("ste}}, entré(e) le {{Date d'entrée}}.")
+    t = d.add_table(rows=1, cols=2)
+    t.cell(0, 0).text, t.cell(0, 1).text = "Matricule", "{{Matricule}}"
+    d.save(chemin)
+
+
+@pytest.fixture
+def ctxp(ctx):
+    fabriquer_fiche(ctx.dossier_execution / "fiche.docx")
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Personnes"
+    import datetime
+    for l in [["Nom", "Prénom", "Service", "Poste", "Date d'entrée", "Matricule"],
+              ["Martin", "Anne", "BMN", "Cheffe", datetime.date(2020, 3, 2), "M-001"],
+              ["Durand", "Paul", "Logistique", "Technicien", datetime.date(2022, 9, 12), "M-002"],
+              ["Lefèvre", "Éva", "BMN", "Analyste", None, "M-003"]]:
+        ws.append(l)
+    wb.save(ctx.dossier_execution / "personnes.xlsx")
+    ctx.fichiers_autorises += ["fiche.docx", "personnes.xlsx"]
+    return ctx
+
+
+def publier(ctx, **plus):
+    return executer("word_publipostage", {"fichier_modele": "fiche.docx", "fichier_excel": "personnes.xlsx", **plus}, ctx)
+
+
+def texte_complet(ctx, nom):
+    d = Document(str(ctx.dossier_sortie / nom))
+    return " | ".join([d.sections[0].header.paragraphs[0].text] + [p.text for p in d.paragraphs] + [c.text for t in d.tables for l in t.rows for c in l.cells])
+
+
+def test_un_document_par_personne_avec_ses_propres_donnees(ctxp):
+    r = publier(ctxp)
+
+    assert r.statut == "ok" and r.donnees["nombre"] == 3 and len(ctxp.fichiers_produits) == 3
+    par_nom = {nom: texte_complet(ctxp, nom) for nom in r.donnees["fichiers_produits"]}
+    martin = next(t for t in par_nom.values() if "Martin" in t)
+    assert "Fiche de Anne Martin" in martin and "Poste : Cheffe, entré(e) le 02/03/2020." in martin
+    assert "Service BMN" in martin and "M-001" in martin and "Durand" not in martin and "Lefèvre" not in martin
+    assert not any("{{" in t for t in par_nom.values())                    # plus aucun marqueur dans aucun document
+
+
+def test_noms_de_fichiers_par_defaut_et_demandes(ctxp):
+    assert publier(ctxp).donnees["fichiers_produits"] == ["fiche-Martin.docx", "fiche-Durand.docx", "fiche-Lefèvre.docx"]
+
+    r = publier(ctxp, nom_fichier="Fiche {Prénom} {Nom}")
+    assert r.donnees["fichiers_produits"][0] == "Fiche Anne Martin.docx"
+
+
+def test_deux_personnes_au_meme_nom_ne_s_ecrasent_pas(ctxp):
+    wb = openpyxl.load_workbook(ctxp.dossier_execution / "personnes.xlsx")
+    wb.active.append(["Martin", "Luc", "BMN", "Aide", None, "M-004"])
+    wb.save(ctxp.dossier_execution / "personnes.xlsx")
+
+    noms = publier(ctxp).donnees["fichiers_produits"]
+
+    assert len(set(noms)) == 4 and "fiche-Martin-2.docx" in noms
+
+
+def test_condition_limite_les_personnes(ctxp):
+    r = publier(ctxp, condition={"colonne": "Service", "operateur": "=", "valeur": "BMN"})
+
+    assert r.donnees["nombre"] == 2 and not any("Durand" in texte_complet(ctxp, n) for n in r.donnees["fichiers_produits"])
+
+
+def test_cellule_vide_est_signalee_et_non_cachee(ctxp):
+    r = publier(ctxp)
+
+    assert r.donnees["valeurs_vides"] == {"{{Date d'entrée}}": 1} and "cellules vides" in r.resume
+    lefevre = next(texte_complet(ctxp, n) for n in r.donnees["fichiers_produits"] if "Lefèvre" in n)
+    assert "entré(e) le ." in lefevre
+
+
+def test_correspondances_explicites(ctxp):
+    d = Document(str(ctxp.dossier_execution / "fiche.docx"))
+    d.add_paragraph("Collaborateur : {{NOM COMPLET}}")
+    d.save(ctxp.dossier_execution / "fiche.docx")
+
+    sans = publier(ctxp)
+    assert sans.statut == "erreur" and "{{NOM COMPLET}}" in sans.resume and "Colonnes de « personnes.xlsx »" in sans.suite
+    assert ctxp.fichiers_produits == []
+
+    avec = publier(ctxp, correspondances={"{{NOM COMPLET}}": "Nom"})
+    assert avec.statut == "ok" and "Collaborateur : Martin" in texte_complet(ctxp, avec.donnees["fichiers_produits"][0])
+
+
+@pytest.mark.parametrize("plus, attendu", [
+    ({"condition": {"colonne": "Service", "operateur": "=", "valeur": "Inconnu"}}, "Aucune ligne"),
+    ({"condition": {"colonne": "Absente", "operateur": "=", "valeur": "x"}}, "Absente"),
+    ({"nom_fichier": "x-{Inconnue}"}, "colonne inconnue"),
+    ({"fichier_excel": "absent.xlsx"}, "pas disponible"),
+])
+def test_publipostage_invalide_aucun_fichier(ctxp, plus, attendu):
+    r = publier(ctxp, **plus)
+
+    assert r.statut == "erreur" and attendu in r.resume + r.suite
+    assert ctxp.fichiers_produits == [] and not list(ctxp.dossier_sortie.glob("*"))
+
+
+def test_modele_sans_marqueur_refuse(ctxp):
+    d = Document()
+    d.add_paragraph("Rien à remplir ici.")
+    d.save(ctxp.dossier_execution / "fiche.docx")
+
+    r = publier(ctxp)
+
+    assert r.statut == "erreur" and "aucun marqueur" in r.resume
+
+
+def test_plus_de_cinquante_lignes_refuse(ctxp):
+    wb = openpyxl.load_workbook(ctxp.dossier_execution / "personnes.xlsx")
+    for i in range(60):
+        wb.active.append([f"N{i}", "P", "S", "Poste", None, f"M{i}"])
+    wb.save(ctxp.dossier_execution / "personnes.xlsx")
+
+    r = publier(ctxp)
+
+    assert r.statut == "erreur" and "au plus 50" in r.resume and ctxp.fichiers_produits == []
+    assert publier(ctxp, condition={"colonne": "Nom", "operateur": "contient", "valeur": "N1"}).statut == "ok"
+
+
+def test_exactement_cinquante_documents_est_permis(ctxp):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["Nom", "Prénom", "Service", "Poste", "Date d'entrée", "Matricule"])
+    for i in range(50):
+        ws.append([f"N{i:02d}", "P", "S", "Poste", None, f"M{i}"])
+    wb.save(ctxp.dossier_execution / "personnes.xlsx")
+
+    assert publier(ctxp).donnees["nombre"] == 50
+
+
+def test_modele_et_classeur_restent_intacts_et_valeurs_dangereuses_inoffensives(ctxp):
+    wb = openpyxl.load_workbook(ctxp.dossier_execution / "personnes.xlsx")
+    wb.active["A2"] = "=CMD|' /C calc'!A0"                # une « formule » dans une cellule reste du texte dans le Word
+    wb.save(ctxp.dossier_execution / "personnes.xlsx")
+    avant = {n: hashlib.sha256((ctxp.dossier_execution / n).read_bytes()).hexdigest() for n in ("fiche.docx", "personnes.xlsx")}
+
+    r = publier(ctxp, nom_fichier="../../evil-{Matricule}")
+
+    assert all((ctxp.dossier_sortie / n).parent == ctxp.dossier_sortie and "/" not in n for n in r.donnees["fichiers_produits"])
+    assert avant == {n: hashlib.sha256((ctxp.dossier_execution / n).read_bytes()).hexdigest() for n in avant}
+
+
+def test_publipostage_hors_liste_refuse(ctxp):
+    ctxp.outils_autorises = {"word_lire"}
+
+    r = publier(ctxp)
+
+    assert r.statut == "erreur" and "pas autorisé" in r.resume and ctxp.fichiers_produits == []

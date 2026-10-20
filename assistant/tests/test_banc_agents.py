@@ -123,3 +123,19 @@ def test_remplir_le_tableau_du_modele():
         {"content": "Tableau rempli."})
     v = lancer(scenario("W09"), m)
     assert v.reussi, v.raisons
+
+
+def test_un_word_par_personne_reussit_avec_le_publipostage():
+    m = Scenarii(appel("word_publipostage", fichier_modele="modele-fiche.docx", fichier_excel="personnes.xlsx"),
+                 {"content": "Trois fiches sont prêtes."})
+    v = lancer(scenario("W10"), m)
+    assert v.reussi, v.raisons
+    assert len(v.outils) == 1
+
+
+def test_un_seul_word_pour_tout_le_monde_echoue():
+    m = Scenarii(appel("word_regenerer", fichier_source="modele-fiche.docx", nom_sortie="fiche", modifications=[
+        {"remplacer": "{{Nom}}", "par": "Martin"}, {"remplacer": "{{Prénom}}", "par": "Anne"}, {"remplacer": "{{Service}}", "par": "BMN"},
+        {"remplacer": "{{Poste}}", "par": "Cheffe de secteur"}]), {"content": "Une fiche est prête."})
+    v = lancer(scenario("W10"), m)
+    assert not v.reussi and any("non permis" in r or "pas celui attendu" in r or "aucun de ces" in r for r in v.raisons)

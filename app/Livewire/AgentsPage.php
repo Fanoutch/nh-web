@@ -234,6 +234,7 @@ class AgentsPage extends Component
             'word_tableau' => 'Lecture d\'un tableau',
             'word_creer' => 'Création d\'un document Word',
             'word_regenerer' => 'Remplissage d\'un modèle Word',
+            'word_publipostage' => 'Un document Word par ligne du classeur',
             'agent_proposer' => 'Proposition de changement',
             'agent_historique' => 'Consultation de l\'historique',
             default => $outil,
@@ -258,7 +259,7 @@ class AgentsPage extends Component
         $executions = $agent !== null ? $agent->executions()->reorder()->orderBy('id')->get() : collect();
         $apports = $agent !== null ? $agent->apports()->orderBy('id')->get() : collect();
         $produits = $agent !== null
-            ? $executions->flatMap(fn (AgentExecution $e) => collect($e->fichiers_produits ?? [])->map(fn ($nom) => ['execution' => $e, 'nom' => $nom]))->reverse()->take(8)->values()
+            ? $executions->flatMap(fn (AgentExecution $e) => collect($e->fichiers_produits ?? [])->map(fn ($nom) => ['execution' => $e, 'nom' => $nom]))->reverse()->take(30)->values()
             : collect();
 
         return view('livewire.agents-page', [

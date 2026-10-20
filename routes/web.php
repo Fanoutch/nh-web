@@ -3,6 +3,7 @@
 use App\Http\Controllers\AgentArretController;
 use App\Http\Controllers\AgentController;
 use App\Http\Controllers\AgentFichierController;
+use App\Http\Controllers\AgentZipController;
 use App\Http\Controllers\AssistantArretController;
 use App\Http\Controllers\AssistantDocumentController;
 use App\Http\Controllers\AssistantPieceJointeController;
@@ -74,6 +75,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/agents/{agent}/arreter', AgentArretController::class)->name('agents.arreter')->can('view', 'agent');
     Route::get('/agents/{agent}/executions/{execution}/fichiers/{nom}', AgentFichierController::class)
         ->name('agents.fichier')->can('view', 'agent');
+
+    Route::get('/agents/{agent}/executions/{execution}/zip', AgentZipController::class)
+        ->name('agents.zip')->can('view', 'agent');
 
     // Profil (existant Breeze)
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

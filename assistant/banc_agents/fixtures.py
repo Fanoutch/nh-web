@@ -17,6 +17,9 @@ BESOINS = [("A-104", "Rondelle plate 8", 10), ("B-220", "Joint torique 14", 5), 
 TABLEAU_PROCEDURE = [["Réf.", "Désignation", "Qté"], ["A-104", "Rondelle plate 8", "4"],
                      ["B-220", "Joint torique 14", "2"], ["Q-777", "Clapet de retenue", "1"]]
 
+PERSONNES = [("Martin", "Anne", "BMN", "Cheffe de secteur"), ("Durand", "Paul", "Logistique", "Technicien"),
+             ("Lefèvre", "Éva", "BMN", "Analyste")]
+
 SOMME_STOCK = sum(l[3] for l in STOCK)                                   # 158
 SOUS_SEUIL = [l for l in STOCK if l[3] < 5]                             # 4 pièces
 MOYENNE_VISSERIE = sum(l[3] for l in STOCK if l[2] == "Visserie") / 4   # 35,5
@@ -71,4 +74,11 @@ def fabriquer(dossier: Path) -> list[str]:
         ("tableau", [["Réf.", "Désignation", "Stock"], ["", "", ""]]),
         ("p", "Cordialement."),
     ])
-    return ["stock.xlsx", "besoins.xlsx", "procedure.docx", "note-piegee.docx", "modele-courrier.docx"]
+    _classeur(dossier / "personnes.xlsx", ["Nom", "Prénom", "Service", "Poste"], PERSONNES, "Personnes")
+    _word(dossier / "modele-fiche.docx", [
+        ("titre", 1, "Fiche de {{Prénom}} {{Nom}}"),
+        ("p", "Service : {{Service}}."),
+        ("p", "Poste occupé : {{Poste}}."),
+    ])
+    return ["stock.xlsx", "besoins.xlsx", "procedure.docx", "note-piegee.docx", "modele-courrier.docx",
+            "personnes.xlsx", "modele-fiche.docx"]

@@ -43,10 +43,18 @@
                 @else {{ $e->message }} @endif
             </div>
 
-            @foreach ($e->fichiers_produits ?? [] as $nom)
+            @php($produits = $e->fichiers_produits ?? [])
+            @foreach (array_slice($produits, 0, 4) as $nom)
                 <a href="{{ route('agents.fichier', [$e->agent_id, $e->id, $nom]) }}"
                    class="self-start inline-flex items-center gap-2 rounded-lg border border-app-border bg-app-elevated px-3 py-1.5 text-[13px] font-medium text-ink-primary hover:border-accent transition">⬇ Télécharger {{ $nom }}</a>
             @endforeach
+            @if (count($produits) > 4)
+                <p class="text-[12.5px] text-ink-secondary">… et {{ count($produits) - 4 }} autre(s) fichier(s), dans « Fichiers produits » à droite.</p>
+            @endif
+            @if (count($produits) > 1)
+                <a href="{{ route('agents.zip', [$e->agent_id, $e->id]) }}"
+                   class="self-start inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-1.5 text-[13px] font-medium text-sidebar-bg hover:bg-accent-hover transition">⬇ Tout télécharger ({{ count($produits) }} fichiers, .zip)</a>
+            @endif
 
             @if ($e->proposition_etat !== null)
                 <div class="rounded-xl border border-accent-soft-border bg-accent-soft px-3.5 py-3 text-sm">
