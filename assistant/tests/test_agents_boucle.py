@@ -76,7 +76,7 @@ def test_le_modele_recoit_consignes_demande_et_outils_autorises(ctx):
     messages, declares = m.recus[0]
     assert messages[0]["role"] == "system" and "Consigne X." in messages[0]["content"]
     assert "donnée" in messages[0]["content"]
-    assert messages[-1] == {"role": "user", "content": "Que contient le stock ?"}
+    assert messages[-1]["role"] == "user" and messages[-1]["content"].startswith("Que contient le stock ?")
     assert [o["function"]["name"] for o in declares] == ["excel_decrire"]
 
 
@@ -194,3 +194,11 @@ def test_format_standard_plusieurs_appels_un_message_outil_par_appel(ctx):
     m = FauxModele(deux, {"content": "Fini."})
     lancer(m, ctx)
     assert [x["role"] for x in m.recus[1][0]] == ["system", "user", "assistant", "tool", "tool"]
+
+
+def test_la_demande_est_accompagnee_de_la_fiche_des_fichiers(ctx):
+    m = FauxModele({"content": "ok"})
+    lancer(m, ctx)
+    envoye = m.recus[0][0][-1]["content"]
+    assert envoye.startswith("Que contient le stock ?")
+    assert "stock.xlsx (classeur)" in envoye and "feuille « Stock »" in envoye and "colonnes Réf, Stock" in envoye
