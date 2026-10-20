@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Controllers\AgentArretController;
+use App\Http\Controllers\AgentController;
+use App\Http\Controllers\AgentFichierController;
 use App\Http\Controllers\AssistantArretController;
 use App\Http\Controllers\AssistantDocumentController;
 use App\Http\Controllers\AssistantPieceJointeController;
@@ -64,6 +67,13 @@ Route::middleware(['auth'])->group(function () {
         ->name('secteurs.documents.consulter')->can('consulterDocument', 'secteur');
     Route::get('/secteurs/{secteur}/disponibilites/{report}/telecharger', [ExcelReportController::class, 'download'])
         ->name('secteurs.disponibilites.download')->can('consulterDispos', 'secteur');
+
+    // Agents (personnels : droits dans App\Policies\AgentPolicy ; {agent} = identifiant)
+    Route::get('/agents', [AgentController::class, 'index'])->name('agents.index');
+    Route::get('/agents/{agent}', [AgentController::class, 'show'])->name('agents.show')->can('view', 'agent');
+    Route::post('/agents/{agent}/arreter', AgentArretController::class)->name('agents.arreter')->can('view', 'agent');
+    Route::get('/agents/{agent}/executions/{execution}/fichiers/{nom}', AgentFichierController::class)
+        ->name('agents.fichier')->can('view', 'agent');
 
     // Profil (existant Breeze)
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

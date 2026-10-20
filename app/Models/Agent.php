@@ -77,6 +77,14 @@ class Agent extends Model
         return $this->hasOne(AgentRappel::class);
     }
 
+    /** Dans « À faire » : le rappel est arrivé à échéance (la veille proche s'ajoutera à l'étape 6). */
+    public function aFaire(): bool
+    {
+        return $this->etat === self::ACTIF
+            && $this->rappel !== null
+            && $this->rappel->prochaine_echeance->lte(now()->startOfDay());
+    }
+
     public function estEnVeille(): bool
     {
         return $this->etat === self::EN_VEILLE;

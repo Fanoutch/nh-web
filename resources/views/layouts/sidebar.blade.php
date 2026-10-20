@@ -25,6 +25,12 @@
         ],
     ], $secteursLink, [
         [
+            'route' => 'agents.index',
+            'label' => 'Agents',
+            'prefixes' => ['agents.'],
+            'icon' => '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="2" y="4.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.3"/><path d="M7.5 4.5V2M5.2 8h.01M9.8 8h.01M5.5 10.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+        ],
+        [
             'route' => 'dashboards.index',
             'label' => 'Dashboards',
             'prefixes' => ['dashboards.'],
