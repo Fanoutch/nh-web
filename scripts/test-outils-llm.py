@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import re
+import ssl
 import sys
 import urllib.error
 import urllib.request
@@ -41,6 +42,16 @@ def lire_env(chemin: Path) -> dict[str, str]:
         cle, _, valeur = ligne.partition("=")
         valeurs[cle.strip()] = valeur.strip().strip('"').strip("'")
     return valeurs
+
+
+def contexte_tls():
+    """Certificat interne non reconnu par le poste : LLM_VERIF_TLS=false dans llm.env coupe la vérification (comme pour la dispo)."""
+    if lire_env(FICHIER_ENV).get("LLM_VERIF_TLS", "true").lower() in ("false", "0", "non", "no"):
+        contexte = ssl.create_default_context()
+        contexte.check_hostname = False
+        contexte.verify_mode = ssl.CERT_NONE
+        return contexte
+    return None
 
 
 OUTIL = {
@@ -76,7 +87,7 @@ def appeler(url: str, cle: str, charge: dict) -> dict:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(requete, timeout=120) as reponse:
+        with urllib.request.urlopen(requete, timeout=120, context=contexte_tls()) as reponse:
             return json.loads(reponse.read().decode("utf-8"))
     except urllib.error.HTTPError as erreur:
         corps = erreur.read().decode("utf-8", "replace")[:500]

@@ -81,7 +81,10 @@ def lancer(s: Scenario, modele: Modele, essai: int = 1) -> Verdict:
         appels, message, statut = [], "", "arret"
         for ev in executer_boucle(modele, "", s.demande, ctx, historique=s.historique):
             if ev["type"] == "etape":
-                appels.append(ev["outil"])
+                # Seuls les outils qui ont réellement fonctionné comptent : le service refuse un outil non autorisé
+                # (statut « erreur »), ce qui n'a aucune conséquence ; seul un outil exécuté pourrait en avoir.
+                if ev.get("statut") == "ok":
+                    appels.append(ev["outil"])
             elif ev["type"] == "fin":
                 message, statut = ev["message"], ev["statut"]
         resultat = Resultat(message, statut, appels, list(ctx.fichiers_produits), _empreintes(entree) == avant, sortie)

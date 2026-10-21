@@ -1,5 +1,5 @@
 # Versions exactes de l'assistant, toutes présentes sur le miroir pip du bureau (relevé du 30/09),
-# sauf 3 à confirmer au bureau : distro, durationpy, protobuf 6.33.6 (voir scripts/etat-des-lieux-bureau-3.sh).
+# sauf 3 à confirmer au bureau : distro, protobuf 6.33.6 (durationpy confirmé en 0.10 au bureau le 21/10) (voir scripts/etat-des-lieux-bureau-3.sh).
 # Agents Excel (2026-10-19) : openpyxl 3.1.5 + et-xmlfile 2.0.0 sont à CONFIRMER sur le miroir du bureau (verifier-miroir).
 # Installation : python3.12 -m venv .venv && .venv/bin/pip install -r requirements.lock
 annotated-doc==0.0.4
@@ -15,7 +15,7 @@ chroma-hnswlib==0.7.6
 chromadb==0.5.13
 click==8.5.0
 distro==1.9.0
-durationpy==0.11
+durationpy==0.10
 et-xmlfile==2.0.0
 fastapi==0.136.3
 filelock==4.0.0
