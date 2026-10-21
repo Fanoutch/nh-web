@@ -759,7 +759,8 @@ def test_modele_exemple_les_valeurs_de_la_ligne_sont_remplacees_par_le_code(ctxe
     durand = next(texte_complet(ctxe, n) for n in r.donnees["fichiers_produits"] if "Durand" in n)
     assert "Délivré à Paul Durand, Technicien" in durand and "Martin" not in durand and "Anne" not in durand
     assert "n° 2026-04827" in durand                                             # non lié à une colonne : intact
-    assert "Le modèle est un exemple rempli" in r.resume and "Colonnes dont la valeur n'a pas été retrouvée" in r.resume
+    assert "Dans chaque document, j'ai remplacé" in r.resume and "Je n'ai rien pu remplacer pour" in r.resume
+    assert "signalez" not in r.resume and "signalez" not in r.suite
 
 
 def test_modele_exemple_texte_donne_par_le_modele_complete_la_detection(ctxe):

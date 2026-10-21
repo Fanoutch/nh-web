@@ -718,11 +718,13 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
                      + ", ".join(f"{m} ({n} document(s))" for m, n in sorted(vides.items())) + ".")
     non_remplacees = [e for e in c.entetes if e not in {c.entetes[i] for i in colonne_de.values()}]
     if auto or (exemples and not marqueurs):
-        avertissement += (" Le modèle est un exemple rempli : ont été remplacés " + ", ".join(
-            f"« {t} » (colonne {c.entetes[i]})" for t, i in sorted({**auto, **{e: colonne_de[e] for e in exemples}}.items(), key=lambda kv: -len(kv[0])))
-            + ". Colonnes dont la valeur n'a pas été retrouvée dans le modèle (donc rien de remplacé pour elles) : "
-            + (", ".join(non_remplacees) or "aucune")
-            + ". Le reste du texte du modèle (numéro, dates de naissance…) est resté tel quel : signalez-le à l'utilisateur.")
+        faits = {**auto, **{e: colonne_de[e] for e in exemples}}
+        avertissement += (" Dans chaque document, j'ai remplacé " + ", ".join(
+            f"« {t} » par la colonne {c.entetes[i]}" for t, i in sorted(faits.items(), key=lambda kv: -len(kv[0]))) + "."
+            + (f" Je n'ai rien pu remplacer pour : {', '.join(non_remplacees)} (cette valeur n'apparaît pas telle quelle dans le modèle)."
+               if non_remplacees else "")
+            + " Tout texte du modèle qui ne correspond à aucune colonne (un numéro, une date de naissance…) reste celui de l'exemple :"
+            " dites-moi par quelle colonne le remplacer si besoin.")
     return ok(f"{len(crees)} document(s) produit(s) à partir de « {fichier_modele} » et « {fichier_excel} ».{avertissement}",
               {"fichiers_produits": crees, "nombre": len(crees), "marqueurs": {m: c.entetes[i] for m, i in colonne_de.items()},
                "valeurs_vides": vides},
