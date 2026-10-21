@@ -253,3 +253,14 @@ def test_reponse_vide_donne_un_message_clair_et_non_un_blanc(ctx):
 
     fin = evenements[-1]
     assert fin["statut"] == "arret" and "rien répondu" in fin["message"]
+
+
+def test_historique_sans_reponses_vides_ni_caracteres_invisibles(ctx):
+    modele = FauxModele({"content": "Fait."}, {"content": "Fait."})
+    historique = [{"role": "user", "content": "Silence ?"}, {"role": "assistant", "content": "\u200b"},
+                  {"role": "user", "content": "Bonjour"}, {"role": "assistant", "content": "\u200bSalut."}]
+
+    list(boucle.executer_boucle(modele, "", "Que contient le stock ?", ctx, historique=historique))
+
+    envoyes = [m for m in modele.recus[0][0] if m["role"] != "system"]
+    assert [m["content"] for m in envoyes[:2]] == ["Bonjour", "Salut."] and "Silence ?" not in str(modele.recus[0][0])

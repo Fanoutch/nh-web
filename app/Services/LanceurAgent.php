@@ -136,7 +136,9 @@ class LanceurAgent
         $tours = max(0, (int) config('assistant.historique_tours'));
         $precedentes = $agent->executions()->reorder()->orderByDesc('id')
             ->where('id', '<', $courante->id)->where('etat', AgentExecution::TERMINE)
-            ->where('message', '!=', '')->limit($tours)->get()->reverse()->values();
+            ->where('message', '!=', '')->limit($tours * 3)->get()
+            ->filter(fn ($e) => preg_replace('/[\s\x{200B}-\x{200D}\x{2060}\x{FEFF}]+/u', '', (string) $e->message) !== '')   // jamais une réponse « invisible »
+            ->take($tours)->reverse()->values();
 
         $messages = [];
         foreach ($precedentes as $e) {

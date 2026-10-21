@@ -53,6 +53,23 @@ def _fin(statut: str, message: str, contexte: Contexte, tours: int) -> dict:
             "fichiers": list(contexte.fichiers_produits)}
 
 
+_INVISIBLES = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff"))
+
+
+def _historique_propre(historique: list[dict] | None) -> list[dict]:
+    """Retire de l'historique les réponses vides (ou faites de caractères invisibles) avec la demande qui les précède :
+    un modèle qui voit ses propres silences passés continue de se taire."""
+    propre: list[dict] = []
+    for m in historique or []:
+        texte = str(m.get("content") or "").translate(_INVISIBLES).strip()
+        if m.get("role") == "assistant" and not texte:
+            if propre and propre[-1].get("role") == "user":
+                propre.pop()
+            continue
+        propre.append({**m, "content": texte if m.get("role") == "assistant" else m.get("content")})
+    return propre
+
+
 def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Contexte,
                     arreter: Callable[[], bool] = lambda: False,
                     horloge: Callable[[], float] = time.monotonic,
@@ -61,7 +78,7 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
     debut = horloge()
     outils = declaration_outils(contexte.outils_autorises)
     messages = [{"role": "system", "content": PROMPT_SYSTEME + ("\n\n" + consignes if consignes else "")}]
-    messages += historique or []
+    messages += _historique_propre(historique)
     fiche = decrire_fichiers(contexte)
     messages.append({"role": "user", "content": demande + ("\n\n" + fiche if fiche else "")})
     deja_vus: set[str] = set()

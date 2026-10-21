@@ -77,6 +77,17 @@ it('sends the consignes, the tools and the history of this agent only', function
         && in_array('agent_proposer', $r['outils']) && ! str_contains(json_encode($r->data()), 'Secret'));
 });
 
+it('never sends past answers made only of invisible characters', function () {
+    $this->agent->executions()->create(['user_id' => $this->user->id, 'mode' => 'conception', 'etat' => 'termine', 'demande' => 'Silence', 'message' => "\u{200B}"]);
+    $this->agent->executions()->create(['user_id' => $this->user->id, 'mode' => 'conception', 'etat' => 'termine', 'demande' => 'Bonjour', 'message' => 'Salut.']);
+    fluxAgent(['type' => 'fin', 'statut' => 'termine', 'message' => 'ok', 'fichiers' => []]);
+
+    $this->lanceur->lancer($this->agent, $this->user, 'Et maintenant ?', false, fn () => null);
+
+    Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/agents/executions')
+        && $r['historique'] === [['role' => 'user', 'content' => 'Bonjour'], ['role' => 'assistant', 'content' => 'Salut.']]);
+});
+
 it('keeps the proposal of the agent, waiting for the confirmation', function () {
     fluxAgent(etape('agent_proposer', 'Rappel proposé', ['proposition' => ['type' => 'rappel', 'periodicite' => 'mensuel']]),
         ['type' => 'fin', 'statut' => 'termine', 'message' => 'Confirmez-vous ?', 'fichiers' => []]);
