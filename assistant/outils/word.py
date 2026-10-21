@@ -665,8 +665,11 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
                       "Soit le modèle contient des marqueurs comme {{Nom}} ; soit, pour un document déjà rempli pour une personne, "
                       "lisez-le (word_lire), puis donnez dans « correspondances » chaque texte à remplacer et sa colonne : "
                       "{\"Bon Chevalier\": \"Nom\", \"Jean\": \"Prénom\"}.")
+    # Un texte demandé mais absent du modèle (le modèle de langage donne parfois les noms de colonnes eux-mêmes) est écarté
+    # et signalé, sans bloquer le reste ; il ne reste rien à remplacer seulement si la détection automatique échoue aussi.
     introuvables = [e for e in exemples if e not in texte_modele]
-    if introuvables:
+    exemples = [e for e in exemples if e in texte_modele]
+    if not marqueurs and not exemples and not auto:
         return erreur("Texte(s) à remplacer introuvable(s) dans le modèle : " + ", ".join(f"« {e} »" for e in introuvables) + ".",
                       "Recopiez le texte exactement comme dans le modèle (word_lire ou word_chercher).")
     colonne_de, absents = {}, []
@@ -723,6 +726,7 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
             f"« {t} » par la colonne {c.entetes[i]}" for t, i in sorted(faits.items(), key=lambda kv: -len(kv[0]))) + "."
             + (f" Je n'ai rien pu remplacer pour : {', '.join(non_remplacees)} (cette valeur n'apparaît pas telle quelle dans le modèle)."
                if non_remplacees else "")
+            + (" Textes demandés mais absents du modèle (ignorés) : " + ", ".join(f"« {e} »" for e in introuvables) + "." if introuvables else "")
             + " Tout texte du modèle qui ne correspond à aucune colonne (un numéro, une date de naissance…) reste celui de l'exemple :"
             " dites-moi par quelle colonne le remplacer si besoin.")
     return ok(f"{len(crees)} document(s) produit(s) à partir de « {fichier_modele} » et « {fichier_excel} ».{avertissement}",

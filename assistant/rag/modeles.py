@@ -124,18 +124,23 @@ _PANNES_PASSAGERES = (" 429 ", " 500 ", " 502 ", " 503 ", " 504 ", "injoignable"
 
 
 def discuter_avec_outils(messages: list[dict], outils: list[dict], r: Reglages, temperature: float,
-                         pause: float = 2.0, essais: int = 3) -> dict:
+                         pause: float = 2.0, essais: int = 3, forcer: bool = False) -> dict:
     """Un tour d'agent : renvoie le message de l'assistant tel quel (`content`, éventuellement `tool_calls`).
     Une panne passagère du serveur (502, 503, 504, 429, injoignable) est retentée ; le reste remonte tout de suite."""
     url = _url_chat(r)
     charge = _charge_chat(messages, r, temperature, False)
     if outils:
         charge["tools"] = outils
+        if forcer:
+            charge["tool_choice"] = "required"        # le modèle DOIT appeler un outil (si le serveur l'accepte)
     for essai in range(1, essais + 1):
         try:
             reponse = _post(url, r.llm_cle_api, charge, r)
             break
         except ModeleIndisponible as exc:
+            if forcer and " 400 " in str(exc) and "tool_choice" in charge:      # serveur sans « tool_choice » : on s'en passe
+                del charge["tool_choice"]
+                continue
             if essai == essais or not any(m in str(exc) for m in _PANNES_PASSAGERES):
                 raise
             time.sleep(pause * essai)
@@ -157,7 +162,7 @@ def _est_vide(message: dict) -> bool:
 
 
 def discuter_avec_outils_robuste(messages: list[dict], outils: list[dict], r: Reglages, temperature: float,
-                                 pause: float = 1.0) -> dict:
+                                 pause: float = 1.0, forcer: bool = False) -> dict:
     """Comme `discuter_avec_outils`, avec les caractères invisibles retirés du texte rendu. Une première réponse vide
     est rendue telle quelle (la boucle relance le modèle avec un message) ; si le modèle a DÉJÀ répondu à vide plus tôt
     dans la conversation, la demande est refaite à température croissante (4 essais au plus)."""
@@ -165,7 +170,7 @@ def discuter_avec_outils_robuste(messages: list[dict], outils: list[dict], r: Re
     temperatures = (temperature, temperature + 0.3, temperature + 0.6, temperature + 0.9) if deja_vides else (temperature,)
     message: dict = {}
     for chaleur in temperatures:
-        message = discuter_avec_outils(messages, outils, r, chaleur)
+        message = discuter_avec_outils(messages, outils, r, chaleur, forcer=forcer)
         if not _est_vide(message):
             break
         time.sleep(pause)

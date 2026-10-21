@@ -264,3 +264,20 @@ def test_historique_sans_reponses_vides_ni_caracteres_invisibles(ctx):
 
     envoyes = [m for m in modele.recus[0][0] if m["role"] != "system"]
     assert [m["content"] for m in envoyes[:2]] == ["Bonjour", "Salut."] and "Silence ?" not in str(modele.recus[0][0])
+
+
+def test_modele_muet_apres_un_outil_la_reponse_vient_des_resultats(ctx):
+    evenements = lancer(FauxModele(std("excel_lire", {"fichier": "stock.xlsx"}), {"content": ""}), ctx)
+
+    fin = evenements[-1]
+    assert fin["statut"] == "termine" and fin["message"].startswith("Voici ce que les outils ont donné :")
+
+
+def test_question_posee_a_la_place_d_agir_relance_une_fois(ctx):
+    modele = FauxModele(std("excel_lire", {"fichier": "stock.xlsx"}), {"content": "Pouvez-vous fournir plus de détails ?"},
+                        {"content": "Fait, voici le résumé complet."})
+
+    evenements = lancer(modele, ctx)
+
+    assert evenements[-1]["message"] == "Fait, voici le résumé complet."
+    assert "Ne posez pas de question" in modele.recus[2][0][-1]["content"]

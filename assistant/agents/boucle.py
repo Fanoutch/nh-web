@@ -4,7 +4,9 @@ Garde-fous codés (jamais dans le prompt) : 12 tours, 5 minutes, même appel deu
 réponse illisible (une seule relance). Chaque étape est produite au fil de l'eau ; `arreter()` interrompt."""
 from __future__ import annotations
 
+import inspect
 import json
+import re
 import time
 from typing import Callable, Iterator
 
@@ -32,6 +34,10 @@ Règles :
 - Quand le travail est terminé, répondez en français, sans appeler d'outil, en résumant ce qui a été fait."""
 
 RELANCE_SANS_APPEL = ("Vous annoncez un outil sans l'appeler. Appelez-le maintenant, avec ses arguments.")
+RELANCE_PROMESSE = ("Vous annoncez une action sans l'exécuter. Appelez maintenant un outil, avec ses arguments : n'écrivez pas ce "
+                    "que vous allez faire, faites-le (commencez par excel_decrire ou word_decrire si vous ne connaissez pas "
+                    "encore les fichiers).")
+_PROMESSE = re.compile(r"\b(je vais|je commence|veuillez patienter|un instant|je m'occupe|je corrige|je génère|je génèrerai)\b", re.I)
 RELANCE_SANS_DONNEES = ("Vous n'avez lu aucune donnée dans les fichiers : n'inventez rien. Utilisez d'abord un outil "
                         "de lecture (excel_lire, excel_selectionner, excel_filtrer, excel_rapprocher, word_lire, "
                         "word_chercher ou word_tableau), puis répondez d'après son résultat.")
@@ -39,6 +45,13 @@ OUTILS_DE_DESCRIPTION = {"excel_decrire", "word_decrire"}
 
 RELANCE_ILLISIBLE = ("Votre dernière réponse n'était pas exploitable. Appelez un outil avec un JSON valide, "
                      "ou répondez en texte simple si le travail est terminé.")
+
+RELANCE_QUESTION = ("Ne posez pas de question : choisissez vous-même les valeurs raisonnables qui manquent (noms des fichiers, "
+                    "mise en forme) et réalisez la demande maintenant avec l'outil adapté (word_publipostage pour un Word "
+                    "par ligne d'un classeur, word_regenerer pour corriger un document), en le disant à la fin.")
+_QUESTION = re.compile(r"(pouvez-vous|veuillez (?:me )?(?:fournir|préciser|donner)|plus de détails|instructions? (?:claires?|explicites?)"
+                       r"|je ne peux pas continuer|sans plus d'informations)", re.I)
+RELANCES_QUI_FORCENT = {RELANCE_SANS_APPEL, RELANCE_SANS_DONNEES, RELANCE_PROMESSE, RELANCE_QUESTION}
 
 # Un modèle est une fonction (messages, outils) -> message de l'assistant {"content": ..., "tool_calls": [...]}
 Modele = Callable[[list[dict], list[dict]], dict]
@@ -86,6 +99,7 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
     relance_faite = False
     relances: set[str] = set()
     outils_appeles: set[str] = set()
+    resumes: list[str] = []         # ce que chaque outil a fait, pour répondre à la place d'un modèle resté muet
 
     for tour in range(1, MAX_TOURS + 1):
         if arreter():
@@ -95,7 +109,11 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
             yield _fin("arret", "Le travail dépasse 5 minutes : il a été arrêté. Précisez la demande ou découpez-la.",
                        contexte, tour - 1)
             return
-        message = modele(messages, outils)
+        # Après une relance (annonce sans appel, aucune donnée lue), le modèle est contraint d'appeler un outil
+        # si son appelant sait le demander (paramètre « forcer »).
+        forcer = (messages[-1]["role"] == "user" and messages[-1]["content"] in RELANCES_QUI_FORCENT
+                  and "forcer" in inspect.signature(modele).parameters)
+        message = modele(messages, outils, forcer=True) if forcer else modele(messages, outils)
         decode = decoder(message, set(contexte.outils_autorises))
 
         if decode.illisible:
@@ -115,12 +133,26 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
                 messages += [{"role": "assistant", "content": message.get("content") or ""},
                              {"role": "user", "content": RELANCE_SANS_APPEL}]
                 continue
+            if not (outils_appeles - OUTILS_DE_DESCRIPTION) and _PROMESSE.search(decode.texte) and "promesse" not in relances:
+                relances.add("promesse")
+                messages += [{"role": "assistant", "content": message.get("content") or ""},
+                             {"role": "user", "content": RELANCE_PROMESSE}]
+                continue
             if (contexte.fichiers_autorises and not (outils_appeles - OUTILS_DE_DESCRIPTION)
                     and "sans_donnees" not in relances):
                 relances.add("sans_donnees")
                 messages += [{"role": "assistant", "content": message.get("content") or ""},
                              {"role": "user", "content": RELANCE_SANS_DONNEES}]
                 continue
+            if (contexte.fichiers_autorises and not contexte.fichiers_produits and _QUESTION.search(decode.texte)
+                    and "question" not in relances):
+                relances.add("question")
+                messages += [{"role": "assistant", "content": message.get("content") or ""},
+                             {"role": "user", "content": RELANCE_QUESTION}]
+                continue
+            if not decode.texte.strip() and resumes:
+                yield _fin("termine", "Voici ce que les outils ont donné : " + " ".join(resumes[-5:]), contexte, tour)
+                return
             if not decode.texte.strip():
                 yield _fin("arret", "Le modèle n'a rien répondu à cette demande, même après plusieurs essais. "
                                     "Reformulez-la plus simplement (par exemple : « Générez un Word par personne du "
@@ -145,6 +177,8 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
             deja_vus.add(cle)
             outils_appeles.add(appel.nom)
             reponse = executer(appel.nom, appel.arguments, contexte)
+            if reponse.resume:
+                resumes.append(reponse.resume)
             etape = {"type": "etape", "tour": tour, "outil": appel.nom, "arguments": appel.arguments,
                      "statut": reponse.statut, "resume": reponse.resume}
             if reponse.statut == "ok" and isinstance(reponse.donnees.get("proposition"), dict):

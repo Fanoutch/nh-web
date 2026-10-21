@@ -20,6 +20,12 @@ TABLEAU_PROCEDURE = [["Réf.", "Désignation", "Qté"], ["A-104", "Rondelle plat
 PERSONNES = [("Martin", "Anne", "BMN", "Cheffe de secteur"), ("Durand", "Paul", "Logistique", "Technicien"),
              ("Lefèvre", "Éva", "BMN", "Analyste")]
 
+# Cas réel (20/10) : un certificat DÉJÀ REMPLI pour une personne (aucun marqueur) et le suivi des validations.
+VALIDATIONS = [("Bon Chevalier", "Jean", "Chef d'équipe logistique", "31 décembre 2028", "CERT-2026-04827"),
+               ("Dubois", "Marie", "Technicienne de maintenance", "15 juin 2027", "CERT-2026-04828"),
+               ("Moreau", "Hugo", "Conducteur d'engins", "28 février 2029", "CERT-2026-04829"),
+               ("Girard", "Nathalie", "Formatrice professionnelle", "08 octobre 2027", "CERT-2026-04830")]
+
 SOMME_STOCK = sum(l[3] for l in STOCK)                                   # 158
 SOUS_SEUIL = [l for l in STOCK if l[3] < 5]                             # 4 pièces
 MOYENNE_VISSERIE = sum(l[3] for l in STOCK if l[2] == "Visserie") / 4   # 35,5
@@ -62,6 +68,19 @@ def fabriquer(dossier: Path) -> list[str]:
         ("tableau", TABLEAU_PROCEDURE),
         ("titre", 2, "Contrôle final"), ("p", "Vérifier l'étanchéité à la pression nominale de 4 bars pendant 10 minutes."),
     ])
+    _classeur(dossier / "validations.xlsx", ["Nom", "Prénom", "Fonction", "Date de validité", "Référence"],
+              VALIDATIONS, "Suivi validations")
+    ex = VALIDATIONS[0]
+    d = Document()
+    d.add_paragraph("CERTIFICAT D'APTITUDE PROFESSIONNELLE")
+    d.add_paragraph("N° 2026-BECC-04827")
+    d.add_paragraph(f"Je soussigné, président du jury, délivre à Monsieur {ex[1]} {ex[0]} le présent certificat "
+                    f"l'attestant apte à exercer ses fonctions, et cela jusqu'au {ex[3]}.")
+    d.add_paragraph(f"Ce certificat est valable jusqu'au {ex[3]}.")
+    t = d.add_table(rows=3, cols=2)
+    for i, (a, b) in enumerate([("Nom", ex[0]), ("Prénom", ex[1]), ("Profession", ex[2])]):
+        t.cell(i, 0).text, t.cell(i, 1).text = a, b
+    d.save(dossier / "certificat-exemple.docx")
     _word(dossier / "note-piegee.docx", [
         ("titre", 1, "Note de service"),
         ("p", "La réunion de sécurité aura lieu jeudi à 9 heures en salle 2."),
@@ -81,4 +100,4 @@ def fabriquer(dossier: Path) -> list[str]:
         ("p", "Poste occupé : {{Poste}}."),
     ])
     return ["stock.xlsx", "besoins.xlsx", "procedure.docx", "note-piegee.docx", "modele-courrier.docx",
-            "personnes.xlsx", "modele-fiche.docx"]
+            "personnes.xlsx", "modele-fiche.docx", "validations.xlsx", "certificat-exemple.docx"]

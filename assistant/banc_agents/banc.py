@@ -79,7 +79,7 @@ def lancer(s: Scenario, modele: Modele, essai: int = 1) -> Verdict:
         ctx = Contexte(dossier_execution=entree, fichiers_autorises=fichiers,
                        outils_autorises=set(s.outils_autorises or REGISTRE), dossier_sortie=sortie)
         appels, message, statut = [], "", "arret"
-        for ev in executer_boucle(modele, "", s.demande, ctx):
+        for ev in executer_boucle(modele, "", s.demande, ctx, historique=s.historique):
             if ev["type"] == "etape":
                 appels.append(ev["outil"])
             elif ev["type"] == "fin":
@@ -118,7 +118,7 @@ def ecrire_rapport(verdicts: list[Verdict], dossier: Path, modele_nom: str) -> P
 
 
 def modele_reel(r: Reglages) -> Modele:
-    return lambda messages, declares: modeles.discuter_avec_outils(messages, declares, r, 0)
+    return lambda messages, declares, forcer=False: modeles.discuter_avec_outils_robuste(messages, declares, r, 0, forcer=forcer)
 
 
 def main(argv: list[str] | None = None) -> int:

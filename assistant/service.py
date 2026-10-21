@@ -81,10 +81,10 @@ def creer_app(reglages: Reglages | None = None, assistant=None, modele_agent=Non
     arrets: set[int] = set()        # exécutions dont l'arrêt est demandé (un seul processus : en mémoire)
     verrou_arrets = Lock()
 
-    def modele(messages, outils_declares):
+    def modele(messages, outils_declares, forcer=False):
         if modele_agent is not None:
             return modele_agent(messages, outils_declares)
-        return modeles.discuter_avec_outils_robuste(messages, outils_declares, r, 0)
+        return modeles.discuter_avec_outils_robuste(messages, outils_declares, r, 0, forcer=forcer)
 
     def verifier_jeton(x_assistant_jeton: str | None = Header(default=None)) -> None:
         # Comparaison en temps constant ; jeton configuré vide = tout refusé.

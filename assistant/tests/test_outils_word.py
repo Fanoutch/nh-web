@@ -770,7 +770,20 @@ def test_modele_exemple_texte_donne_par_le_modele_complete_la_detection(ctxe):
     assert "n° M-002" in next(texte_complet(ctxe, n) for n in r.donnees["fichiers_produits"] if "Durand" in n)
 
 
-def test_modele_exemple_texte_introuvable_refuse(ctxe):
+def test_modele_exemple_texte_demande_mais_absent_est_ignore_et_signale(ctxe):
+    # le modèle de langage donne parfois les noms de colonnes eux-mêmes comme « texte à remplacer »
+    r = publier(ctxe, correspondances={"Nom": "Nom", "Date d'entrée": "Date d'entrée"})
+
+    assert r.statut == "ok" and r.donnees["nombre"] == 3
+    assert "ignorés" in r.resume and "« Date d'entrée »" in r.resume
+    assert "Délivré à Paul Durand" in next(texte_complet(ctxe, n) for n in r.donnees["fichiers_produits"] if "Durand" in n)
+
+
+def test_modele_exemple_rien_a_remplacer_refuse(ctxe):
+    d = Document()
+    d.add_paragraph("Un texte sans rapport avec le classeur.")
+    d.save(ctxe.dossier_execution / "fiche.docx")
+
     r = publier(ctxe, correspondances={"Zoé Inconnue": "Nom"})
 
     assert r.statut == "erreur" and "introuvable" in r.resume and ctxe.fichiers_produits == []
