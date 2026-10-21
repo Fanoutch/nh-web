@@ -88,6 +88,29 @@ it('never sends past answers made only of invisible characters', function () {
         && $r['historique'] === [['role' => 'user', 'content' => 'Bonjour'], ['role' => 'assistant', 'content' => 'Salut.']]);
 });
 
+it('gives the files of the previous answer to the next request, as copies', function () {
+    $precedente = $this->agent->executions()->create(['user_id' => $this->user->id, 'mode' => 'conception', 'etat' => 'termine',
+        'demande' => 'Fais les fiches', 'message' => 'Fait.', 'fichiers_produits' => ['fiche-A.docx']]);
+    Storage::disk('local')->put($precedente->dossierSortie().'/fiche-A.docx', 'contenu');
+    fluxAgent(['type' => 'fin', 'statut' => 'termine', 'message' => 'ok', 'fichiers' => []]);
+
+    $e = $this->lanceur->lancer($this->agent, $this->user, 'Corrige le texte', false, fn () => null);
+
+    expect(Storage::disk('local')->get($e->dossierEntree().'/fiche-A.docx'))->toBe('contenu')
+        ->and(Storage::disk('local')->exists($precedente->dossierSortie().'/fiche-A.docx'))->toBeTrue();
+    Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/agents/executions')
+        && $r['fichiers'] === ['fiche-A.docx'] && str_contains($r['consignes'], 'RÉPONSE PRÉCÉDENTE') && str_contains($r['consignes'], 'fiche-A.docx'));
+});
+
+it('does not touch the request when the previous answer produced nothing', function () {
+    $this->agent->executions()->create(['user_id' => $this->user->id, 'mode' => 'conception', 'etat' => 'termine', 'demande' => 'Bonjour', 'message' => 'Salut.']);
+    fluxAgent(['type' => 'fin', 'statut' => 'termine', 'message' => 'ok', 'fichiers' => []]);
+
+    $this->lanceur->lancer($this->agent, $this->user, 'Et maintenant ?', false, fn () => null);
+
+    Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/agents/executions') && $r['consignes'] === 'Soyez bref.' && $r['fichiers'] === []);
+});
+
 it('keeps the proposal of the agent, waiting for the confirmation', function () {
     fluxAgent(etape('agent_proposer', 'Rappel proposé', ['proposition' => ['type' => 'rappel', 'periodicite' => 'mensuel']]),
         ['type' => 'fin', 'statut' => 'termine', 'message' => 'Confirmez-vous ?', 'fichiers' => []]);

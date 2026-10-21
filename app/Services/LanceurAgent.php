@@ -45,6 +45,11 @@ class LanceurAgent
         );
 
         $consignes = (string) $agent->consignes;
+        $repris = $this->fichiers->reprendreProduits($agent, $execution);
+        if ($repris !== []) {
+            $consignes .= "\n\nFICHIERS DE VOTRE RÉPONSE PRÉCÉDENTE, disponibles si l'utilisateur demande de les corriger ou de les compléter "
+                .'(ne les modifiez jamais en place : produisez une version corrigée sous un nouveau nom) : '.implode(', ', $repris).'.';
+        }
         if ($rejouerRecette) {
             $consignes .= "\n\nRECETTE VALIDÉE à rejouer dans l'ordre, sans improviser. Adaptez seulement les noms de fichiers aux "
                 ."documents disponibles ; si une colonne ou une feuille attendue est absente, arrêtez-vous et dites-le :\n"
@@ -81,6 +86,7 @@ class LanceurAgent
                 $surEvenement($evenement);
             }, $arret, [
                 'consignes' => $consignes,
+                'en_dernier' => $repris,
                 'historique' => $this->historique($agent, $execution),
                 'donnees_agent' => ['historique' => $this->resumeHistorique($agent, $execution)],
             ]);

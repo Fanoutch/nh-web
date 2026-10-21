@@ -126,6 +126,35 @@ class GestionFichiersAgent
         return $execution;
     }
 
+    /**
+     * Met à la disposition de la nouvelle exécution les fichiers produits par la réponse précédente de l'agent,
+     * pour pouvoir lui dire « corrige ça ». Copies seulement : les fichiers de la réponse précédente restent intacts.
+     *
+     * @return list<string> noms copiés (jamais un fichier déjà présent sous le même nom)
+     */
+    public function reprendreProduits(Agent $agent, AgentExecution $execution, int $max = 15): array
+    {
+        $precedente = $agent->executions()->reorder()->orderByDesc('id')
+            ->where('id', '<', $execution->id)->where('etat', AgentExecution::TERMINE)->get()
+            ->first(fn ($e) => ! empty($e->fichiers_produits));
+        if ($precedente === null) {
+            return [];
+        }
+
+        $disque = Storage::disk('local');
+        $repris = [];
+        foreach (array_slice($precedente->fichiers_produits, 0, $max) as $nom) {
+            $source = $precedente->dossierSortie().'/'.$nom;
+            $cible = $execution->dossierEntree().'/'.$nom;
+            if (basename($nom) === $nom && $disque->exists($source) && ! $disque->exists($cible)) {
+                $disque->copy($source, $cible);
+                $repris[] = $nom;
+            }
+        }
+
+        return $repris;
+    }
+
     /** Les documents en attente ont servi à un lancement réussi : on les retire (la copie reste dans l'exécution). */
     public function consommerApports(Agent $agent): void
     {

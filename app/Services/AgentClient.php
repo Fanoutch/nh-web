@@ -19,7 +19,7 @@ class AgentClient
      *
      * @param  callable(array): void  $surEvenement
      * @param  ?callable(): bool  $doitArreter
-     * @param  array{consignes?: string, historique?: list<array{role: string, content: string}>, donnees_agent?: array}  $options
+     * @param  array{consignes?: string, en_dernier?: list<string>, historique?: list<array{role: string, content: string}>, donnees_agent?: array}  $options
      */
     public function executer(AgentExecution $execution, callable $surEvenement, ?callable $doitArreter = null, array $options = []): void
     {
@@ -36,12 +36,21 @@ class AgentClient
                 'donnees_agent' => (object) ($options['donnees_agent'] ?? []),
                 'demande' => $execution->demande,
                 'dossier_execution' => $disque->path($execution->dossierEntree()),
-                'fichiers' => array_map('basename', $disque->files($execution->dossierEntree())),
+                'fichiers' => $this->fichiersEnDernier(array_map('basename', $disque->files($execution->dossierEntree())), $options['en_dernier'] ?? []),
                 'dossier_sortie' => $disque->path($execution->dossierSortie()),
                 'outils' => $agent->outilsAutorises(),
             ]));
 
         $this->lireFlux($reponse, $surEvenement, $doitArreter);
+    }
+
+    /** Les fichiers déposés d'abord, ceux de la réponse précédente à la fin (la fiche donnée au modèle est limitée en longueur). */
+    private function fichiersEnDernier(array $noms, array $enDernier): array
+    {
+        $debut = array_values(array_diff($noms, $enDernier));
+        $fin = array_values(array_intersect($noms, $enDernier));
+
+        return [...$debut, ...$fin];
     }
 
     /**
