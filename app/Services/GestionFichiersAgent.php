@@ -20,6 +20,14 @@ class GestionFichiersAgent
     {
         $nom = basename(str_replace('\\', '/', $fichier->getClientOriginalName()));
         $extension = strtolower(pathinfo($nom, PATHINFO_EXTENSION));
+        if (in_array($extension, ['doc', 'xls'], true)) {
+            // Ancien format binaire (Word / Excel 97-2003) : impossible à remplir sans perdre la mise en forme.
+            throw new FichierAgentRefuse(
+                'Le fichier « '.$nom.' » est à l\'ancien format ('.'.'.$extension.'). Ouvrez-le dans '
+                .($extension === 'doc' ? 'Word' : 'Excel').', faites « Enregistrer sous » au format '
+                .($extension === 'doc' ? '.docx' : '.xlsx').', puis déposez ce nouveau fichier : la mise en forme sera conservée.'
+            );
+        }
         if ($nom === '' || str_starts_with($nom, '.') || ! in_array($extension, config('agents.extensions'), true)) {
             throw new FichierAgentRefuse(
                 'Le fichier « '.$nom.' » n\'est pas accepté. Déposez un classeur ou un document Word : '

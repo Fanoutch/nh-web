@@ -44,6 +44,10 @@ def resoudre(ctx: Contexte, nom: str, extensions: tuple[str, ...] = EXTENSIONS) 
         raise ErreurClasseur(f"Le fichier « {nom} » est introuvable.")
     if chemin.resolve().parent != base.resolve():
         raise ErreurClasseur(f"Le fichier « {nom} » est en dehors du dossier de l'exécution : il est refusé.")
+    if chemin.suffix.lower() in (".doc", ".xls"):
+        raise ErreurClasseur(f"« {nom} » est à l'ancien format {chemin.suffix.lower()} (97-2003) : il ne peut pas être modifié "
+                             "sans perdre sa mise en forme. Demandez à l'utilisateur de l'enregistrer au format "
+                             + (".docx" if chemin.suffix.lower() == ".doc" else ".xlsx") + " (« Enregistrer sous »).")
     if chemin.suffix.lower() not in extensions:
         raise ErreurClasseur(f"Le format de « {nom} » n'est pas pris en charge par cet outil. "
                              f"Formats acceptés : {', '.join(extensions)}.")

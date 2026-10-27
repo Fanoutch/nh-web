@@ -32,6 +32,10 @@ it('refuses a wrong extension with a message saying what to do', function () {
     $this->gestion->deposerReference($this->agent, UploadedFile::fake()->create('note.pdf', 10));
 })->throws(FichierAgentRefuse::class, 'Déposez un classeur ou un document Word : .xlsx, .xlsm, .csv, .docx');
 
+it('refuses an old .doc and says how to convert it', function () {
+    $this->gestion->deposerReference($this->agent, UploadedFile::fake()->create('formulaire.doc', 10));
+})->throws(FichierAgentRefuse::class, 'faites « Enregistrer sous » au format .docx');
+
 it('refuses a file over 20 Mo', function () {
     $this->gestion->deposerReference($this->agent, UploadedFile::fake()->create('gros.xlsx', 20 * 1024 + 1));
 })->throws(FichierAgentRefuse::class, 'dépasse 20 Mo');
