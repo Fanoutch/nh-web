@@ -407,7 +407,7 @@ def _cibles(document, chercher: str, occurrence: int | None = None, precedent: s
         # Le libellé le plus proche fait foi : celui du paragraphe lui-même s'il en a un (« Nom : ........ ») ; sinon
         # (paragraphe ou case qui ne contient que le blanc) celui du paragraphe d'avant ou de la ligne du tableau.
         propre_libelle = texte.replace(chercher, "").strip(" \t:.-_")
-        if precedent and precedent not in (texte if propre_libelle else voisins):
+        if precedent and normaliser(precedent) not in normaliser(texte if propre_libelle else voisins):
             continue
         trouves += [(p, m.start()) for m in re.finditer(re.escape(chercher), texte)]
     if occurrence is not None:
@@ -752,6 +752,7 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
     if champs is not None and (not isinstance(champs, list) or not all(isinstance(ch, dict) for ch in champs)):
         return erreur("« champs » doit être une liste d'objets.", "Exemple : [{\"remplacer\": \"........\", \"colonne\": \"Grade\", \"precedent\": \"Grade\"}].")
     cibles_champs = []                  # (champ lisible, remplacer, indice de colonne, occurrence, precedent)
+    corriges: list[str] = []
     for k, ch in enumerate(champs or [], start=1):
         chercher = ch.get("remplacer")
         if not isinstance(chercher, str) or not chercher:
@@ -766,6 +767,16 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
             return erreur(f"Champ {k} : « {chercher} » est introuvable dans le modèle à l'endroit demandé"
                           + (f" (près du libellé « {precedent} »)" if precedent else "") + (f" (occurrence {occurrence})" if occurrence else "") + ".",
                           "Vérifiez avec word_lire le libellé exact et le texte à remplacer.")
+        # Garde-fou : le modèle de langage associe parfois une colonne au mauvais libellé (« GRADE » mis à côté de
+        # « Signature »). Si le formulaire a un champ dont le libellé porte le nom même de la colonne, c'est lui.
+        nom_colonne = c.entetes[indice]
+        if (precedent is None or normaliser(nom_colonne) not in normaliser(precedent) or occurrence is not None) \
+                and _cibles(modele, chercher, None, nom_colonne):
+            if precedent is None or normaliser(nom_colonne) not in normaliser(precedent):
+                corriges.append(f"{nom_colonne} (placé à côté de « {nom_colonne} » et non de « {precedent or chercher} »)")
+            precedent, occurrence = nom_colonne, None
+            cibles_champs.insert(0, (precedent, chercher, indice, occurrence, precedent))   # sûrs d'abord : ils l'emportent
+            continue
         cibles_champs.append((precedent or chercher, chercher, indice, occurrence, precedent))
     marqueurs = sorted({m for p in _paragraphes(modele) for m in _MARQUEUR.findall(p.text)})
     explicites = correspondances if isinstance(correspondances, dict) else {}
@@ -846,6 +857,8 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
     if cibles_champs:
         avertissement += (" Dans chaque document, j'ai rempli les champs : "
                           + ", ".join(f"« {libelle} » (colonne {c.entetes[i]})" for libelle, _, i, _, _ in cibles_champs) + ".")
+        if corriges:
+            avertissement += " J'ai corrigé l'emplacement de : " + ", ".join(corriges) + "."
     non_remplacees = [e for e in c.entetes if e not in {c.entetes[i] for i in colonne_de.values()}]
     if auto or (exemples and not marqueurs):
         faits = {**auto, **{e: colonne_de[e] for e in exemples}}

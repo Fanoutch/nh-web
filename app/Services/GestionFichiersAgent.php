@@ -20,15 +20,7 @@ class GestionFichiersAgent
     {
         $nom = basename(str_replace('\\', '/', $fichier->getClientOriginalName()));
         $extension = strtolower(pathinfo($nom, PATHINFO_EXTENSION));
-        if (in_array($extension, ['doc', 'xls'], true)) {
-            // Ancien format binaire (Word / Excel 97-2003) : impossible à remplir sans perdre la mise en forme.
-            throw new FichierAgentRefuse(
-                'Le fichier « '.$nom.' » est à l\'ancien format ('.'.'.$extension.'). Ouvrez-le dans '
-                .($extension === 'doc' ? 'Word' : 'Excel').', faites « Enregistrer sous » au format '
-                .($extension === 'doc' ? '.docx' : '.xlsx').', puis déposez ce nouveau fichier : la mise en forme sera conservée.'
-            );
-        }
-        if ($nom === '' || str_starts_with($nom, '.') || ! in_array($extension, config('agents.extensions'), true)) {
+        if ($nom === '' || str_starts_with($nom, '.') || ! in_array($extension, [...config('agents.extensions'), ...array_keys(config('agents.anciens_formats'))], true)) {
             throw new FichierAgentRefuse(
                 'Le fichier « '.$nom.' » n\'est pas accepté. Déposez un classeur ou un document Word : '
                 .implode(', ', array_map(fn ($e) => '.'.$e, config('agents.extensions'))).'.'
@@ -44,15 +36,15 @@ class GestionFichiersAgent
 
     public function deposerReference(Agent $agent, UploadedFile $fichier, ?string $role = null): AgentFichierReference
     {
-        $nom = $this->valider($fichier);
+        $nom = $this->nomFinal($this->valider($fichier));
         if ($this->nomPris($agent, $nom)) {
             throw new FichierAgentRefuse('Un fichier nommé « '.$nom.' » existe déjà pour cet agent. Supprimez-le d\'abord ou renommez le nouveau.');
         }
-        $chemin = $fichier->storeAs($agent->dossier().'/references', $nom, 'local');
+        [$chemin, $taille] = $this->stocker($fichier, $agent->dossier().'/references', $nom);
 
         return $agent->tousFichiers()->create([
             'type' => AgentFichierReference::REFERENCE, 'nom' => $nom, 'chemin' => $chemin,
-            'taille' => $fichier->getSize(), 'role' => $role,
+            'taille' => $taille, 'role' => $role,
         ]);
     }
 
@@ -62,7 +54,7 @@ class GestionFichiersAgent
      */
     public function deposerApport(Agent $agent, UploadedFile $fichier): AgentFichierReference
     {
-        $nom = $this->valider($fichier);
+        $nom = $this->nomFinal($this->valider($fichier));
         $ancien = $agent->apports()->whereRaw('lower(nom) = ?', [strtolower($nom)])->first();
         if ($ancien === null && $this->nomPris($agent, $nom)) {
             throw new FichierAgentRefuse('Le nom « '.$nom.' » est déjà pris par un fichier de référence de cet agent. Renommez le document puis déposez-le de nouveau.');
@@ -70,11 +62,52 @@ class GestionFichiersAgent
         if ($ancien !== null) {
             $this->supprimerFichier($ancien);
         }
-        $chemin = $fichier->storeAs($agent->dossier().'/apports', $nom, 'local');
+        [$chemin, $taille] = $this->stocker($fichier, $agent->dossier().'/apports', $nom);
 
         return $agent->tousFichiers()->create([
-            'type' => AgentFichierReference::APPORT, 'nom' => $nom, 'chemin' => $chemin, 'taille' => $fichier->getSize(),
+            'type' => AgentFichierReference::APPORT, 'nom' => $nom, 'chemin' => $chemin, 'taille' => $taille,
         ]);
+    }
+
+    /** Nom sous lequel le fichier sera gardé : un ancien format (.doc / .xls) devient .docx / .xlsx. */
+    public function nomFinal(string $nom): string
+    {
+        $cible = config('agents.anciens_formats')[strtolower(pathinfo($nom, PATHINFO_EXTENSION))] ?? null;
+
+        return $cible === null ? $nom : pathinfo($nom, PATHINFO_FILENAME).'.'.$cible;
+    }
+
+    /**
+     * Range le fichier sous `$nom`. Un ancien format est d'abord converti par le service (LibreOffice, mise en forme
+     * comprise) ; l'original n'est pas gardé. Conversion impossible : rien n'est gardé et l'utilisateur sait quoi faire.
+     *
+     * @return array{0: string, 1: int} chemin et taille
+     */
+    private function stocker(UploadedFile $fichier, string $dossier, string $nom): array
+    {
+        $disque = Storage::disk('local');
+        $original = basename(str_replace('\\', '/', $fichier->getClientOriginalName()));
+        if ($original === $nom) {
+            $chemin = $fichier->storeAs($dossier, $nom, 'local');
+
+            return [$chemin, (int) $fichier->getSize()];
+        }
+
+        $atelier = $dossier.'/_conversion-'.bin2hex(random_bytes(4));
+        $fichier->storeAs($atelier, $original, 'local');
+        try {
+            $produit = app(AgentClient::class)->convertir($disque->path($atelier.'/'.$original));
+            $chemin = $dossier.'/'.$nom;
+            $disque->delete($chemin);
+            $disque->move($atelier.'/'.$produit, $chemin);
+        } catch (AssistantIndisponible) {
+            throw new FichierAgentRefuse('« '.$original.' » est à l\'ancien format et le service de conversion ne répond pas. '
+                .'Réessayez dans un instant, ou enregistrez-le au format '.pathinfo($nom, PATHINFO_EXTENSION).' depuis Word ou Excel.');
+        } finally {
+            $disque->deleteDirectory($atelier);
+        }
+
+        return [$chemin, (int) $disque->size($chemin)];
     }
 
     private function nomPris(Agent $agent, string $nom): bool

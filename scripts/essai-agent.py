@@ -57,7 +57,7 @@ def main() -> None:
         fin = {}
         for ev in executer_boucle(modele, "", a.demande, ctx, historique=historique):
             if ev["type"] == "etape":
-                print(f"  outil {ev['outil']} -> {ev['statut']}" + (f" : {ev['resume']}" if a.messages else ""))
+                print(f"  outil {ev['outil']} -> {ev['statut']}" + (f" : {ev['resume']}\n      arguments : {ev['arguments']}" if a.messages else ""))
             elif ev["type"] == "fin":
                 fin = ev
     print(f"Fin : {fin.get('statut')} en {fin.get('tours')} tour(s). Fichiers produits : {len(ctx.fichiers_produits)}")

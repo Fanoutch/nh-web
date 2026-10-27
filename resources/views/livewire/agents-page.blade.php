@@ -131,7 +131,7 @@
 
             <div class="border-t border-app-border-soft px-4 py-3">
                 <form wire:submit="envoyer" x-on:submit="$refs.message.value = ''; $refs.message.style.height = 'auto'; arretEnCours = false" class="max-w-[760px] mx-auto">
-                    <input type="file" x-ref="depot" wire:model="depots" multiple hidden accept=".xlsx,.xlsm,.csv,.docx" aria-label="Déposer des documents">
+                    <input type="file" x-ref="depot" wire:model="depots" multiple hidden accept=".xlsx,.xlsm,.csv,.docx,.doc,.xls" aria-label="Déposer des documents">
                     @error('message') <p class="mb-1 text-xs text-danger">{{ $message }}</p> @enderror
                     <div class="flex items-end gap-2 bg-app-bg border border-app-border rounded-xl px-3 py-2 focus-within:border-accent transition">
                         <button type="button" x-on:click="$refs.depot.click()"

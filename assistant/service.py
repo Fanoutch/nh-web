@@ -22,6 +22,7 @@ from pydantic import BaseModel
 import outils  # noqa: F401 — enregistre les outils Excel
 from agents.boucle import executer_boucle
 from agents.contexte import analyser
+from outils import conversion
 from outils.registre import REGISTRE, Contexte
 from rag import lecteurs, modeles
 from rag.assistant import MESSAGE_INDISPONIBLE, Assistant
@@ -67,6 +68,10 @@ class ExecutionEntrante(BaseModel):
     dossier_sortie: str             # fichiers produits
     outils: list[str]               # outils autorisés par la recette de l'agent
     donnees_agent: dict = {}        # historique des lancements, etc. (aucun secret)
+
+
+class FichierAConvertir(BaseModel):
+    chemin: str
 
 
 class FichiersALire(BaseModel):
@@ -231,6 +236,18 @@ def creer_app(reglages: Reglages | None = None, assistant=None, modele_agent=Non
         contexte = Contexte(dossier_execution=dossier, fichiers_autorises=list(f.fichiers), outils_autorises=set(),
                             dossier_sortie=dossier / "_sortie")
         return {"fichiers": [analyser(contexte, nom) for nom in f.fichiers]}
+
+    @app.post("/agents/fichiers/convertir", dependencies=protege)
+    def convertir_fichier(f: FichierAConvertir):
+        """Ancien format (.doc / .xls) déposé : converti à côté de l'original, mise en forme comprise (LibreOffice)."""
+        chemin = Path(f.chemin)
+        if not chemin.is_absolute() or not chemin.is_file():
+            raise HTTPException(status_code=422, detail={"code": "fichier", "message": "Le fichier à convertir est introuvable."})
+        try:
+            produit = conversion.convertir(chemin)
+        except conversion.ConversionImpossible as exc:
+            raise HTTPException(status_code=422, detail={"code": "conversion", "message": str(exc)})
+        return {"nom": produit.name}
 
     @app.post("/agents/executions/{execution_id}/arret", dependencies=protege)
     def arreter_agent(execution_id: int):

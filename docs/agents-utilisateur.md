@@ -103,8 +103,9 @@ Vous avez un Excel avec une ligne par personne (ou par client, par pièce…) et
 - **Formulaire vierge** (des « ........ » ou des cases vides à côté de libellés comme « Nom », « Grade ») : dites
   « remplis ce formulaire pour chaque personne de l'Excel ». Chaque champ est repéré par son libellé et rempli avec la
   colonne correspondante ; la mise en page du formulaire est conservée.
-- **Le modèle doit être un .docx.** Un ancien .doc (Word 97-2003) est refusé : ouvrez-le dans Word, « Enregistrer
-  sous » au format .docx, puis déposez ce nouveau fichier.
+- **Ancien format .doc ou .xls ?** Déposez-le tel quel : il est converti automatiquement en .docx / .xlsx, mise en forme
+  comprise (le nom du fichier change d'extension dans le panneau). Si le serveur ne sait pas le convertir, un message vous
+  dit de l'enregistrer vous-même au format .docx depuis Word.
 
 ## 6. Bon à savoir
 

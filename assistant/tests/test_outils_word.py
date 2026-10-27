@@ -834,3 +834,13 @@ def test_champ_introuvable_aucun_fichier(ctxf):
     r = publier(ctxf, champs=[{"remplacer": "........", "colonne": "Nom", "precedent": "Grade"}])
 
     assert r.statut == "erreur" and "Grade" in r.resume and ctxf.fichiers_produits == []
+
+
+def test_colonne_mise_a_cote_du_mauvais_libelle_est_corrigee(ctxf):
+    champs = CHAMPS[:3] + [{"remplacer": "........", "colonne": "Matricule", "precedent": "Signature"}]
+
+    r = publier(ctxf, champs=champs)
+
+    durand = Document(str(ctxf.dossier_sortie / next(n for n in r.donnees["fichiers_produits"] if "Durand" in n)))
+    assert r.statut == "ok" and durand.paragraphs[2].text == "Signature : ........"
+    assert durand.tables[0].rows[1].cells[1].text == "M-002" and "J'ai corrigé l'emplacement" in r.resume

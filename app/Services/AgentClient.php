@@ -68,6 +68,21 @@ class AgentClient
         return $reponse->json('fichiers', []);
     }
 
+    /**
+     * Convertit un ancien format (.doc / .xls) déposé, à côté de l'original ; renvoie le nom du fichier produit.
+     *
+     * @throws FichierAgentRefuse  conversion impossible (message pour l'utilisateur, avec la marche à suivre)
+     */
+    public function convertir(string $cheminAbsolu): string
+    {
+        $reponse = $this->envoyer(fn () => $this->http(150)->post('/agents/fichiers/convertir', ['chemin' => $cheminAbsolu]), true);
+        if ($reponse->status() === 422) {
+            throw new FichierAgentRefuse((string) ($reponse->json('detail.message') ?? 'Le fichier n\'a pas pu être converti.'));
+        }
+
+        return (string) $reponse->json('nom');
+    }
+
     /** Demande l'arrêt d'une exécution en cours (bouton « Arrêter »). */
     public function arreter(AgentExecution $execution): void
     {

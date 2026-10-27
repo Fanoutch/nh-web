@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\FichierAgentRefuse;
 use App\Services\GestionFichiersAgent;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
@@ -32,9 +33,33 @@ it('refuses a wrong extension with a message saying what to do', function () {
     $this->gestion->deposerReference($this->agent, UploadedFile::fake()->create('note.pdf', 10));
 })->throws(FichierAgentRefuse::class, 'Déposez un classeur ou un document Word : .xlsx, .xlsm, .csv, .docx');
 
-it('refuses an old .doc and says how to convert it', function () {
-    $this->gestion->deposerReference($this->agent, UploadedFile::fake()->create('formulaire.doc', 10));
-})->throws(FichierAgentRefuse::class, 'faites « Enregistrer sous » au format .docx');
+it('converts an old .doc into a .docx through the service, without keeping the original', function () {
+    config(['assistant.jeton' => 'secret']);
+    Http::fake(['*/agents/fichiers/convertir' => function ($requete) {
+        $doc = $requete['chemin'];
+        file_put_contents(substr($doc, 0, -4).'.docx', 'converti');
+
+        return Http::response(['nom' => basename(substr($doc, 0, -4)).'.docx']);
+    }]);
+
+    $reference = $this->gestion->deposerReference($this->agent, UploadedFile::fake()->create('formulaire.doc', 10));
+
+    expect($reference->nom)->toBe('formulaire.docx');
+    Storage::disk('local')->assertExists('agents/'.$this->agent->id.'/references/formulaire.docx');
+    expect(Storage::disk('local')->get('agents/'.$this->agent->id.'/references/formulaire.docx'))->toBe('converti')
+        ->and(collect(Storage::disk('local')->allFiles('agents/'.$this->agent->id))->filter(fn ($f) => str_ends_with($f, '.doc')))->toBeEmpty();
+});
+
+it('refuses an old .doc the server cannot convert, with what to do, and keeps nothing', function () {
+    config(['assistant.jeton' => 'secret']);
+    Http::fake(['*/agents/fichiers/convertir' => Http::response(['detail' => ['code' => 'conversion',
+        'message' => 'LibreOffice absent. Ouvrez « formulaire.doc » dans Word, faites « Enregistrer sous » au format .docx']], 422)]);
+
+    expect(fn () => $this->gestion->deposerApport($this->agent, UploadedFile::fake()->create('formulaire.doc', 10)))
+        ->toThrow(FichierAgentRefuse::class, 'Enregistrer sous');
+    expect(Storage::disk('local')->allFiles('agents/'.$this->agent->id))->toBeEmpty()
+        ->and($this->agent->tousFichiers()->count())->toBe(0);
+});
 
 it('refuses a file over 20 Mo', function () {
     $this->gestion->deposerReference($this->agent, UploadedFile::fake()->create('gros.xlsx', 20 * 1024 + 1));

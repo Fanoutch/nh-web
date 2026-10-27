@@ -12,6 +12,7 @@
 
 return [
     'extensions' => ['xlsx', 'xlsm', 'csv', 'docx'],
+    'anciens_formats' => ['doc' => 'docx', 'xls' => 'xlsx'],   // convertis au dépôt par le service (LibreOffice), mise en forme comprise
     'taille_max_mo' => 20,           // par fichier
     'alerte_mo' => 500,              // par agent : prévenir, sans rien supprimer
     'veille_mois' => 3,              // sans lancement : l'agent passe « en veille »

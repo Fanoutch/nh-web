@@ -26,6 +26,20 @@ voir « Vérifier le modèle » ci-dessous.
   documents en attente et les dossiers d'exécution sont supprimés ; références et historique restent.
 - Limites : 20 Mo et 100 000 lignes par fichier ; alerte à 500 Mo par agent (réglages dans `config/agents.php`).
 
+## Anciens formats .doc / .xls (LibreOffice)
+
+Un utilisateur peut déposer un .doc ou un .xls : le service le convertit en .docx / .xlsx **en gardant la mise en
+forme** (tableaux, gras, images, en-têtes), grâce à LibreOffice. Il faut donc LibreOffice **sur le serveur où tourne
+`nh-assistant`** (pas sur les postes) :
+
+```
+sudo dnf install libreoffice-writer libreoffice-calc    # RHEL 8 ; sans interface graphique
+which soffice                                            # attendu : un chemin, par exemple /usr/bin/soffice
+```
+
+Sans LibreOffice, rien ne casse : le dépôt d'un .doc est refusé avec la marche à suivre pour l'utilisateur
+(« Enregistrer sous » .docx). Aucun document « à plat » n'est jamais produit.
+
 ## Vérifier le modèle (avant d'ouvrir aux utilisateurs)
 
 ```bash
