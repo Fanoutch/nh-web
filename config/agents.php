@@ -16,5 +16,5 @@ return [
     'alerte_mo' => 500,              // par agent : prévenir, sans rien supprimer
     'veille_mois' => 3,              // sans lancement : l'agent passe « en veille »
     'prevenir_jours_avant' => 7,     // notification à 2 mois et 3 semaines
-    'timeout' => 330,                // une exécution (la boucle s'arrête à 5 minutes), en secondes
+    'timeout' => (int) env('AGENTS_TIMEOUT', 330),                // une exécution (la boucle s'arrête à 5 minutes), en secondes
 ];

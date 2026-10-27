@@ -204,7 +204,7 @@ def creer_app(reglages: Reglages | None = None, assistant=None, modele_agent=Non
                     return e.execution_id in arrets
             try:
                 for evenement in executer_boucle(modele, e.consignes, e.demande, contexte,
-                                                 arreter=arreter, historique=historique):
+                                                 arreter=arreter, historique=historique, max_tours=r.agent_max_tours, duree_max=r.agent_duree_max):
                     yield json.dumps(evenement, ensure_ascii=False) + "\n"
             except modeles.ModeleIndisponible as exc:
                 yield json.dumps({"type": "fin", "statut": "arret", "message": MESSAGE_INDISPONIBLE,

@@ -86,7 +86,8 @@ def _historique_propre(historique: list[dict] | None) -> list[dict]:
 def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Contexte,
                     arreter: Callable[[], bool] = lambda: False,
                     horloge: Callable[[], float] = time.monotonic,
-                    historique: list[dict] | None = None) -> Iterator[dict]:
+                    historique: list[dict] | None = None, max_tours: int = MAX_TOURS,
+                    duree_max: int = DUREE_MAX_SECONDES) -> Iterator[dict]:
     """Produit des événements : `etape` (appel d'outil et résultat), `fin` (statut `termine` ou `arret`)."""
     debut = horloge()
     outils = declaration_outils(contexte.outils_autorises)
@@ -101,12 +102,12 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
     outils_appeles: set[str] = set()
     resumes: list[str] = []         # ce que chaque outil a fait, pour répondre à la place d'un modèle resté muet
 
-    for tour in range(1, MAX_TOURS + 1):
+    for tour in range(1, max_tours + 1):
         if arreter():
             yield _fin("arret", "Arrêt demandé.", contexte, tour - 1)
             return
-        if horloge() - debut > DUREE_MAX_SECONDES:
-            yield _fin("arret", "Le travail dépasse 5 minutes : il a été arrêté. Précisez la demande ou découpez-la.",
+        if horloge() - debut > duree_max:
+            yield _fin("arret", f"Le travail dépasse {round(duree_max / 60)} minutes : il a été arrêté. Précisez la demande ou découpez-la.",
                        contexte, tour - 1)
             return
         # Après une relance (annonce sans appel, aucune donnée lue), le modèle est contraint d'appeler un outil
@@ -200,5 +201,5 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
         if resultats_texte:     # certains serveurs (Mistral) exigent l'alternance stricte utilisateur / assistant
             messages.append({"role": "user", "content": "\n".join(resultats_texte)})
 
-    yield _fin("arret", f"Le travail dépasse {MAX_TOURS} étapes : il a été arrêté. Précisez ou découpez la demande.",
-               contexte, MAX_TOURS)
+    yield _fin("arret", f"Le travail dépasse {max_tours} étapes : il a été arrêté. Précisez ou découpez la demande.",
+               contexte, max_tours)

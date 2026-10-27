@@ -787,3 +787,50 @@ def test_modele_exemple_rien_a_remplacer_refuse(ctxe):
     r = publier(ctxe, correspondances={"Zoé Inconnue": "Nom"})
 
     assert r.statut == "erreur" and "introuvable" in r.resume and ctxe.fichiers_produits == []
+
+
+# --- formulaire vierge : champs « ........ » repérés par leur libellé ou leur rang --------------------------------
+@pytest.fixture
+def ctxf(ctxp):
+    d = Document()
+    d.add_paragraph("Nom : ........")
+    p = d.add_paragraph()
+    p.add_run("Poste : ").bold = True
+    p.add_run("........")
+    t = d.add_table(rows=2, cols=2)
+    t.cell(0, 0).text, t.cell(0, 1).text = "Service", "........"
+    t.cell(1, 0).text, t.cell(1, 1).text = "Matricule", "........"
+    d.add_paragraph("Signature : ........")
+    d.save(ctxp.dossier_execution / "fiche.docx")
+    return ctxp
+
+
+CHAMPS = [{"remplacer": "........", "colonne": "Nom", "precedent": "Nom"},
+          {"remplacer": "........", "colonne": "Poste", "precedent": "Poste"},
+          {"remplacer": "........", "colonne": "Service", "precedent": "Service"},
+          {"remplacer": "........", "colonne": "Matricule", "precedent": "Matricule"}]
+
+
+def test_formulaire_vierge_chaque_champ_rempli_a_sa_place(ctxf):
+    r = publier(ctxf, champs=CHAMPS)
+
+    assert r.statut == "ok" and r.donnees["nombre"] == 3
+    durand = Document(str(ctxf.dossier_sortie / next(n for n in r.donnees["fichiers_produits"] if "Durand" in n)))
+    assert [p.text for p in durand.paragraphs] == ["Nom : Durand", "Poste : Technicien", "Signature : ........"]
+    assert [[c.text for c in l.cells] for l in durand.tables[0].rows] == [["Service", "Logistique"], ["Matricule", "M-002"]]
+    assert durand.paragraphs[1].runs[0].bold                                     # la mise en forme du modèle est gardée
+    assert "j'ai rempli les champs" in r.resume
+
+
+def test_regenerer_cible_par_rang(ctxf):
+    r = executer("word_regenerer", {"fichier_source": "fiche.docx", "nom_sortie": "f.docx", "modifications": [
+        {"remplacer": "........", "par": "X", "occurrence": 2}]}, ctxf)
+
+    d = Document(str(ctxf.dossier_sortie / "f.docx"))
+    assert r.statut == "ok" and [p.text for p in d.paragraphs] == ["Nom : ........", "Poste : X", "Signature : ........"]
+
+
+def test_champ_introuvable_aucun_fichier(ctxf):
+    r = publier(ctxf, champs=[{"remplacer": "........", "colonne": "Nom", "precedent": "Grade"}])
+
+    assert r.statut == "erreur" and "Grade" in r.resume and ctxf.fichiers_produits == []

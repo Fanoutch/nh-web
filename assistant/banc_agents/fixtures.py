@@ -26,6 +26,10 @@ VALIDATIONS = [("Bon Chevalier", "Jean", "Chef d'équipe logistique", "31 décem
                ("Moreau", "Hugo", "Conducteur d'engins", "28 février 2029", "CERT-2026-04829"),
                ("Girard", "Nathalie", "Formatrice professionnelle", "08 octobre 2027", "CERT-2026-04830")]
 
+# Cas réel (27/10) : formulaire VIERGE (champs « ........ » à côté de libellés), classeur NOM / GRADE / DATE / REFERENCE.
+AGENTS_FORMULAIRE = [("DURAND", "Adjudant", "12/03/2027", "REF-101"), ("MARTIN", "Sergent", "05/06/2027", "REF-102"),
+                     ("PETIT", "Caporal", "21/09/2027", "REF-103")]
+
 SOMME_STOCK = sum(l[3] for l in STOCK)                                   # 158
 SOUS_SEUIL = [l for l in STOCK if l[3] < 5]                             # 4 pièces
 MOYENNE_VISSERIE = sum(l[3] for l in STOCK if l[2] == "Visserie") / 4   # 35,5
@@ -81,6 +85,16 @@ def fabriquer(dossier: Path) -> list[str]:
     for i, (a, b) in enumerate([("Nom", ex[0]), ("Prénom", ex[1]), ("Profession", ex[2])]):
         t.cell(i, 0).text, t.cell(i, 1).text = a, b
     d.save(dossier / "certificat-exemple.docx")
+    _classeur(dossier / "agents.xlsx", ["NOM", "GRADE", "DATE", "REFERENCE"], AGENTS_FORMULAIRE, "Feuil1")
+    d = Document()
+    d.add_paragraph("ATTESTATION")
+    d.add_paragraph("Référence : ........")
+    t = d.add_table(rows=2, cols=2)
+    t.cell(0, 0).text, t.cell(0, 1).text = "Nom", "........"
+    t.cell(1, 0).text, t.cell(1, 1).text = "Grade", "........"
+    d.add_paragraph("Valable jusqu'au : ........")
+    d.add_paragraph("Signature du chef de service : ........")
+    d.save(dossier / "formulaire-vierge.docx")
     _word(dossier / "note-piegee.docx", [
         ("titre", 1, "Note de service"),
         ("p", "La réunion de sécurité aura lieu jeudi à 9 heures en salle 2."),
@@ -100,4 +114,4 @@ def fabriquer(dossier: Path) -> list[str]:
         ("p", "Poste occupé : {{Poste}}."),
     ])
     return ["stock.xlsx", "besoins.xlsx", "procedure.docx", "note-piegee.docx", "modele-courrier.docx",
-            "personnes.xlsx", "modele-fiche.docx", "validations.xlsx", "certificat-exemple.docx"]
+            "personnes.xlsx", "modele-fiche.docx", "validations.xlsx", "certificat-exemple.docx", "agents.xlsx", "formulaire-vierge.docx"]

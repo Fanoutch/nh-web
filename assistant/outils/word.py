@@ -371,6 +371,88 @@ def _remplacer_dans_paragraphe(p: Paragraph, chercher: str, par: str) -> int:
         depart = i + len(par)
 
 
+def _paragraphes_et_voisins(document):
+    """Comme `_paragraphes`, avec pour chacun le texte qui l'entoure : le paragraphe précédent, et dans un tableau les
+    autres cellules de la même ligne (c'est là qu'est le libellé d'un formulaire : « Grade » | « ........ »)."""
+    def liste(paragraphes, autour=""):
+        precedent = ""
+        for p in paragraphes:
+            yield p, precedent + " " + autour
+            precedent = p.text
+
+    def dans_tables(tables):
+        for t in tables:
+            for ligne in t.rows:
+                cellules = ligne.cells
+                for cellule in cellules:
+                    autour = " ".join(c.text for c in cellules if c is not cellule)
+                    yield from liste(cellule.paragraphs, autour)
+                    yield from dans_tables(cellule.tables)
+    yield from liste(document.paragraphs)
+    yield from dans_tables(document.tables)
+    for section in document.sections:
+        for zone in (section.header, section.footer):
+            yield from liste(zone.paragraphs)
+            yield from dans_tables(zone.tables)
+
+
+def _cibles(document, chercher: str, occurrence: int | None = None, precedent: str | None = None) -> list:
+    """Emplacements (paragraphe, position) de « chercher », dans l'ordre du document. « precedent » ne garde que ceux dont
+    le libellé le plus proche (le paragraphe lui-même, sinon le paragraphe d'avant ou la ligne de tableau) contient ce texte ; « occurrence » (1, 2…) n'en garde qu'un."""
+    trouves = []
+    for p, voisins in _paragraphes_et_voisins(document):
+        texte = p.text
+        if chercher not in texte:
+            continue
+        # Le libellé le plus proche fait foi : celui du paragraphe lui-même s'il en a un (« Nom : ........ ») ; sinon
+        # (paragraphe ou case qui ne contient que le blanc) celui du paragraphe d'avant ou de la ligne du tableau.
+        propre_libelle = texte.replace(chercher, "").strip(" \t:.-_")
+        if precedent and precedent not in (texte if propre_libelle else voisins):
+            continue
+        trouves += [(p, m.start()) for m in re.finditer(re.escape(chercher), texte)]
+    if occurrence is not None:
+        trouves = trouves[occurrence - 1:occurrence] if 0 < occurrence <= len(trouves) else []
+    return trouves
+
+
+def _remplacer_a_position(p: Paragraph, position: int, longueur: int, par: str) -> None:
+    """Remplace [position, position + longueur) du paragraphe, même coupé entre plusieurs « runs »."""
+    runs = p.runs
+    fin_i = position + longueur
+    pos, debut, fin = 0, None, None
+    for k, r in enumerate(runs):
+        n = len(r.text)
+        if debut is None and position < pos + n:
+            debut = (k, position - pos)
+        if debut is not None and fin_i <= pos + n:
+            fin = (k, fin_i - pos)
+            break
+        pos += n
+    (d_k, d_o), (f_k, f_o) = debut, fin
+    if d_k == f_k:
+        runs[d_k].text = runs[d_k].text[:d_o] + par + runs[d_k].text[f_o:]
+    else:
+        runs[d_k].text = runs[d_k].text[:d_o] + par
+        for k in range(d_k + 1, f_k):
+            runs[k].text = ""
+        runs[f_k].text = runs[f_k].text[f_o:]
+
+
+def _remplacer_cibles(remplacements: list) -> int:
+    """Applique [(paragraphe, position, longueur, texte)] calculés AVANT toute modification : par paragraphe, de la
+    fin vers le début, pour que les positions restent justes."""
+    par_paragraphe: dict = {}
+    for p, pos, longueur, par in remplacements:
+        liste = par_paragraphe.setdefault(p._p, (p, []))[1]
+        if any(pos < d + n and d < pos + longueur for d, n, _ in liste):
+            continue                    # deux champs visent le même endroit : le premier l'emporte
+        liste.append((pos, longueur, par))
+    for p, liste in par_paragraphe.values():
+        for pos, longueur, par in sorted(liste, key=lambda x: x[0], reverse=True):
+            _remplacer_a_position(p, pos, longueur, par)
+    return sum(len(liste) for _, liste in par_paragraphe.values())
+
+
 def _poser_texte_cellule(cellule, texte: str) -> None:
     premier, *autres = cellule.paragraphs
     if premier.runs:
@@ -496,6 +578,17 @@ def _appliquer(ctx: Contexte, document, i: int, m: dict) -> str:
             raise _Refus(erreur(f"La modification {i} : indiquez « par » (un texte) ou « valeur_excel » (une valeur prise dans un classeur).", ""))
         if len(par) > MAX_TEXTE_REMPLACEMENT:
             raise _Refus(erreur(f"La modification {i} : le texte de remplacement dépasse {MAX_TEXTE_REMPLACEMENT} caractères.", ""))
+        if m.get("occurrence") is not None or m.get("precedent"):
+            occurrence = _entier(m.get("occurrence"), 1, 1) if m.get("occurrence") is not None else None
+            precedent = _propre(m.get("precedent")) or None
+            cibles = _cibles(document, chercher, occurrence, precedent)
+            if not cibles:
+                raise _Refus(erreur(f"Modification {i} : « {chercher} » est introuvable à l'endroit demandé"
+                                    + (f" (occurrence {occurrence})" if occurrence else "")
+                                    + (f" (près du libellé « {precedent} »)" if precedent else "") + ".",
+                                    "Vérifiez avec word_lire le libellé exact et le nombre d'occurrences."))
+            n = _remplacer_cibles([(p, pos, len(chercher), par) for p, pos in cibles])
+            return f"« {chercher} » remplacé à l'endroit demandé ({n} fois)" + (f" par {par} (pris dans {m['valeur_excel'].get('fichier')})" if depuis_excel else "")
         n = sum(_remplacer_dans_paragraphe(p, chercher, par) for p in _paragraphes(document))
         if n == 0:
             marqueurs = sorted({mm for p in _paragraphes(document) for mm in _MARQUEUR.findall(p.text)})
@@ -561,7 +654,9 @@ def _appliquer(ctx: Contexte, document, i: int, m: dict) -> str:
 @outil("word_regenerer",
        "Remplit un document Word EXISTANT (un modèle) en en produisant une COPIE modifiée ; l'original n'est jamais touché "
        "et sa mise en forme est conservée. « modifications » est une liste appliquée dans l'ordre : "
-       "{remplacer: \"{{DATE}}\", par: \"texte\"} (partout : texte, tableaux, en-têtes) ; "
+       "{remplacer: \"{{DATE}}\", par: \"texte\"} (partout : texte, tableaux, en-têtes) ; SI LE TEXTE EST PRÉSENT PLUSIEURS FOIS "
+       "(formulaire avec des « ........ » à compléter) : ajoutez precedent: \"Grade\" (le libellé écrit à côté : même paragraphe, "
+       "paragraphe d'avant ou même ligne de tableau) et/ou occurrence: 2 (la 2e fois dans le document) ; "
        "{remplir_tableau: n, lignes: [[...]], mode: \"ajouter\"|\"remplacer\"} ; "
        "POUR REPRENDRE DES DONNÉES D'EXCEL SANS LES RECOPIER (le code les copie, ne retapez jamais un chiffre) : "
        "{remplacer: \"{{TOTAL}}\", valeur_excel: {fichier, feuille?, condition?, calcul?: compter|somme|moyenne|min|max, colonne?}} "
@@ -628,14 +723,17 @@ def _exemples_auto(texte_modele: str, entetes: list, lignes: list) -> dict[str, 
        f"copie lui-même les valeurs ({MAX_PUBLIPOSTAGE} documents au plus). Le modèle et le classeur ne sont jamais modifiés. "
        "« condition » limite les lignes (comme excel_selectionner). « nom_fichier » donne le nom de chaque document, avec "
        "des colonnes entre accolades simples : \"courrier-{Nom}\" (par défaut : nom du modèle + première colonne). « correspondances » associe un marqueur à une colonne "
-       "quand les noms diffèrent : {\"{{NOM}}\": \"Nom complet\"}. Modèle sans marqueur (document déjà rempli pour une personne) : « correspondances » donne le texte d'exemple à remplacer et sa colonne, ex. {\"Bon Chevalier\": \"Nom\"}. Tout ou rien.",
+       "quand les noms diffèrent : {\"{{NOM}}\": \"Nom complet\"}. Modèle sans marqueur (document déjà rempli pour une personne) : « correspondances » donne le texte d'exemple à remplacer et sa colonne, ex. {\"Bon Chevalier\": \"Nom\"}. FORMULAIRE VIERGE (champs « ........ » ou cases vides à côté d'un libellé) : « champs » = "
+       "[{remplacer: \"........\", colonne: \"Grade\", precedent: \"Grade\"}, …] — le texte à remplacer, la colonne qui le remplit, "
+       "le libellé écrit à côté (même paragraphe, paragraphe d'avant ou même ligne de tableau) et/ou occurrence: n. Tout ou rien.",
        {"type": "object", "properties": {
+           "champs": {"type": "array", "items": {"type": "object"}},
            "fichier_modele": {"type": "string"}, "fichier_excel": {"type": "string"}, "feuille": {"type": "string"},
            "condition": {"type": "object"}, "nom_fichier": {"type": "string"},
            "correspondances": {"type": "object"}}, "required": ["fichier_modele", "fichier_excel"]})
 @_garde
 def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, feuille: str | None = None,
-                      condition=None, nom_fichier: str | None = None, correspondances=None) -> Reponse:
+                      condition=None, nom_fichier: str | None = None, correspondances=None, champs=None) -> Reponse:
     source = _resoudre_word(ctx, fichier_modele)
     try:
         c = charger(ctx, fichier_excel, feuille)
@@ -650,6 +748,25 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
 
     modele = DocumentWord(str(source))
     texte_modele = "\n".join(p.text for p in _paragraphes(modele))
+    # Formulaire vierge : chaque champ = un texte à remplacer (souvent « ........ »), repéré par son libellé et/ou son rang.
+    if champs is not None and (not isinstance(champs, list) or not all(isinstance(ch, dict) for ch in champs)):
+        return erreur("« champs » doit être une liste d'objets.", "Exemple : [{\"remplacer\": \"........\", \"colonne\": \"Grade\", \"precedent\": \"Grade\"}].")
+    cibles_champs = []                  # (champ lisible, remplacer, indice de colonne, occurrence, precedent)
+    for k, ch in enumerate(champs or [], start=1):
+        chercher = ch.get("remplacer")
+        if not isinstance(chercher, str) or not chercher:
+            return erreur(f"Champ {k} : « remplacer » doit être un texte non vide.", "")
+        try:
+            indice = trouver_colonne(str(ch.get("colonne", "")), c.entetes)
+        except ErreurCondition:
+            return erreur(f"Champ {k} : la colonne « {ch.get('colonne')} » n'existe pas.", "Colonnes : " + ", ".join(c.entetes) + ".")
+        occurrence = _entier(ch.get("occurrence"), 1, 1) if ch.get("occurrence") is not None else None
+        precedent = _propre(ch.get("precedent")) or None
+        if not _cibles(modele, chercher, occurrence, precedent):
+            return erreur(f"Champ {k} : « {chercher} » est introuvable dans le modèle à l'endroit demandé"
+                          + (f" (près du libellé « {precedent} »)" if precedent else "") + (f" (occurrence {occurrence})" if occurrence else "") + ".",
+                          "Vérifiez avec word_lire le libellé exact et le texte à remplacer.")
+        cibles_champs.append((precedent or chercher, chercher, indice, occurrence, precedent))
     marqueurs = sorted({m for p in _paragraphes(modele) for m in _MARQUEUR.findall(p.text)})
     explicites = correspondances if isinstance(correspondances, dict) else {}
     # Un modèle sans marqueur peut être un document déjà rempli pour une personne : chaque texte d'exemple donné dans
@@ -657,10 +774,10 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
     exemples = sorted((k for k in explicites if isinstance(k, str) and k.strip() and k not in marqueurs
                        and not _MARQUEUR.fullmatch(k)), key=len, reverse=True)
     auto: dict[str, int] = {}
-    if not marqueurs:
+    if not marqueurs and not cibles_champs:
         auto = {t: i for t, i in _exemples_auto(texte_modele, c.entetes, c.lignes).items()
                 if t not in exemples and not any(t in e for e in exemples)}
-    if not marqueurs and not exemples and not auto:
+    if not marqueurs and not exemples and not auto and not cibles_champs:
         return erreur(f"Le modèle « {fichier_modele} » ne contient aucun marqueur {{{{Colonne}}}} et je n'y reconnais pas les valeurs d'une ligne de « {fichier_excel} ».",
                       "Soit le modèle contient des marqueurs comme {{Nom}} ; soit, pour un document déjà rempli pour une personne, "
                       "lisez-le (word_lire), puis donnez dans « correspondances » chaque texte à remplacer et sa colonne : "
@@ -669,7 +786,7 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
     # et signalé, sans bloquer le reste ; il ne reste rien à remplacer seulement si la détection automatique échoue aussi.
     introuvables = [e for e in exemples if e not in texte_modele]
     exemples = [e for e in exemples if e in texte_modele]
-    if not marqueurs and not exemples and not auto:
+    if not marqueurs and not exemples and not auto and not cibles_champs:
         return erreur("Texte(s) à remplacer introuvable(s) dans le modèle : " + ", ".join(f"« {e} »" for e in introuvables) + ".",
                       "Recopiez le texte exactement comme dans le modèle (word_lire ou word_chercher).")
     colonne_de, absents = {}, []
@@ -702,6 +819,13 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
             ctx.fichiers_produits.append(nom)
             crees.append(nom)
             document = DocumentWord(str(sortie))
+            remplacements = []          # positions calculées sur le document intact, puis appliquées d'un coup
+            for libelle, chercher, indice, occurrence, precedent in cibles_champs:
+                valeur = _texte_cellule(ligne[indice])
+                if valeur == "":
+                    vides[libelle] = vides.get(libelle, 0) + 1
+                remplacements += [(p, pos, len(chercher), valeur) for p, pos in _cibles(document, chercher, occurrence, precedent)]
+            _remplacer_cibles(remplacements)
             for m in ordre:
                 indice = colonne_de[m]
                 valeur = _texte_cellule(ligne[indice])
@@ -719,6 +843,9 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
                       "Vérifiez que le modèle s'ouvre normalement dans Word.")
     avertissement = ("" if not vides else " Attention, des cellules vides ont laissé un champ vide : "
                      + ", ".join(f"{m} ({n} document(s))" for m, n in sorted(vides.items())) + ".")
+    if cibles_champs:
+        avertissement += (" Dans chaque document, j'ai rempli les champs : "
+                          + ", ".join(f"« {libelle} » (colonne {c.entetes[i]})" for libelle, _, i, _, _ in cibles_champs) + ".")
     non_remplacees = [e for e in c.entetes if e not in {c.entetes[i] for i in colonne_de.values()}]
     if auto or (exemples and not marqueurs):
         faits = {**auto, **{e: colonne_de[e] for e in exemples}}

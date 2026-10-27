@@ -281,3 +281,11 @@ def test_question_posee_a_la_place_d_agir_relance_une_fois(ctx):
 
     assert evenements[-1]["message"] == "Fait, voici le résumé complet."
     assert "Ne posez pas de question" in modele.recus[2][0][-1]["content"]
+
+
+def test_plafond_d_etapes_reglable(ctx):
+    modele = FauxModele(*[std("excel_lire", {"fichier": "stock.xlsx", "limite": n}, ident=str(n)) for n in range(1, 4)])
+
+    fin = list(boucle.executer_boucle(modele, "", "Lis.", ctx, max_tours=2))[-1]
+
+    assert fin["statut"] == "arret" and "dépasse 2 étapes" in fin["message"]

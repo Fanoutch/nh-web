@@ -100,6 +100,11 @@ Vous avez un Excel avec une ligne par personne (ou par client, par pièce…) et
   rendu dit **ce qui a été remplacé et ce qui ne l'a pas été** : un numéro de certificat ou une date de naissance qui
   n'existe pas dans l'Excel (ou écrit autrement) reste tel quel dans le modèle. Dites alors à l'agent quel texte
   remplacer par quelle colonne.
+- **Formulaire vierge** (des « ........ » ou des cases vides à côté de libellés comme « Nom », « Grade ») : dites
+  « remplis ce formulaire pour chaque personne de l'Excel ». Chaque champ est repéré par son libellé et rempli avec la
+  colonne correspondante ; la mise en page du formulaire est conservée.
+- **Le modèle doit être un .docx.** Un ancien .doc (Word 97-2003) est refusé : ouvrez-le dans Word, « Enregistrer
+  sous » au format .docx, puis déposez ce nouveau fichier.
 
 ## 6. Bon à savoir
 

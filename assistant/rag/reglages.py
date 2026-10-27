@@ -53,6 +53,8 @@ class Reglages:
     seuil_distance: float = 1.0
     temperature: float = 0.3
     historique_tours: int = 3
+    agent_max_tours: int = 12          # étapes d'un agent avant arrêt
+    agent_duree_max: int = 300         # secondes ; le délai du site (config/agents.php, « timeout ») doit rester plus grand
     taille_morceau: int = 600
     taille_min: int = 150
     fusion_sections: bool = True
@@ -91,6 +93,8 @@ _CLES = {  # variable -> (champ de Reglages, conversion)
     "ASSISTANT_SEUIL_DISTANCE": ("seuil_distance", float),
     "ASSISTANT_TEMPERATURE": ("temperature", float),
     "ASSISTANT_HISTORIQUE_TOURS": ("historique_tours", int),
+    "ASSISTANT_AGENT_MAX_TOURS": ("agent_max_tours", int),
+    "ASSISTANT_AGENT_DUREE_MAX": ("agent_duree_max", int),
     "ASSISTANT_TAILLE_MORCEAU": ("taille_morceau", int),
     "ASSISTANT_TAILLE_MIN": ("taille_min", int),
     "ASSISTANT_FUSION_SECTIONS": ("fusion_sections", _booleen),
