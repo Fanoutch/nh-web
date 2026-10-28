@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from docx import Document as DocumentWord
+from lxml import etree
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 
@@ -70,14 +71,17 @@ def charger_blocs(ctx: Contexte, nom: str) -> list[Bloc]:
         balise = element.tag.rsplit("}", 1)[-1]
         if balise == "p":
             p = Paragraph(element, document)
-            texte = p.text.strip()
-            if not texte:
-                continue
-            niveau = _niveau_titre(p)
-            blocs.append(Bloc("titre" if niveau else "paragraphe", texte, niveau=niveau))
+            texte = _texte_lisible(p).strip()
+            if texte:
+                niveau = _niveau_titre(p)
+                blocs.append(Bloc("titre" if niveau else "paragraphe", texte, niveau=niveau))
+            for e in _encadres(element, document):          # zones de texte ancrées dans ce paragraphe
+                if _texte_lisible(e).strip():
+                    blocs.append(Bloc("paragraphe", "[encadré] " + _texte_lisible(e).strip()))
         elif balise == "tbl":
             numero += 1
-            lignes = [[c.text.strip() for c in ligne.cells] for ligne in Table(element, document).rows]
+            lignes = [[" ".join(_texte_lisible(q) for q in c.paragraphs).strip() for c in ligne.cells]
+                      for ligne in Table(element, document).rows]
             blocs.append(Bloc("tableau", numero=numero, lignes=lignes))
     return blocs
 
@@ -323,6 +327,90 @@ MAX_TEXTE_REMPLACEMENT = 20_000
 _MARQUEUR = re.compile(r"\{\{[^{}]{1,60}\}\}")
 
 
+_W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+CHAMP_FORMULAIRE = "[champ]"          # ce que voit le modèle à la place d'un champ de formulaire Word (case grise)
+_NS = {"w": _W[1:-1], "mc": "http://schemas.openxmlformats.org/markup-compatibility/2006"}
+
+
+def _xpath(element, chemin: str) -> list:
+    return etree.XPath(chemin, namespaces=_NS)(element)
+
+
+def _encadres(element, parent, avec_secours: bool = False) -> list:
+    """Paragraphes des zones de texte (encadrés) contenues dans `element`. Word en garde deux copies : la version moderne
+    et une version « de secours » (mc:Fallback) ; seule la première est lue, la seconde n'est utile qu'aux remplacements."""
+    chemin = ".//w:txbxContent//w:p" if avec_secours else ".//w:txbxContent[not(ancestor::mc:Fallback)]//w:p"
+    return [Paragraph(e, parent) for e in _xpath(element, chemin)]
+
+
+def _copie_de_secours(p: Paragraph):
+    """Le même paragraphe dans la copie de secours d'un encadré, s'il en a une."""
+    choix = _xpath(p._p, "ancestor::mc:Choice[1]")
+    if not choix:
+        return None
+    secours = _xpath(choix[0].getparent(), "mc:Fallback//w:txbxContent//w:p")
+    paragraphes = _xpath(choix[0], ".//w:txbxContent//w:p")
+    rang = paragraphes.index(p._p) if p._p in paragraphes else -1
+    return Paragraph(secours[rang], p._parent) if 0 <= rang < len(secours) else None
+
+
+def _champs_formulaire(p: Paragraph) -> list[list]:
+    """Champs de formulaire texte (FORMTEXT) du paragraphe : pour chacun, la liste des « runs » de son résultat."""
+    champs, courant, etat = [], None, None
+    for r in p._p.iterchildren(_W + "r"):
+        car = r.find(_W + "fldChar")
+        instr = r.find(_W + "instrText")
+        if car is not None:
+            genre = car.get(_W + "fldCharType")
+            if genre == "begin":
+                courant, etat = [], "code"
+            elif genre == "separate" and courant is not None:
+                etat = "resultat" if etat == "formtext" else None
+            elif genre == "end" and courant is not None:
+                if etat == "resultat":
+                    champs.append(courant)
+                courant, etat = None, None
+        elif instr is not None and etat == "code" and "FORMTEXT" in (instr.text or ""):
+            etat = "formtext"
+        elif etat == "resultat":
+            courant.append(r)
+    return champs
+
+
+def _texte_lisible(p: Paragraph) -> str:
+    """Texte du paragraphe tel que le modèle doit le voir : chaque champ de formulaire devient « [champ] »."""
+    champs = _champs_formulaire(p)
+    if not champs:
+        return p.text
+    dans_champ = {id(r) for c in champs for r in c}
+    morceaux, vus = [], set()
+    for r in p._p.iterchildren(_W + "r"):
+        champ = next((c for c in champs if r in c), None)
+        if champ is not None:
+            if id(champ[0]) not in vus:
+                vus.add(id(champ[0]))
+                morceaux.append(CHAMP_FORMULAIRE)
+            continue
+        if id(r) not in dans_champ:
+            morceaux.append("".join(t.text or "" for t in r.iter(_W + "t")))
+    return "".join(morceaux)
+
+
+def _remplir_champ(p: Paragraph, rang: int, valeur: str) -> None:
+    resultat = _champs_formulaire(p)[rang]
+    textes = [t for r in resultat for t in r.iter(_W + "t")]
+    if not textes:                                  # champ sans aucun texte : on en crée un dans le premier run
+        if not resultat:
+            return
+        t = resultat[0].makeelement(_W + "t", {})
+        resultat[0].append(t)
+        textes = [t]
+    textes[0].text = valeur
+    textes[0].set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+    for t in textes[1:]:
+        t.text = ""
+
+
 def _paragraphes(document):
     """Tous les paragraphes du corps, des tableaux (y compris imbriqués), des en-têtes et des pieds de page."""
     def dans_tables(tables):
@@ -333,10 +421,12 @@ def _paragraphes(document):
                     yield from dans_tables(cellule.tables)
     yield from document.paragraphs
     yield from dans_tables(document.tables)
+    yield from _encadres(document.element.body, document, avec_secours=True)
     for section in document.sections:
         for zone in (section.header, section.footer):
             yield from zone.paragraphs
             yield from dans_tables(zone.tables)
+            yield from _encadres(zone._element, zone, avec_secours=True)
 
 
 def _remplacer_dans_paragraphe(p: Paragraph, chercher: str, par: str) -> int:
@@ -378,7 +468,7 @@ def _paragraphes_et_voisins(document):
         precedent = ""
         for p in paragraphes:
             yield p, precedent + " " + autour
-            precedent = p.text
+            precedent = _texte_lisible(p)
 
     def dans_tables(tables):
         for t in tables:
@@ -390,10 +480,17 @@ def _paragraphes_et_voisins(document):
                     yield from dans_tables(cellule.tables)
     yield from liste(document.paragraphs)
     yield from dans_tables(document.tables)
+    yield from liste(_encadres(document.element.body, document))
     for section in document.sections:
         for zone in (section.header, section.footer):
             yield from liste(zone.paragraphs)
             yield from dans_tables(zone.tables)
+            yield from liste(_encadres(zone._element, zone))
+
+
+@dataclass(frozen=True)
+class ChampWord:
+    rang: int                       # rang du champ de formulaire dans son paragraphe
 
 
 def _cibles(document, chercher: str, occurrence: int | None = None, precedent: str | None = None) -> list:
@@ -401,8 +498,14 @@ def _cibles(document, chercher: str, occurrence: int | None = None, precedent: s
     le libellé le plus proche (le paragraphe lui-même, sinon le paragraphe d'avant ou la ligne de tableau) contient ce texte ; « occurrence » (1, 2…) n'en garde qu'un."""
     trouves = []
     for p, voisins in _paragraphes_et_voisins(document):
-        texte = p.text
+        texte = _texte_lisible(p)
         if chercher not in texte:
+            continue
+        if chercher == CHAMP_FORMULAIRE:         # champ de formulaire Word : repéré par son rang dans le paragraphe
+            propre_libelle = texte.replace(chercher, "").strip(" \t:.-_")
+            if precedent and normaliser(precedent) not in normaliser(texte if propre_libelle else voisins):
+                continue
+            trouves += [(p, ChampWord(k)) for k in range(texte.count(CHAMP_FORMULAIRE))]
             continue
         # Le libellé le plus proche fait foi : celui du paragraphe lui-même s'il en a un (« Nom : ........ ») ; sinon
         # (paragraphe ou case qui ne contient que le blanc) celui du paragraphe d'avant ou de la ligne du tableau.
@@ -442,15 +545,25 @@ def _remplacer_cibles(remplacements: list) -> int:
     """Applique [(paragraphe, position, longueur, texte)] calculés AVANT toute modification : par paragraphe, de la
     fin vers le début, pour que les positions restent justes."""
     par_paragraphe: dict = {}
+    champs: dict = {}
     for p, pos, longueur, par in remplacements:
+        if isinstance(pos, ChampWord):
+            champs.setdefault((p._p, pos.rang), (p, pos.rang, par))     # le premier l'emporte
+            continue
         liste = par_paragraphe.setdefault(p._p, (p, []))[1]
         if any(pos < d + n and d < pos + longueur for d, n, _ in liste):
             continue                    # deux champs visent le même endroit : le premier l'emporte
         liste.append((pos, longueur, par))
     for p, liste in par_paragraphe.values():
+        secours = _copie_de_secours(p)
+        secours = secours if secours is not None and secours.text == p.text else None
         for pos, longueur, par in sorted(liste, key=lambda x: x[0], reverse=True):
             _remplacer_a_position(p, pos, longueur, par)
-    return sum(len(liste) for _, liste in par_paragraphe.values())
+            if secours is not None:     # même remplacement dans la copie de secours de l'encadré
+                _remplacer_a_position(secours, pos, longueur, par)
+    for p, rang, par in champs.values():
+        _remplir_champ(p, rang, par)
+    return sum(len(liste) for _, liste in par_paragraphe.values()) + len(champs)
 
 
 def _poser_texte_cellule(cellule, texte: str) -> None:
@@ -725,7 +838,8 @@ def _exemples_auto(texte_modele: str, entetes: list, lignes: list) -> dict[str, 
        "des colonnes entre accolades simples : \"courrier-{Nom}\" (par défaut : nom du modèle + première colonne). « correspondances » associe un marqueur à une colonne "
        "quand les noms diffèrent : {\"{{NOM}}\": \"Nom complet\"}. Modèle sans marqueur (document déjà rempli pour une personne) : « correspondances » donne le texte d'exemple à remplacer et sa colonne, ex. {\"Bon Chevalier\": \"Nom\"}. FORMULAIRE VIERGE (champs « ........ » ou cases vides à côté d'un libellé) : « champs » = "
        "[{remplacer: \"........\", colonne: \"Grade\", precedent: \"Grade\"}, …] — le texte à remplacer, la colonne qui le remplit, "
-       "le libellé écrit à côté (même paragraphe, paragraphe d'avant ou même ligne de tableau) et/ou occurrence: n. Tout ou rien.",
+       "le libellé écrit à côté (même paragraphe, paragraphe d'avant ou même ligne de tableau) et/ou occurrence: n. Une case grise de "
+       "formulaire Word apparaît « [champ] » dans word_lire : remplacer: \"[champ]\". Les encadrés apparaissent « [encadré] ». Tout ou rien.",
        {"type": "object", "properties": {
            "champs": {"type": "array", "items": {"type": "object"}},
            "fichier_modele": {"type": "string"}, "fichier_excel": {"type": "string"}, "feuille": {"type": "string"},
@@ -747,7 +861,7 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
         return erreur(f"{len(lignes)} lignes : au plus {MAX_PUBLIPOSTAGE} documents par appel.", "Ajoutez une condition pour traiter la liste par groupes.")
 
     modele = DocumentWord(str(source))
-    texte_modele = "\n".join(p.text for p in _paragraphes(modele))
+    texte_modele = "\n".join(_texte_lisible(p) for p in _paragraphes(modele))
     # Formulaire vierge : chaque champ = un texte à remplacer (souvent « ........ »), repéré par son libellé et/ou son rang.
     if champs is not None and (not isinstance(champs, list) or not all(isinstance(ch, dict) for ch in champs)):
         return erreur("« champs » doit être une liste d'objets.", "Exemple : [{\"remplacer\": \"........\", \"colonne\": \"Grade\", \"precedent\": \"Grade\"}].")
