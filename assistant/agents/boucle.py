@@ -51,6 +51,9 @@ RELANCE_QUESTION = ("Ne posez pas de question : choisissez vous-même les valeur
                     "par ligne d'un classeur, word_regenerer pour corriger un document), en le disant à la fin.")
 _QUESTION = re.compile(r"(pouvez-vous|veuillez (?:me )?(?:fournir|préciser|donner)|plus de détails|instructions? (?:claires?|explicites?)"
                        r"|je ne peux pas continuer|sans plus d'informations)", re.I)
+_SALUTATION = re.compile(r"^\s*(bonjour|bonsoir|salut|merci)\b[^.?!]{0,40}[.?!]?\s*$|\b(que sais[- ]tu|que peux[- ]tu|que savez[- ]vous|"
+                         r"que pouvez[- ]vous|qu'est-ce que tu sais|à quoi sers[- ]tu|aide[- ]moi à comprendre ce que tu)", re.I)
+_ABSENT = re.compile(r"(n'existe pas|introuvable|n'est pas disponible|ne figure pas|aucun fichier nommé)", re.I)
 RELANCES_QUI_FORCENT = {RELANCE_SANS_APPEL, RELANCE_SANS_DONNEES, RELANCE_PROMESSE, RELANCE_QUESTION}
 
 # Un modèle est une fonction (messages, outils) -> message de l'assistant {"content": ..., "tool_calls": [...]}
@@ -139,7 +142,10 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
                 messages += [{"role": "assistant", "content": message.get("content") or ""},
                              {"role": "user", "content": RELANCE_PROMESSE}]
                 continue
+            # Pas de relance pour une salutation (« que sais-tu faire ? ») ni pour « ce fichier n'existe pas » :
+            # la réponse n'affirme rien sur le contenu des fichiers.
             if (contexte.fichiers_autorises and not (outils_appeles - OUTILS_DE_DESCRIPTION)
+                    and not _SALUTATION.search(demande) and not _ABSENT.search(decode.texte)
                     and "sans_donnees" not in relances):
                 relances.add("sans_donnees")
                 messages += [{"role": "assistant", "content": message.get("content") or ""},

@@ -8,12 +8,12 @@ import copy
 import functools
 import re
 import shutil
+import tempfile
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from docx import Document as DocumentWord
-from lxml import etree
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 
@@ -22,6 +22,8 @@ from .condition import ErreurCondition, compiler as compiler_condition, trouver_
 from .excel import _nom_sortie
 from .registre import Contexte, Reponse, erreur, ok, outil
 from .texte import nombre, normaliser, pour_json
+from . import word_texte as wt
+from .word_texte import CHAMP_FORMULAIRE
 
 EXTENSIONS_WORD = (".docx",)
 MAX_BLOCS_MODELE = 200        # blocs (paragraphes, titres, marqueurs de tableau) renvoyés par appel
@@ -66,24 +68,51 @@ def charger_blocs(ctx: Contexte, nom: str) -> list[Bloc]:
         document = DocumentWord(str(chemin))
     except Exception as exc:  # fichier abîmé : message clair plutôt qu'une trace
         raise ErreurClasseur(f"Le document « {nom} » est illisible ({type(exc).__name__}).") from exc
-    blocs, numero = [], 0
-    for element in document.element.body.iterchildren():
-        balise = element.tag.rsplit("}", 1)[-1]
-        if balise == "p":
-            p = Paragraph(element, document)
-            texte = _texte_lisible(p).strip()
-            if texte:
-                niveau = _niveau_titre(p)
-                blocs.append(Bloc("titre" if niveau else "paragraphe", texte, niveau=niveau))
-            for e in _encadres(element, document):          # zones de texte ancrées dans ce paragraphe
-                if _texte_lisible(e).strip():
-                    blocs.append(Bloc("paragraphe", "[encadré] " + _texte_lisible(e).strip()))
-        elif balise == "tbl":
-            numero += 1
-            lignes = [[" ".join(_texte_lisible(q) for q in c.paragraphs).strip() for c in ligne.cells]
-                      for ligne in Table(element, document).rows]
-            blocs.append(Bloc("tableau", numero=numero, lignes=lignes))
+    blocs: list[Bloc] = []
+    numero = 0
+
+    def paragraphe(element):
+        texte = wt.texte(element).strip()
+        if texte:
+            niveau = _niveau_titre(Paragraph(element, document))
+            blocs.append(Bloc("titre" if niveau else "paragraphe", texte, niveau=niveau))
+        for e in wt.xpath(element, ".//w:txbxContent[not(ancestor::mc:Fallback)]//w:p"):   # encadrés ancrés ici
+            if wt.texte(e).strip():
+                blocs.append(Bloc("paragraphe", "[encadré] " + wt.texte(e).strip()))
+
+    def parcourir(conteneur):
+        """Corps du document, contrôles de contenu (w:sdt) et autres enveloppes compris, dans l'ordre."""
+        nonlocal numero
+        for element in conteneur.iterchildren():
+            balise = element.tag.rsplit("}", 1)[-1]
+            if balise == "p":
+                paragraphe(element)
+            elif balise == "tbl":
+                numero += 1
+                lignes = [[" ".join(wt.texte(q) for q in wt.xpath(case, ".//w:p[not(ancestor::mc:Fallback)]")).strip()
+                           for case in ligne.iterchildren(wt.W + "tc")]
+                          for ligne in element.iterchildren(wt.W + "tr")]
+                blocs.append(Bloc("tableau", numero=numero, lignes=lignes))
+            elif balise not in ("sectPr", "bookmarkStart", "bookmarkEnd"):
+                parcourir(element)              # w:sdt, w:sdtContent, w:customXml… : on entre dedans
+
+    parcourir(document.element.body)
+    for partie in wt.parties(document)[1:]:                        # en-têtes, pieds de page, notes
+        genre = "note" if "note" in partie.nom else ("en-tête" if "header" in partie.nom else "pied de page")
+        for e in wt.xpath(partie.racine, ".//w:p[not(ancestor::mc:Fallback)]"):
+            if wt.texte(e).strip():
+                blocs.append(Bloc("paragraphe", f"[{genre}] " + wt.texte(e).strip()))
     return blocs
+
+
+def inventaire_word(ctx: Contexte, nom: str) -> dict:
+    """Éléments présents dans le document (comptes seulement, jamais de texte)."""
+    try:
+        return wt.inventaire(DocumentWord(str(_resoudre_word(ctx, nom))))
+    except ErreurClasseur:
+        raise
+    except Exception as exc:  # fichier abîmé
+        raise ErreurClasseur(f"Le document « {nom} » est illisible ({type(exc).__name__}).") from exc
 
 
 def _garde(fonction):
@@ -142,12 +171,16 @@ def word_decrire(ctx: Contexte, fichier: str | None = None) -> Reponse:
     paragraphes = sum(1 for b in blocs if b.genre == "paragraphe")
     marqueurs = sorted({m for b in blocs for m in _MARQUEUR.findall(b.texte if b.genre != "tableau" else " ".join(c for l in b.lignes for c in l))})
     caracteres = sum(len(b.texte) for b in blocs)
-    return ok(f"« {fichier} » : {len(blocs)} bloc(s), {len(tableaux)} tableau(x).",
+    inv = inventaire_word(ctx, fichier)
+    alertes = wt.avertissements(inv)
+    return ok(f"« {fichier} » : {len(blocs)} bloc(s), {len(tableaux)} tableau(x)."
+              + (" Attention, ce document contient des " + " ; des ".join(alertes) + "." if alertes else ""),
               {"fichier": fichier, "blocs": len(blocs), "paragraphes": paragraphes, "caracteres": caracteres,
                "titres": titres[:MAX_RESULTATS], "tableaux": tableaux[:MAX_RESULTATS],
-               "marqueurs": marqueurs[:MAX_RESULTATS]},
+               "marqueurs": marqueurs[:MAX_RESULTATS], "elements": inv, "non_pris_en_charge": alertes},
               "Lisez le texte avec word_lire, cherchez un mot avec word_chercher, lisez un tableau avec word_tableau. "
-              "Les marqueurs {{...}} se remplissent avec word_regenerer.")
+              "Les marqueurs {{...}} se remplissent avec word_regenerer."
+              + (" Dites à l'utilisateur que ces éléments ne seront pas remplis." if alertes else ""))
 
 
 @outil("word_lire",
@@ -327,165 +360,23 @@ MAX_TEXTE_REMPLACEMENT = 20_000
 _MARQUEUR = re.compile(r"\{\{[^{}]{1,60}\}\}")
 
 
-_W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-CHAMP_FORMULAIRE = "[champ]"          # ce que voit le modèle à la place d'un champ de formulaire Word (case grise)
-_NS = {"w": _W[1:-1], "mc": "http://schemas.openxmlformats.org/markup-compatibility/2006"}
+def _el(p):
+    """Élément XML d'un paragraphe (accepte un Paragraph de python-docx)."""
+    return p._p if isinstance(p, Paragraph) else p
 
 
-def _xpath(element, chemin: str) -> list:
-    return etree.XPath(chemin, namespaces=_NS)(element)
+def _texte_lisible(p) -> str:
+    """Texte du paragraphe tel que le modèle le voit (champs de formulaire : « [champ] »)."""
+    return wt.texte(_el(p))
 
 
-def _encadres(element, parent, avec_secours: bool = False) -> list:
-    """Paragraphes des zones de texte (encadrés) contenues dans `element`. Word en garde deux copies : la version moderne
-    et une version « de secours » (mc:Fallback) ; seule la première est lue, la seconde n'est utile qu'aux remplacements."""
-    chemin = ".//w:txbxContent//w:p" if avec_secours else ".//w:txbxContent[not(ancestor::mc:Fallback)]//w:p"
-    return [Paragraph(e, parent) for e in _xpath(element, chemin)]
+def _paragraphes(document) -> list:
+    """Tous les paragraphes de toutes les parties (copies de secours des encadrés comprises) : pour remplacer partout."""
+    return wt.paragraphes(document, secours=True)
 
 
-def _copie_de_secours(p: Paragraph):
-    """Le même paragraphe dans la copie de secours d'un encadré, s'il en a une."""
-    choix = _xpath(p._p, "ancestor::mc:Choice[1]")
-    if not choix:
-        return None
-    secours = _xpath(choix[0].getparent(), "mc:Fallback//w:txbxContent//w:p")
-    paragraphes = _xpath(choix[0], ".//w:txbxContent//w:p")
-    rang = paragraphes.index(p._p) if p._p in paragraphes else -1
-    return Paragraph(secours[rang], p._parent) if 0 <= rang < len(secours) else None
-
-
-def _champs_formulaire(p: Paragraph) -> list[list]:
-    """Champs de formulaire texte (FORMTEXT) du paragraphe : pour chacun, la liste des « runs » de son résultat."""
-    champs, courant, etat = [], None, None
-    for r in p._p.iterchildren(_W + "r"):
-        car = r.find(_W + "fldChar")
-        instr = r.find(_W + "instrText")
-        if car is not None:
-            genre = car.get(_W + "fldCharType")
-            if genre == "begin":
-                courant, etat = [], "code"
-            elif genre == "separate" and courant is not None:
-                etat = "resultat" if etat == "formtext" else None
-            elif genre == "end" and courant is not None:
-                if etat == "resultat":
-                    champs.append(courant)
-                courant, etat = None, None
-        elif instr is not None and etat == "code" and "FORMTEXT" in (instr.text or ""):
-            etat = "formtext"
-        elif etat == "resultat":
-            courant.append(r)
-    return champs
-
-
-def _texte_lisible(p: Paragraph) -> str:
-    """Texte du paragraphe tel que le modèle doit le voir : chaque champ de formulaire devient « [champ] »."""
-    champs = _champs_formulaire(p)
-    if not champs:
-        return p.text
-    dans_champ = {id(r) for c in champs for r in c}
-    morceaux, vus = [], set()
-    for r in p._p.iterchildren(_W + "r"):
-        champ = next((c for c in champs if r in c), None)
-        if champ is not None:
-            if id(champ[0]) not in vus:
-                vus.add(id(champ[0]))
-                morceaux.append(CHAMP_FORMULAIRE)
-            continue
-        if id(r) not in dans_champ:
-            morceaux.append("".join(t.text or "" for t in r.iter(_W + "t")))
-    return "".join(morceaux)
-
-
-def _remplir_champ(p: Paragraph, rang: int, valeur: str) -> None:
-    resultat = _champs_formulaire(p)[rang]
-    textes = [t for r in resultat for t in r.iter(_W + "t")]
-    if not textes:                                  # champ sans aucun texte : on en crée un dans le premier run
-        if not resultat:
-            return
-        t = resultat[0].makeelement(_W + "t", {})
-        resultat[0].append(t)
-        textes = [t]
-    textes[0].text = valeur
-    textes[0].set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
-    for t in textes[1:]:
-        t.text = ""
-
-
-def _paragraphes(document):
-    """Tous les paragraphes du corps, des tableaux (y compris imbriqués), des en-têtes et des pieds de page."""
-    def dans_tables(tables):
-        for t in tables:
-            for ligne in t.rows:
-                for cellule in ligne.cells:
-                    yield from cellule.paragraphs
-                    yield from dans_tables(cellule.tables)
-    yield from document.paragraphs
-    yield from dans_tables(document.tables)
-    yield from _encadres(document.element.body, document, avec_secours=True)
-    for section in document.sections:
-        for zone in (section.header, section.footer):
-            yield from zone.paragraphs
-            yield from dans_tables(zone.tables)
-            yield from _encadres(zone._element, zone, avec_secours=True)
-
-
-def _remplacer_dans_paragraphe(p: Paragraph, chercher: str, par: str) -> int:
-    """Remplace toutes les occurrences, même coupées entre plusieurs « runs » ; garde la mise en forme du début."""
-    n, depart = 0, 0
-    while True:
-        runs = p.runs
-        texte = "".join(r.text for r in runs)
-        i = texte.find(chercher, depart)
-        if i < 0:
-            return n
-        fin_i = i + len(chercher)
-        pos, debut, fin = 0, None, None
-        for k, r in enumerate(runs):
-            longueur = len(r.text)
-            if debut is None and i < pos + longueur:
-                debut = (k, i - pos)
-            if debut is not None and fin_i <= pos + longueur:
-                fin = (k, fin_i - pos)
-                break
-            pos += longueur
-        d_k, d_o = debut
-        f_k, f_o = fin
-        if d_k == f_k:
-            runs[d_k].text = runs[d_k].text[:d_o] + par + runs[d_k].text[f_o:]
-        else:
-            runs[d_k].text = runs[d_k].text[:d_o] + par
-            for k in range(d_k + 1, f_k):
-                runs[k].text = ""
-            runs[f_k].text = runs[f_k].text[f_o:]
-        n += 1
-        depart = i + len(par)
-
-
-def _paragraphes_et_voisins(document):
-    """Comme `_paragraphes`, avec pour chacun le texte qui l'entoure : le paragraphe précédent, et dans un tableau les
-    autres cellules de la même ligne (c'est là qu'est le libellé d'un formulaire : « Grade » | « ........ »)."""
-    def liste(paragraphes, autour=""):
-        precedent = ""
-        for p in paragraphes:
-            yield p, precedent + " " + autour
-            precedent = _texte_lisible(p)
-
-    def dans_tables(tables):
-        for t in tables:
-            for ligne in t.rows:
-                cellules = ligne.cells
-                for cellule in cellules:
-                    autour = " ".join(c.text for c in cellules if c is not cellule)
-                    yield from liste(cellule.paragraphs, autour)
-                    yield from dans_tables(cellule.tables)
-    yield from liste(document.paragraphs)
-    yield from dans_tables(document.tables)
-    yield from liste(_encadres(document.element.body, document))
-    for section in document.sections:
-        for zone in (section.header, section.footer):
-            yield from liste(zone.paragraphs)
-            yield from dans_tables(zone.tables)
-            yield from liste(_encadres(zone._element, zone))
+def _remplacer_dans_paragraphe(p, chercher: str, par: str) -> int:
+    return wt.remplacer_partout(_el(p), chercher, par)
 
 
 @dataclass(frozen=True)
@@ -495,75 +386,55 @@ class ChampWord:
 
 def _cibles(document, chercher: str, occurrence: int | None = None, precedent: str | None = None) -> list:
     """Emplacements (paragraphe, position) de « chercher », dans l'ordre du document. « precedent » ne garde que ceux dont
-    le libellé le plus proche (le paragraphe lui-même, sinon le paragraphe d'avant ou la ligne de tableau) contient ce texte ; « occurrence » (1, 2…) n'en garde qu'un."""
+    le libellé le plus proche (le paragraphe lui-même, sinon le paragraphe d'avant ou la ligne de tableau) contient ce
+    texte ; « occurrence » (1, 2…) n'en garde qu'un. « [champ] » désigne un champ de formulaire Word."""
     trouves = []
-    for p, voisins in _paragraphes_et_voisins(document):
-        texte = _texte_lisible(p)
+    for p, autour in wt.voisins(document):
+        texte = wt.texte(p)
         if chercher not in texte:
-            continue
-        if chercher == CHAMP_FORMULAIRE:         # champ de formulaire Word : repéré par son rang dans le paragraphe
-            propre_libelle = texte.replace(chercher, "").strip(" \t:.-_")
-            if precedent and normaliser(precedent) not in normaliser(texte if propre_libelle else voisins):
-                continue
-            trouves += [(p, ChampWord(k)) for k in range(texte.count(CHAMP_FORMULAIRE))]
             continue
         # Le libellé le plus proche fait foi : celui du paragraphe lui-même s'il en a un (« Nom : ........ ») ; sinon
         # (paragraphe ou case qui ne contient que le blanc) celui du paragraphe d'avant ou de la ligne du tableau.
         propre_libelle = texte.replace(chercher, "").strip(" \t:.-_")
-        if precedent and normaliser(precedent) not in normaliser(texte if propre_libelle else voisins):
+        if precedent and normaliser(precedent) not in normaliser(texte if propre_libelle else autour):
             continue
-        trouves += [(p, m.start()) for m in re.finditer(re.escape(chercher), texte)]
+        if chercher == CHAMP_FORMULAIRE:
+            trouves += [(p, ChampWord(k)) for k in range(texte.count(CHAMP_FORMULAIRE))]
+        else:
+            trouves += [(p, m.start()) for m in re.finditer(re.escape(chercher), texte)]
     if occurrence is not None:
+        if precedent and len(trouves) == 1:
+            return trouves          # le libellé désigne déjà un seul endroit : le rang donné par le modèle est superflu
         trouves = trouves[occurrence - 1:occurrence] if 0 < occurrence <= len(trouves) else []
     return trouves
 
 
-def _remplacer_a_position(p: Paragraph, position: int, longueur: int, par: str) -> None:
-    """Remplace [position, position + longueur) du paragraphe, même coupé entre plusieurs « runs »."""
-    runs = p.runs
-    fin_i = position + longueur
-    pos, debut, fin = 0, None, None
-    for k, r in enumerate(runs):
-        n = len(r.text)
-        if debut is None and position < pos + n:
-            debut = (k, position - pos)
-        if debut is not None and fin_i <= pos + n:
-            fin = (k, fin_i - pos)
-            break
-        pos += n
-    (d_k, d_o), (f_k, f_o) = debut, fin
-    if d_k == f_k:
-        runs[d_k].text = runs[d_k].text[:d_o] + par + runs[d_k].text[f_o:]
-    else:
-        runs[d_k].text = runs[d_k].text[:d_o] + par
-        for k in range(d_k + 1, f_k):
-            runs[k].text = ""
-        runs[f_k].text = runs[f_k].text[f_o:]
-
-
 def _remplacer_cibles(remplacements: list) -> int:
     """Applique [(paragraphe, position, longueur, texte)] calculés AVANT toute modification : par paragraphe, de la
-    fin vers le début, pour que les positions restent justes."""
+    fin vers le début, pour que les positions restent justes ; un encadré est rempli dans ses deux copies."""
     par_paragraphe: dict = {}
     champs: dict = {}
     for p, pos, longueur, par in remplacements:
+        p = _el(p)
         if isinstance(pos, ChampWord):
-            champs.setdefault((p._p, pos.rang), (p, pos.rang, par))     # le premier l'emporte
+            champs.setdefault((p, pos.rang), par)                 # le premier l'emporte
             continue
-        liste = par_paragraphe.setdefault(p._p, (p, []))[1]
+        liste = par_paragraphe.setdefault(p, [])
         if any(pos < d + n and d < pos + longueur for d, n, _ in liste):
             continue                    # deux champs visent le même endroit : le premier l'emporte
         liste.append((pos, longueur, par))
-    for p, liste in par_paragraphe.values():
-        secours = _copie_de_secours(p)
-        secours = secours if secours is not None and secours.text == p.text else None
+    for p, liste in par_paragraphe.items():
+        secours = wt.copie_de_secours(p)
+        secours = secours if secours is not None and wt.texte(secours) == wt.texte(p) else None
         for pos, longueur, par in sorted(liste, key=lambda x: x[0], reverse=True):
-            _remplacer_a_position(p, pos, longueur, par)
-            if secours is not None:     # même remplacement dans la copie de secours de l'encadré
-                _remplacer_a_position(secours, pos, longueur, par)
-    for p, rang, par in champs.values():
-        _remplir_champ(p, rang, par)
-    return sum(len(liste) for _, liste in par_paragraphe.values()) + len(champs)
+            wt.remplacer_position(p, pos, longueur, par)
+            if secours is not None:
+                wt.remplacer_position(secours, pos, longueur, par)
+    for (p, rang), par in champs.items():
+        a_remplir = [s for s in wt.carte(p) if isinstance(s, wt.Champ)]
+        if rang < len(a_remplir):
+            wt.remplir_champ(a_remplir[rang], par)
+    return sum(len(liste) for liste in par_paragraphe.values()) + len(champs)
 
 
 def _poser_texte_cellule(cellule, texte: str) -> None:
@@ -704,7 +575,7 @@ def _appliquer(ctx: Contexte, document, i: int, m: dict) -> str:
             return f"« {chercher} » remplacé à l'endroit demandé ({n} fois)" + (f" par {par} (pris dans {m['valeur_excel'].get('fichier')})" if depuis_excel else "")
         n = sum(_remplacer_dans_paragraphe(p, chercher, par) for p in _paragraphes(document))
         if n == 0:
-            marqueurs = sorted({mm for p in _paragraphes(document) for mm in _MARQUEUR.findall(p.text)})
+            marqueurs = sorted({mm for p in _paragraphes(document) for mm in _MARQUEUR.findall(_texte_lisible(p))})
             raise _Refus(erreur(f"Modification {i} : « {chercher} » est introuvable dans le document.",
                                 "Marqueurs du document : " + (", ".join(marqueurs) or "aucun") + ". Utilisez word_chercher pour retrouver le texte exact."))
         return f"« {chercher} » remplacé ({n} fois)" + (f" par {par} (pris dans {m['valeur_excel'].get('fichier')})" if depuis_excel else "")
@@ -795,7 +666,7 @@ def word_regenerer(ctx: Contexte, fichier_source: str, modifications: list, nom_
     try:
         document = DocumentWord(str(sortie))
         comptes = [_appliquer(ctx, document, i, m) for i, m in enumerate(modifications, start=1)]
-        document.save(sortie)
+        wt.enregistrer(document, sortie)
     except _Refus as refus:
         sortie.unlink(missing_ok=True)
         return refus.reponse
@@ -892,7 +763,7 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
             cibles_champs.insert(0, (precedent, chercher, indice, occurrence, precedent))   # sûrs d'abord : ils l'emportent
             continue
         cibles_champs.append((precedent or chercher, chercher, indice, occurrence, precedent))
-    marqueurs = sorted({m for p in _paragraphes(modele) for m in _MARQUEUR.findall(p.text)})
+    marqueurs = sorted({m for p in _paragraphes(modele) for m in _MARQUEUR.findall(_texte_lisible(p))})
     explicites = correspondances if isinstance(correspondances, dict) else {}
     # Un modèle sans marqueur peut être un document déjà rempli pour une personne : chaque texte d'exemple donné dans
     # « correspondances » (ex. « Bon Chevalier » -> colonne « Nom ») est alors remplacé par la valeur de chaque ligne.
@@ -933,9 +804,19 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
     except ErreurCondition as exc:
         return erreur(f"Le nom de fichier demandé utilise une colonne inconnue. {exc}", "Corrigez « nom_fichier ».")
 
+    cote = Path(tempfile.mkdtemp(prefix="publipostage-"))
+    mis_de_cote: list[str] = []
     crees, vides = [], {}
     try:
         ctx.dossier_sortie.mkdir(parents=True, exist_ok=True)
+        # Un publipostage refait dans la même exécution (le modèle corrige son premier essai) REMPLACE le précédent au
+        # lieu d'ajouter des doublons « -2 » : l'ancien est mis de côté, et remis en place si le nouveau échoue.
+        for nom in ctx.publipostage_precedent:
+            if (ctx.dossier_sortie / nom).exists():
+                (ctx.dossier_sortie / nom).rename(cote / nom)
+                mis_de_cote.append(nom)
+            if nom in ctx.fichiers_produits:
+                ctx.fichiers_produits.remove(nom)
         for n, ligne in enumerate(lignes, start=1):
             base = _ACCOLADE_SIMPLE.sub(lambda mm: _texte_cellule(ligne[champs[mm.group(1)]]) or str(n), motif)
             nom = _nom_sortie(ctx, base, f"{source.stem}-{n}.docx", ".docx")
@@ -958,14 +839,21 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
                     vides[m] = vides.get(m, 0) + 1
                 for p in _paragraphes(document):
                     _remplacer_dans_paragraphe(p, m, valeur)
-            document.save(sortie)
+            wt.enregistrer(document, sortie)
     except Exception as exc:  # noqa: BLE001 — tout ou rien : on retire ce qui a été écrit
         for nom in crees:
             (ctx.dossier_sortie / nom).unlink(missing_ok=True)
             if nom in ctx.fichiers_produits:
                 ctx.fichiers_produits.remove(nom)
+        for nom in mis_de_cote:                     # le publipostage précédent revient tel quel
+            (cote / nom).rename(ctx.dossier_sortie / nom)
+            ctx.fichiers_produits.append(nom)
+        shutil.rmtree(cote, ignore_errors=True)
         return erreur(f"Les documents n'ont pas pu être produits ({type(exc).__name__}) : aucun fichier n'a été gardé.",
                       "Vérifiez que le modèle s'ouvre normalement dans Word.")
+    shutil.rmtree(cote, ignore_errors=True)
+    ctx.publipostage_precedent = list(crees)
+    remplaces = f" Ils remplacent les {len(mis_de_cote)} document(s) du publipostage précédent." if mis_de_cote else ""
     avertissement = ("" if not vides else " Attention, des cellules vides ont laissé un champ vide : "
                      + ", ".join(f"{m} ({n} document(s))" for m, n in sorted(vides.items())) + ".")
     if cibles_champs:
@@ -983,7 +871,7 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
             + (" Textes demandés mais absents du modèle (ignorés) : " + ", ".join(f"« {e} »" for e in introuvables) + "." if introuvables else "")
             + " Tout texte du modèle qui ne correspond à aucune colonne (un numéro, une date de naissance…) reste celui de l'exemple :"
             " dites-moi par quelle colonne le remplacer si besoin.")
-    return ok(f"{len(crees)} document(s) produit(s) à partir de « {fichier_modele} » et « {fichier_excel} ».{avertissement}",
+    return ok(f"{len(crees)} document(s) produit(s) à partir de « {fichier_modele} » et « {fichier_excel} ».{remplaces}{avertissement}",
               {"fichiers_produits": crees, "nombre": len(crees), "marqueurs": {m: c.entetes[i] for m, i in colonne_de.items()},
                "valeurs_vides": vides},
               "Les documents sont prêts à être téléchargés. Les originaux sont intacts." + avertissement,

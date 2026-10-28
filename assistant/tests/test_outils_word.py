@@ -480,7 +480,8 @@ def test_regenerer_exige_un_docx_de_l_execution_et_la_permission(ctxm):
 def test_decrire_liste_les_marqueurs_a_remplir(ctxm):
     r = executer("word_decrire", {"fichier": "modele.docx"}, ctxm)
 
-    assert r.donnees["marqueurs"] == ["{{DATE}}", "{{NOM}}", "{{REF}}"] and "word_regenerer" in r.suite
+    # le marqueur de l'en-tête est vu aussi : tout le document est lu, pas seulement le corps
+    assert r.donnees["marqueurs"] == ["{{DATE}}", "{{NOM}}", "{{REF}}", "{{SERVICE}}"] and "word_regenerer" in r.suite
 
 
 def test_une_valeur_contenant_une_consigne_reste_du_texte(ctxm):
@@ -844,3 +845,20 @@ def test_colonne_mise_a_cote_du_mauvais_libelle_est_corrigee(ctxf):
     durand = Document(str(ctxf.dossier_sortie / next(n for n in r.donnees["fichiers_produits"] if "Durand" in n)))
     assert r.statut == "ok" and durand.paragraphs[2].text == "Signature : ........"
     assert durand.tables[0].rows[1].cells[1].text == "M-002" and "J'ai corrigé l'emplacement" in r.resume
+
+
+def test_publipostage_refait_remplace_le_precedent_sans_doublons(ctxf):
+    premier = publier(ctxf, champs=CHAMPS[:1])
+    second = publier(ctxf, champs=CHAMPS)
+
+    assert second.statut == "ok" and sorted(second.donnees["fichiers_produits"]) == sorted(premier.donnees["fichiers_produits"])
+    assert len(ctxf.fichiers_produits) == 3 and len(list(ctxf.dossier_sortie.glob("*.docx"))) == 3
+    assert "remplacent" in second.resume
+    durand = Document(str(ctxf.dossier_sortie / next(n for n in ctxf.fichiers_produits if "Durand" in n)))
+    assert durand.paragraphs[1].text == "Poste : Technicien"                    # c'est bien la seconde version
+
+
+def test_libelle_unique_le_rang_superflu_est_ignore(ctxf):
+    r = publier(ctxf, champs=[{"remplacer": "........", "colonne": "Nom", "precedent": "Nom", "occurrence": 4}])
+
+    assert r.statut == "ok"

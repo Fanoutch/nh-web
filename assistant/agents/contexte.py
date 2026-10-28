@@ -9,7 +9,8 @@ import re
 
 from outils.classeur import ErreurClasseur, charger
 from outils.registre import Contexte
-from outils.word import _MARQUEUR, charger_blocs
+from outils.word import _MARQUEUR, charger_blocs, inventaire_word
+from outils.word_texte import avertissements
 
 MAX_FICHIERS = 20
 MAX_FEUILLES = 10
@@ -41,7 +42,8 @@ def _fiche_classeur(ctx: Contexte, nom: str) -> dict:
 def _fiche_word(ctx: Contexte, nom: str) -> dict:
     blocs = charger_blocs(ctx, nom)
     tableaux = [b for b in blocs if b.genre == "tableau"]
-    statut = "ok" if blocs else "avertissement"
+    alertes = avertissements(inventaire_word(ctx, nom))
+    statut = "ok" if blocs and not alertes else "avertissement"
     marqueurs = sorted({m for b in blocs for m in _MARQUEUR.findall(b.texte if b.genre != "tableau" else " ".join(c for l in b.lignes for c in l))})
     return {"nom": nom, "type": "word", "statut": statut, "blocs": len(blocs), "marqueurs": marqueurs[:20],
             "titres": [_net(b.texte) for b in blocs if b.genre == "titre"][:8],
@@ -49,7 +51,9 @@ def _fiche_word(ctx: Contexte, nom: str) -> dict:
                           "colonnes": [_net(c) for c in (t.lignes[0] if t.lignes else [])[:MAX_COLONNES]]}
                          for t in tableaux[:5]],
             "nb_tableaux": len(tableaux),
-            "message": "" if blocs else "Le document se lit, mais il est vide."}
+            "non_pris_en_charge": alertes,
+            "message": ("Le document se lit, mais il est vide." if not blocs else
+                        "Ce document contient des " + " ; des ".join(alertes) + "." if alertes else "")}
 
 
 def analyser(ctx: Contexte, nom: str) -> dict:
@@ -70,6 +74,8 @@ def _ligne(f: dict) -> str:
         morceaux += [f"tableau {t['numero']} : colonnes " + ", ".join(t["colonnes"]) for t in f["tableaux"]]
         if f.get("marqueurs"):
             morceaux.append("marqueurs à remplir : " + ", ".join(f["marqueurs"]))
+        if f.get("non_pris_en_charge"):
+            morceaux.append("ne seront pas remplis : " + ", ".join(f["non_pris_en_charge"]))
         return f"- {f['nom']} (document Word) — " + " ; ".join(morceaux)
     morceaux = [f"feuille « {x['nom']} » ({x['lignes']} lignes) : colonnes " + (", ".join(x["colonnes"]) or "(vide)")
                 + (" …" if x["colonnes_tronquees"] else "") for x in f["feuilles"]]

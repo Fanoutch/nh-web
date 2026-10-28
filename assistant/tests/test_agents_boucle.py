@@ -289,3 +289,13 @@ def test_plafond_d_etapes_reglable(ctx):
     fin = list(boucle.executer_boucle(modele, "", "Lis.", ctx, max_tours=2))[-1]
 
     assert fin["statut"] == "arret" and "dépasse 2 étapes" in fin["message"]
+
+
+def test_salutation_ou_fichier_absent_sans_relance_de_lecture(ctx):
+    salut = FauxModele({"content": "Je lis et remplis vos classeurs et documents Word."})
+    absent = FauxModele({"content": "Le fichier ventes.xlsx n'existe pas : fichiers disponibles : stock.xlsx."})
+
+    ev = list(boucle.executer_boucle(salut, "", "Bonjour, que sais-tu faire pour moi ?", ctx))
+    assert ev[-1]["message"].startswith("Je lis") and len(salut.recus) == 1
+    ev = list(boucle.executer_boucle(absent, "", "Fais un résumé du fichier ventes.xlsx.", ctx))
+    assert "n'existe pas" in ev[-1]["message"] and len(absent.recus) == 1

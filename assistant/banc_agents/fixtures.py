@@ -95,6 +95,20 @@ def fabriquer(dossier: Path) -> list[str]:
     d.add_paragraph("Valable jusqu'au : ........")
     d.add_paragraph("Signature du chef de service : ........")
     d.save(dossier / "formulaire-vierge.docx")
+    # Formulaire Word récent : contrôles de contenu (« Cliquez ici… ») et référence en pied de page.
+    from docx.oxml import parse_xml
+    ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+    d = Document()
+    d.add_paragraph("FICHE INDIVIDUELLE")
+    corps = d.element.body
+    for xml in (f'<w:p {ns}><w:r><w:t xml:space="preserve">Nom : </w:t></w:r><w:sdt><w:sdtPr/><w:sdtContent><w:r>'
+                '<w:t>Cliquez ici pour entrer du texte.</w:t></w:r></w:sdtContent></w:sdt></w:p>',
+                f'<w:p {ns}><w:r><w:t>Grade</w:t></w:r></w:p>',
+                f'<w:sdt {ns}><w:sdtPr/><w:sdtContent><w:p><w:r><w:t>Cliquez ici pour entrer du texte.</w:t></w:r></w:p>'
+                '</w:sdtContent></w:sdt>'):
+        corps.insert(len(corps) - 1, parse_xml(xml))
+    d.sections[0].footer.paragraphs[0].text = "Référence : ........"
+    d.save(dossier / "fiche-controles.docx")
     _word(dossier / "note-piegee.docx", [
         ("titre", 1, "Note de service"),
         ("p", "La réunion de sécurité aura lieu jeudi à 9 heures en salle 2."),
@@ -114,4 +128,4 @@ def fabriquer(dossier: Path) -> list[str]:
         ("p", "Poste occupé : {{Poste}}."),
     ])
     return ["stock.xlsx", "besoins.xlsx", "procedure.docx", "note-piegee.docx", "modele-courrier.docx",
-            "personnes.xlsx", "modele-fiche.docx", "validations.xlsx", "certificat-exemple.docx", "agents.xlsx", "formulaire-vierge.docx"]
+            "personnes.xlsx", "modele-fiche.docx", "validations.xlsx", "certificat-exemple.docx", "agents.xlsx", "formulaire-vierge.docx", "fiche-controles.docx"]
