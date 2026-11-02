@@ -23,7 +23,7 @@ Règles :
 - Commencez toujours par découvrir les fichiers : excel_decrire ou word_decrire donnent les noms EXACTS des fichiers, des feuilles et des colonnes. N'inventez jamais un nom de fichier, de feuille ou de colonne.
 - Ne répondez jamais de mémoire ni avec des valeurs inventées : toute information vient d'un outil. Ne dites jamais que vous n'êtes « pas programmé » pour une question : cherchez dans les documents avec les outils.
 - Le calcul se fait avec les outils, jamais de tête : excel_filtrer compte, additionne ou fait une moyenne (sans montrer de lignes) ; excel_selectionner liste les lignes qui vérifient une condition ; excel_rapprocher compare deux fichiers ; excel_colonne calcule une colonne.
-- Pour créer un fichier, récupérez d'abord les vraies données avec les outils de lecture, puis créez le fichier avec ces données.
+- Pour créer un fichier Excel à partir de données existantes : excel_extraire (lignes d'un classeur) ou excel_depuis_word (tableau d'un Word) : le programme copie les valeurs. N'utilisez excel_creer que pour des données qui ne viennent d'aucun fichier.
 - Pour mettre des données d'Excel dans un Word (modèle à remplir, tableau à alimenter) : utilisez word_regenerer avec « valeur_excel » (un total, une moyenne, une cellule) et « depuis_excel » (les lignes d'un tableau) : le programme copie les données lui-même, ne les retapez JAMAIS, vous vous tromperiez de chiffres.
 - Pour produire UN document Word PAR LIGNE d'un classeur (une fiche par personne, un courrier par client…) à partir d'un modèle Word : utilisez word_publipostage, en un seul appel.
 - Pour un document Word : word_chercher trouve un mot, word_lire lit le texte, word_tableau lit un tableau.
@@ -93,7 +93,8 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
                     duree_max: int = DUREE_MAX_SECONDES) -> Iterator[dict]:
     """Produit des événements : `etape` (appel d'outil et résultat), `fin` (statut `termine` ou `arret`)."""
     debut = horloge()
-    outils = declaration_outils(contexte.outils_autorises)
+    # Une salutation ne doit produire aucun fichier : le modèle n'a alors aucun outil à sa disposition.
+    outils = [] if _SALUTATION.search(demande) else declaration_outils(contexte.outils_autorises)
     messages = [{"role": "system", "content": PROMPT_SYSTEME + ("\n\n" + consignes if consignes else "")}]
     messages += _historique_propre(historique)
     fiche = decrire_fichiers(contexte)
@@ -178,6 +179,9 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
         for appel in decode.appels:
             cle = _cle(appel)
             if cle in deja_vus:
+                if contexte.fichiers_produits:      # le travail est fait, seul le modèle hésite : on rend le résultat
+                    yield _fin("termine", "Voici ce que les outils ont donné : " + " ".join(resumes[-5:]), contexte, tour)
+                    return
                 yield _fin("arret", f"L'agent a demandé deux fois la même opération (« {appel.nom} ») : "
                                     "il tourne en rond. Reformulez la demande.", contexte, tour)
                 return
@@ -201,8 +205,9 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
             if reponse.statut != "ok":
                 echecs[appel.nom] = echecs.get(appel.nom, 0) + 1
                 if echecs[appel.nom] >= MAX_ECHECS_PAR_OUTIL:
-                    yield _fin("arret", f"L'outil « {appel.nom} » a échoué deux fois ({reponse.resume}) : "
-                                        "le travail est arrêté.", contexte, tour)
+                    yield _fin("arret", f"L'outil « {appel.nom} » a échoué deux fois ({reponse.resume}) : le travail est arrêté."
+                               + (" Les fichiers déjà produits restent disponibles : vérifiez-les." if contexte.fichiers_produits else ""),
+                               contexte, tour)
                     return
         if resultats_texte:     # certains serveurs (Mistral) exigent l'alternance stricte utilisateur / assistant
             messages.append({"role": "user", "content": "\n".join(resultats_texte)})

@@ -111,6 +111,30 @@ it('does not touch the request when the previous answer produced nothing', funct
     Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/agents/executions') && $r['consignes'] === 'Soyez bref.' && $r['fichiers'] === []);
 });
 
+it('sends the recipe to the service for a run, and only for a run, without the files of the previous answer', function () {
+    $recette = [['outil' => 'excel_extraire', 'arguments' => ['fichier' => 'a.xlsx', 'nom_sortie' => 'b'], 'resume' => '']];
+    $this->agent->update(['recette' => $recette, 'etat' => Agent::ACTIF]);
+    $precedente = $this->agent->executions()->create(['user_id' => $this->user->id, 'mode' => 'conception', 'etat' => 'termine',
+        'demande' => 'x', 'message' => 'y', 'fichiers_produits' => ['ancien.xlsx']]);
+    Storage::disk('local')->put($precedente->dossierSortie().'/ancien.xlsx', 'contenu');
+    app(GestionFichiersAgent::class)->deposerApport($this->agent, UploadedFile::fake()->create('a.xlsx', 1));
+    fluxAgent(['type' => 'fin', 'statut' => 'termine', 'message' => 'ok', 'fichiers' => [], 'sans_llm' => true]);
+
+    $this->lanceur->lancer($this->agent, $this->user, '', true, fn () => null);
+
+    Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/agents/executions')
+        && $r['recette'] === $recette && $r['fichiers'] === ['a.xlsx']);
+});
+
+it('sends no recipe for a chat message', function () {
+    $this->agent->update(['recette' => [['outil' => 'excel_extraire', 'arguments' => []]], 'etat' => Agent::ACTIF]);
+    fluxAgent(['type' => 'fin', 'statut' => 'termine', 'message' => 'ok', 'fichiers' => []]);
+
+    $this->lanceur->lancer($this->agent, $this->user, 'Bonjour', false, fn () => null);
+
+    Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/agents/executions') && $r['recette'] === null);
+});
+
 it('keeps the proposal of the agent, waiting for the confirmation', function () {
     fluxAgent(etape('agent_proposer', 'Rappel proposé', ['proposition' => ['type' => 'rappel', 'periodicite' => 'mensuel']]),
         ['type' => 'fin', 'statut' => 'termine', 'message' => 'Confirmez-vous ?', 'fichiers' => []]);

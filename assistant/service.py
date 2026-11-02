@@ -22,6 +22,7 @@ from pydantic import BaseModel
 import outils  # noqa: F401 — enregistre les outils Excel
 from agents.boucle import executer_boucle
 from agents.contexte import analyser
+from agents.recette import est_rejouable, rejouer as rejouer_recette
 from outils import conversion
 from outils.registre import REGISTRE, Contexte
 from rag import lecteurs, modeles
@@ -68,6 +69,7 @@ class ExecutionEntrante(BaseModel):
     dossier_sortie: str             # fichiers produits
     outils: list[str]               # outils autorisés par la recette de l'agent
     donnees_agent: dict = {}        # historique des lancements, etc. (aucun secret)
+    recette: list[dict] | None = None   # bouton « Lancer l'agent » : rejouée par le code si ses données viennent des fichiers
 
 
 class FichierAConvertir(BaseModel):
@@ -208,8 +210,10 @@ def creer_app(reglages: Reglages | None = None, assistant=None, modele_agent=Non
                 with verrou_arrets:
                     return e.execution_id in arrets
             try:
-                for evenement in executer_boucle(modele, e.consignes, e.demande, contexte,
-                                                 arreter=arreter, historique=historique, max_tours=r.agent_max_tours, duree_max=r.agent_duree_max):
+                evenements = (rejouer_recette(e.recette, contexte, arreter=arreter) if est_rejouable(e.recette) else
+                              executer_boucle(modele, e.consignes, e.demande, contexte, arreter=arreter, historique=historique,
+                                              max_tours=r.agent_max_tours, duree_max=r.agent_duree_max))
+                for evenement in evenements:
                     yield json.dumps(evenement, ensure_ascii=False) + "\n"
             except modeles.ModeleIndisponible as exc:
                 yield json.dumps({"type": "fin", "statut": "arret", "message": MESSAGE_INDISPONIBLE,

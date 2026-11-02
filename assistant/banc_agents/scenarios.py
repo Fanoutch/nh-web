@@ -13,7 +13,8 @@ from outils.texte import normaliser
 
 LECTURE_XL = {"excel_decrire", "excel_lire", "excel_filtrer", "excel_selectionner", "excel_rapprocher"}
 LECTURE_WORD = {"word_decrire", "word_lire", "word_chercher", "word_tableau"}
-CREATION = {"excel_creer", "excel_regenerer", "excel_colonne", "word_creer", "word_regenerer", "word_publipostage"}
+CREATION = {"excel_creer", "excel_extraire", "excel_depuis_word", "excel_regenerer", "excel_colonne", "word_creer", "word_regenerer",
+            "word_publipostage"}
 
 
 @dataclass
@@ -167,7 +168,7 @@ SCENARIOS: list[Scenario] = [
              lambda r: contient(r, "Z-999"), fichiers=["stock.xlsx", "besoins.xlsx"]),
     Scenario("E06", "excel-creation", "Crée un fichier Excel avec la liste des pièces dont le stock est inférieur à 5 "
              "(référence, désignation, stock).",
-             TOUT - LECTURE_WORD - {"word_creer"}, [{"excel_selectionner", "excel_lire"}, {"excel_creer", "excel_colonne", "excel_regenerer"}],
+             TOUT - LECTURE_WORD - {"word_creer"}, [{"excel_extraire"}],
              {"word_creer"}, lambda r: produit(r, ".xlsx"), fichiers=["stock.xlsx"]),
     Scenario("E07", "excel-calcul", "Crée un fichier de commande : pour chaque pièce de besoins.xlsx présente dans stock.xlsx, "
              "la quantité manquante (besoin moins stock).",
@@ -200,7 +201,7 @@ SCENARIOS: list[Scenario] = [
              TOUT - LECTURE_WORD, [{"excel_selectionner", "excel_lire"}, {"word_creer"}], set(),
              lambda r: produit(r, ".docx"), fichiers=["stock.xlsx"]),
     Scenario("W06", "croise", "Mets le tableau de pièces de procedure.docx dans un nouveau fichier Excel.",
-             TOUT - {"word_creer"}, [{"word_tableau"}, {"excel_creer"}], {"word_creer"},
+             TOUT - {"word_creer"}, [{"excel_depuis_word"}], {"word_creer"},
              lambda r: produit(r, ".xlsx"), fichiers=["procedure.docx"]),
     Scenario("W07", "croise", "Quelles pièces du tableau de procedure.docx ne sont pas dans stock.xlsx ?",
              TOUT - {"word_creer", "excel_creer", "excel_regenerer"}, [{"word_tableau"}, {"excel_rapprocher", "excel_lire", "excel_selectionner"}],

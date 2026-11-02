@@ -58,8 +58,7 @@ def test_outil_non_permis_echoue():
 
 def test_creation_attendue_et_fichier_produit():
     m = Scenarii(
-        appel("excel_selectionner", fichier="stock.xlsx", condition={"colonne": "Stock", "operateur": "<", "valeur": 5}),
-        appel("excel_creer", nom="a-commander", colonnes=["Réf"], lignes=[["A-104"]]),
+        appel("excel_extraire", fichier="stock.xlsx", condition={"colonne": "Stock", "operateur": "<", "valeur": 5}, nom_sortie="a-commander"),
         {"content": "Fichier créé."})
     v = lancer(scenario("E06"), m)
     assert v.reussi, v.raisons

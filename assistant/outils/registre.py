@@ -42,6 +42,8 @@ class Contexte:
     dossier_sortie: Path             # fichiers produits pendant l'exécution
     fichiers_produits: list[str] = field(default_factory=list)
     donnees_agent: dict = field(default_factory=dict)   # ce que le site transmet de l'agent (historique…) ; jamais de secret
+    sources_regenerees: set[str] = field(default_factory=set)
+    alertes: list[str] = field(default_factory=list)    # lignes non comparables pendant un remplissage : dites à la fin
     publipostage_precedent: list[str] = field(default_factory=list)   # documents du dernier publipostage de l'exécution
 
 

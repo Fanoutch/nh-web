@@ -45,7 +45,7 @@ class LanceurAgent
         );
 
         $consignes = (string) $agent->consignes;
-        $repris = $this->fichiers->reprendreProduits($agent, $execution);
+        $repris = $rejouerRecette ? [] : $this->fichiers->reprendreProduits($agent, $execution);    // une recette part des seuls documents déposés
         if ($repris !== []) {
             $consignes .= "\n\nFICHIERS DE VOTRE RÉPONSE PRÉCÉDENTE, disponibles si l'utilisateur demande de les corriger ou de les compléter "
                 .'(ne les modifiez jamais en place : produisez une version corrigée sous un nouveau nom) : '.implode(', ', $repris).'.';
@@ -87,6 +87,7 @@ class LanceurAgent
             }, $arret, [
                 'consignes' => $consignes,
                 'en_dernier' => $repris,
+                'recette' => $rejouerRecette ? $agent->recette : null,    // rejouée par le code si le service le peut
                 'historique' => $this->historique($agent, $execution),
                 'donnees_agent' => ['historique' => $this->resumeHistorique($agent, $execution)],
             ]);

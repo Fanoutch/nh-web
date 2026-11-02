@@ -18,8 +18,8 @@ from docx.table import Table
 from docx.text.paragraph import Paragraph
 
 from .classeur import ErreurClasseur, charger, resoudre
-from .condition import ErreurCondition, compiler as compiler_condition, trouver_colonne
-from .excel import _nom_sortie
+from .condition import ErreurCondition, filtrer, trouver_colonne
+from .excel import _alerter, _artefact, _ecrire, _nom_sortie
 from .registre import Contexte, Reponse, erreur, ok, outil
 from .texte import nombre, normaliser, pour_json
 from . import word_texte as wt
@@ -494,8 +494,9 @@ def _source_excel(ctx: Contexte, i: int, src) -> tuple:
                             "Exemple : {\"fichier\": \"stock.xlsx\", \"condition\": {\"colonne\": \"Stock\", \"operateur\": \"<\", \"valeur\": 5}}."))
     try:
         c = charger(ctx, src["fichier"], src.get("feuille"))
-        test = compiler_condition(src.get("condition"), c.entetes)
-        return c, [l for l in c.lignes if test(l)]
+        retenues, alertes = filtrer(src.get("condition"), c.entetes, c.lignes)
+        ctx.alertes += alertes
+        return c, retenues
     except ErreurClasseur as exc:
         raise _Refus(erreur(f"Modification {i} : {exc}", "Utilisez excel_decrire pour voir les fichiers, feuilles et colonnes.")) from exc
     except ErreurCondition as exc:
@@ -675,15 +676,45 @@ def word_regenerer(ctx: Contexte, fichier_source: str, modifications: list, nom_
         return erreur(f"Le document « {fichier_source} » n'a pas pu être rempli ({type(exc).__name__}).",
                       "Vérifiez qu'il s'ouvre normalement dans Word, ou utilisez word_creer pour un document neuf.")
     ctx.fichiers_produits.append(nom)
-    return ok(f"Document « {nom} » produit à partir de « {fichier_source} » : " + " ; ".join(comptes) + ".",
-              {"fichier_produit": nom, "modifications": comptes},
-              "Le fichier est prêt à être téléchargé. L'original est intact.",
-              [{"nom": nom, "type": "docx", "intermediaire": False, "modifications": len(comptes)}])
+    alertes, ctx.alertes = ctx.alertes, []
+    if fichier_source in ctx.sources_regenerees:      # même modèle rempli plusieurs fois : le modèle recopie à la main
+        alertes.append("Pour produire un document par ligne d'un classeur, utilisez word_publipostage : le programme copie les valeurs.")
+    ctx.sources_regenerees.add(fichier_source)
+    return _alerter(ok(f"Document « {nom} » produit à partir de « {fichier_source} » : " + " ; ".join(comptes) + ".",
+                       {"fichier_produit": nom, "modifications": comptes},
+                       "Le fichier est prêt à être téléchargé. L'original est intact.",
+                       [{"nom": nom, "type": "docx", "intermediaire": False, "modifications": len(comptes)}]), alertes)
+
+
+@outil("excel_depuis_word",
+       "Crée un NOUVEAU classeur à partir d'un tableau d'un document Word. LE PROGRAMME COPIE LES VALEURS (ne les recopiez jamais "
+       "avec excel_creer). La première ligne du tableau devient l'en-tête. « numero » : voir word_decrire.",
+       {"type": "object", "properties": {
+           "fichier": {"type": "string"}, "numero": {"type": "integer"}, "nom_sortie": {"type": "string"}},
+        "required": ["fichier", "numero", "nom_sortie"]})
+@_garde
+def excel_depuis_word(ctx: Contexte, fichier: str, numero: int, nom_sortie: str) -> Reponse:
+    tableaux = [b for b in charger_blocs(ctx, fichier) if b.genre == "tableau"]
+    rang = _entier(numero, 0, 0)
+    if not 1 <= rang <= len(tableaux):
+        return erreur(f"Le tableau n° {numero} n'existe pas dans « {fichier} » ({len(tableaux)} tableau(x)).",
+                      "Utilisez word_decrire pour voir les numéros de tableaux.")
+    entetes, *lignes = tableaux[rang - 1].lignes
+    nom = _nom_sortie(ctx, nom_sortie, f"{Path(fichier).stem}-tableau{rang}.xlsx")
+    _ecrire(ctx, nom, entetes, lignes)
+    return ok(f"Classeur « {nom} » produit : {len(lignes)} ligne(s) copiées du tableau {rang} de « {fichier} ».",
+              {"fichier_produit": nom, "lignes": len(lignes), "colonnes": entetes},
+              "Le fichier est prêt à être téléchargé. L'original est intact.", [_artefact(nom, False, len(lignes))])
 
 
 # --- Un document par ligne d'un classeur (publipostage) -------------------------------------------------------------
 MAX_PUBLIPOSTAGE = 50
 _ACCOLADE_SIMPLE = re.compile(r"\{([^{}]+)\}")
+
+
+def _est_blanc(texte: str) -> bool:
+    """Un champ à compléter (points, tirets, « [champ] ») et non une valeur d'exemple."""
+    return texte == CHAMP_FORMULAIRE or not any(c.isalnum() for c in texte)
 
 
 def _exemples_auto(texte_modele: str, entetes: list, lignes: list) -> dict[str, int]:
@@ -722,10 +753,9 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
     source = _resoudre_word(ctx, fichier_modele)
     try:
         c = charger(ctx, fichier_excel, feuille)
-        test = compiler_condition(condition, c.entetes)
+        lignes, alertes_filtre = filtrer(condition, c.entetes, c.lignes)
     except ErreurCondition as exc:
         return erreur(str(exc), "Corrigez la condition ou le nom de la colonne (voir excel_decrire).")
-    lignes = [l for l in c.lignes if test(l)]
     if not lignes:
         return erreur(f"Aucune ligne de « {fichier_excel} » ne correspond : aucun document n'est produit.", "Vérifiez la condition avec excel_selectionner.")
     if len(lignes) > MAX_PUBLIPOSTAGE:
@@ -748,6 +778,10 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
             return erreur(f"Champ {k} : la colonne « {ch.get('colonne')} » n'existe pas.", "Colonnes : " + ", ".join(c.entetes) + ".")
         occurrence = _entier(ch.get("occurrence"), 1, 1) if ch.get("occurrence") is not None else None
         precedent = _propre(ch.get("precedent")) or None
+        # Une VALEUR d'exemple (« Bon Chevalier ») doit disparaître partout : phrase, tableau, en-tête. Seul un blanc
+        # (« ........ », « [champ] »), identique pour plusieurs champs, se repère par son libellé ou son rang.
+        if not _est_blanc(chercher) and sum(1 for x in champs if x.get("remplacer") == chercher) == 1:
+            occurrence, precedent = None, None
         if not _cibles(modele, chercher, occurrence, precedent):
             return erreur(f"Champ {k} : « {chercher} » est introuvable dans le modèle à l'endroit demandé"
                           + (f" (près du libellé « {precedent} »)" if precedent else "") + (f" (occurrence {occurrence})" if occurrence else "") + ".",
@@ -755,7 +789,7 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
         # Garde-fou : le modèle de langage associe parfois une colonne au mauvais libellé (« GRADE » mis à côté de
         # « Signature »). Si le formulaire a un champ dont le libellé porte le nom même de la colonne, c'est lui.
         nom_colonne = c.entetes[indice]
-        if (precedent is None or normaliser(nom_colonne) not in normaliser(precedent) or occurrence is not None) \
+        if _est_blanc(chercher) and (precedent is None or normaliser(nom_colonne) not in normaliser(precedent) or occurrence is not None) \
                 and _cibles(modele, chercher, None, nom_colonne):
             if precedent is None or normaliser(nom_colonne) not in normaliser(precedent):
                 corriges.append(f"{nom_colonne} (placé à côté de « {nom_colonne} » et non de « {precedent or chercher} »)")
@@ -770,9 +804,9 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
     exemples = sorted((k for k in explicites if isinstance(k, str) and k.strip() and k not in marqueurs
                        and not _MARQUEUR.fullmatch(k)), key=len, reverse=True)
     auto: dict[str, int] = {}
-    if not marqueurs and not cibles_champs:
+    if not marqueurs:              # aussi avec « champs » : un exemple rempli ne doit garder aucune valeur de l'ancienne personne
         auto = {t: i for t, i in _exemples_auto(texte_modele, c.entetes, c.lignes).items()
-                if t not in exemples and not any(t in e for e in exemples)}
+                if t not in exemples and not any(t in e for e in exemples) and not any(t in ch[1] or ch[1] in t for ch in cibles_champs)}
     if not marqueurs and not exemples and not auto and not cibles_champs:
         return erreur(f"Le modèle « {fichier_modele} » ne contient aucun marqueur {{{{Colonne}}}} et je n'y reconnais pas les valeurs d'une ligne de « {fichier_excel} ».",
                       "Soit le modèle contient des marqueurs comme {{Nom}} ; soit, pour un document déjà rempli pour une personne, "
@@ -831,14 +865,15 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
                 if valeur == "":
                     vides[libelle] = vides.get(libelle, 0) + 1
                 remplacements += [(p, pos, len(chercher), valeur) for p, pos in _cibles(document, chercher, occurrence, precedent)]
-            _remplacer_cibles(remplacements)
+            # Toutes les positions sont prises sur le document INTACT, puis remplacées d'un coup : la valeur d'une personne qui
+            # contient un texte de l'exemple (un nom « Jean » quand l'exemple a pour prénom « Jean ») n'est jamais remplacée à son tour.
             for m in ordre:
                 indice = colonne_de[m]
                 valeur = _texte_cellule(ligne[indice])
                 if valeur == "":
                     vides[m] = vides.get(m, 0) + 1
-                for p in _paragraphes(document):
-                    _remplacer_dans_paragraphe(p, m, valeur)
+                remplacements += [(p, pos, len(m), valeur) for p, pos in _cibles(document, m)]
+            _remplacer_cibles(remplacements)
             wt.enregistrer(document, sortie)
     except Exception as exc:  # noqa: BLE001 — tout ou rien : on retire ce qui a été écrit
         for nom in crees:
@@ -856,6 +891,12 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
     remplaces = f" Ils remplacent les {len(mis_de_cote)} document(s) du publipostage précédent." if mis_de_cote else ""
     avertissement = ("" if not vides else " Attention, des cellules vides ont laissé un champ vide : "
                      + ", ".join(f"{m} ({n} document(s))" for m, n in sorted(vides.items())) + ".")
+    avertissement += "".join(" " + a for a in alertes_filtre)
+    if cibles_champs:
+        restants = sum(wt.texte(p).count(ch) for ch in {x[1] for x in cibles_champs if _est_blanc(x[1])} for p in wt.paragraphes(DocumentWord(str(ctx.dossier_sortie / crees[0]))))
+        if restants:
+            avertissement += (f" {restants} champ(s) du modèle restent à compléter à la main (signature, etc.) : aucune colonne ne leur "
+                              "correspond, c'est normal. Le travail est terminé : répondez à l'utilisateur sans relire ni corriger les documents.")
     if cibles_champs:
         avertissement += (" Dans chaque document, j'ai rempli les champs : "
                           + ", ".join(f"« {libelle} » (colonne {c.entetes[i]})" for libelle, _, i, _, _ in cibles_champs) + ".")

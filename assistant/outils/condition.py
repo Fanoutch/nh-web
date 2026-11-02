@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from .texte import nombre, normaliser
+from .texte import en_date, nombre, normaliser
 
 OPERATEURS = ("=", "!=", "<", "<=", ">", ">=", "contient", "vide", "non_vide")
 
@@ -26,12 +26,21 @@ def trouver_colonne(nom, entetes: list[str]) -> int:
     raise ErreurCondition(f"La colonne « {nom} » n'existe pas. Colonnes disponibles : {', '.join(entetes)}.")
 
 
+def _genre(valeur) -> tuple[str, object]:
+    """Ce qu'est une valeur pour une comparaison : une date, un nombre ou un texte."""
+    d = en_date(valeur)
+    if d is not None:
+        return "date", d
+    n = nombre(valeur)
+    if n is not None:
+        return "nombre", n
+    return "texte", normaliser(valeur)
+
+
 def _comparer(operateur: str, a, b) -> bool:
-    na, nb = nombre(a), nombre(b)
-    if na is not None and nb is not None:
-        x, y = na, nb
-    else:
-        x, y = normaliser(a), normaliser(b)
+    (ga, x), (gb, y) = _genre(a), _genre(b)
+    if ga != gb:                        # une date, un nombre et un texte ne se comparent pas : jamais d'ordre alphabétique
+        return operateur == "!="        # entre « 15 janvier 2027 » et « 01/01/2028 » (voir `filtrer`, qui le signale)
     return {"=": x == y, "!=": x != y, "<": x < y, "<=": x <= y, ">": x > y, ">=": x >= y}[operateur]
 
 
@@ -73,3 +82,36 @@ def compiler(condition, entetes: list[str]) -> Callable[[list], bool]:
         fonctions = [compiler(c, entetes) for c in condition]
         return lambda ligne: all(f(ligne) for f in fonctions)
     return _clause(condition, entetes)
+
+
+def _clauses(condition) -> list[dict]:
+    if isinstance(condition, list):
+        return [c for sous in condition for c in _clauses(sous)]
+    if isinstance(condition, dict):
+        return _clauses(condition["clauses"]) if "clauses" in condition else [condition]
+    return []
+
+
+def filtrer(condition, entetes: list[str], lignes: list[list]) -> tuple[list[list], list[str]]:
+    """Lignes qui vérifient la condition, et alertes pour celles qui n'ont pas pu être comparées : jamais de réponse fausse
+    en silence. Si AUCUNE cellule de la colonne n'est comparable à la valeur demandée, la condition est refusée."""
+    test = compiler(condition, entetes)
+    alertes = []
+    for clause in _clauses(condition):
+        if clause.get("operateur") in ("vide", "non_vide", "contient") or "valeur" not in clause:
+            continue
+        i = trouver_colonne(clause["colonne"], entetes)
+        attendu = _genre(clause["valeur"])[0]
+        remplies = [l[i] for l in lignes if l[i] is not None and str(l[i]).strip()]
+        autres = [v for v in remplies if _genre(v)[0] != attendu]
+        if not autres:
+            continue
+        noms = {"date": "une date", "nombre": "un nombre", "texte": "un texte"}
+        if len(autres) == len(remplies):
+            raise ErreurCondition(f"La colonne « {entetes[i]} » contient {noms[_genre(autres[0])[0]]} (ex. « {autres[0]} ») et "
+                                  f"la condition donne {noms[attendu]} (« {clause['valeur']} ») : ils ne se comparent pas. "
+                                  "Donnez une valeur du même genre (une date s'écrit par exemple 31/12/2027).")
+        if attendu != "texte":          # dans une colonne de textes, quelques nombres ne faussent rien
+            alertes.append(f"Attention : {len(autres)} ligne(s) de la colonne « {entetes[i]} » ne sont pas {noms[attendu]} "
+                           f"(ex. « {autres[0]} ») : elles n'ont pas pu être comparées et sont écartées.")
+    return [l for l in lignes if test(l)], alertes

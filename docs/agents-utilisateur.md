@@ -109,6 +109,20 @@ Vous avez un Excel avec une ligne par personne (ou par client, par pièce…) et
   comprise (le nom du fichier change d'extension dans le panneau). Si le serveur ne sait pas le convertir, un message vous
   dit de l'enregistrer vous-même au format .docx depuis Word.
 
+### Relancer un agent : même résultat à chaque fois
+
+Le bouton **Lancer l'agent** rejoue la recette **par le programme, sans passer par le modèle**, quand les données viennent
+des documents déposés : c'est plus rapide et le résultat est identique d'un lancement à l'autre. Si un document porte un
+autre nom que la dernière fois, le programme retrouve celui qui lui ressemble et l'indique ; dans le doute, il vous demande
+de préciser au lieu de deviner. Si la recette contient des valeurs écrites à la main (un texte fixe dans un Word par
+exemple), le modèle la reprend pour les recalculer.
+
+### Dates et copies de données
+
+Les dates sont comprises comme en France : 15/01/2027, 15 janvier 2027, 1er mars 2027. Une ligne qui ne contient pas une
+date (« Néant ») est écartée **et signalée** : le résultat ne cache rien. Pour créer un fichier à partir d'un classeur ou
+d'un tableau Word, c'est le programme qui copie les valeurs, jamais le modèle.
+
 ## 6. Bon à savoir
 
 - Le contenu de vos fichiers est traité comme une **donnée** : une phrase « fais telle chose » écrite dans un

@@ -14,10 +14,10 @@ from pathlib import Path
 import openpyxl
 
 from .classeur import Classeur, ErreurClasseur, charger, resoudre
-from .condition import ErreurCondition, compiler as compiler_condition, trouver_colonne
+from .condition import ErreurCondition, filtrer, trouver_colonne
 from .formule import ErreurCalcul, ErreurFormule, compiler as compiler_formule
 from .registre import Contexte, Reponse, erreur, ok, outil
-from .texte import nombre, normaliser, pour_json
+from .texte import en_date, nombre, normaliser, pour_json
 
 MAX_LIGNES_MODELE = 200      # lignes renvoyées au modèle par appel (le fichier, lui, peut en avoir 100 000)
 MAX_GROUPES = 200
@@ -55,6 +55,13 @@ def _entier(valeur, defaut: int, mini: int, maxi: int | None = None) -> int:
         return defaut
     v = max(mini, v)
     return min(v, maxi) if maxi is not None else v
+
+
+def _alerter(reponse: Reponse, alertes: list[str]) -> Reponse:
+    """Ajoute au compte rendu ce qui n'a pas pu être comparé : le modèle et l'utilisateur doivent le savoir."""
+    if alertes:
+        reponse.resume += " " + " ".join(alertes)
+    return reponse
 
 
 def _page(c: Classeur, lignes: list[list], colonnes, depuis, limite) -> Reponse:
@@ -134,8 +141,8 @@ _CONDITION = {"type": "object", "description": "Condition : {colonne, operateur,
 def excel_selectionner(ctx: Contexte, fichier: str, feuille: str | None = None, condition=None, colonnes=None,
                        depuis=0, limite=MAX_LIGNES_MODELE) -> Reponse:
     c = charger(ctx, fichier, feuille)
-    test = compiler_condition(condition, c.entetes)
-    return _page(c, [l for l in c.lignes if test(l)], colonnes, depuis, limite)
+    retenues, alertes = filtrer(condition, c.entetes, c.lignes)
+    return _alerter(_page(c, retenues, colonnes, depuis, limite), alertes)
 
 
 @outil("excel_filtrer",
@@ -152,8 +159,7 @@ def excel_filtrer(ctx: Contexte, fichier: str, feuille: str | None = None, condi
     if calcul not in ("compter", "somme", "moyenne", "min", "max"):
         return erreur(f"Le calcul « {calcul} » n'existe pas.", "Choisissez : compter, somme, moyenne, min ou max.")
     c = charger(ctx, fichier, feuille)
-    test = compiler_condition(condition, c.entetes)
-    retenues = [l for l in c.lignes if test(l)]
+    retenues, alertes = filtrer(condition, c.entetes, c.lignes)
     ic = None
     if calcul != "compter":
         if not colonne:
@@ -177,17 +183,17 @@ def excel_filtrer(ctx: Contexte, fichier: str, feuille: str | None = None, condi
         donnees = {"calcul": calcul, "colonne": colonne, "valeur": valeur, "lignes_retenues": len(retenues)}
         if ignorees:
             donnees["valeurs_non_numeriques_ignorees"] = ignorees
-        return ok(f"{calcul} = {valeur} sur {len(retenues)} ligne(s) retenue(s).", donnees)
+        return _alerter(ok(f"{calcul} = {valeur} sur {len(retenues)} ligne(s) retenue(s).", donnees), alertes)
     groupes: dict[str, list] = {}
     for l in retenues:
         groupes.setdefault("(vide)" if l[ig] in (None, "") else str(l[ig]), []).append(l)
     if len(groupes) > MAX_GROUPES:
         return erreur(f"Il y a {len(groupes)} groupes différents : c'est trop pour les afficher (limite : {MAX_GROUPES}).",
                       "Choisissez une colonne de regroupement moins détaillée, ou ajoutez une condition.")
-    return ok(f"{calcul} par « {groupe} » : {len(groupes)} groupe(s).",
-              {"calcul": calcul, "colonne": colonne, "groupe": groupe,
-               "groupes": {g: calculer(ls)[0] for g, ls in sorted(groupes.items())},
-               "lignes_retenues": len(retenues)})
+    return _alerter(ok(f"{calcul} par « {groupe} » : {len(groupes)} groupe(s).",
+                       {"calcul": calcul, "colonne": colonne, "groupe": groupe,
+                        "groupes": {g: calculer(ls)[0] for g, ls in sorted(groupes.items())},
+                        "lignes_retenues": len(retenues)}), alertes)
 
 
 # --------------------------------------------------------------------------- écriture (fichiers neufs uniquement)
@@ -224,6 +230,63 @@ def _ecrire(ctx: Contexte, nom: str, entetes: list[str], lignes: list[list], feu
 
 def _artefact(nom: str, intermediaire: bool, lignes: int) -> dict:
     return {"nom": nom, "type": "xlsx", "intermediaire": intermediaire, "lignes": lignes}
+
+
+def _cle_tri(valeur) -> tuple:
+    """Trie les dates entre elles, les nombres entre eux, les textes entre eux (sans accents ni majuscules)."""
+    d = en_date(valeur)
+    if d is not None:
+        return (0, d.toordinal())
+    n = nombre(valeur)
+    return (1, n) if n is not None else (2, normaliser(valeur))
+
+
+@outil("excel_extraire",
+       "Crée un NOUVEAU classeur avec les lignes d'un classeur qui vérifient une condition. LE PROGRAMME COPIE LES VALEURS : "
+       "c'est l'outil à utiliser pour produire un fichier à partir de données existantes (ne les recopiez jamais avec "
+       "excel_creer). « colonnes » garde et ordonne les colonnes, « tri » trie ({colonne, ordre: croissant|decroissant}, ou une "
+       "liste), « sans_doublons » retire les lignes identiques. L'original n'est jamais modifié.",
+       {"type": "object", "properties": {
+           "fichier": {"type": "string"}, "feuille": {"type": "string"}, "condition": _CONDITION,
+           "colonnes": {"type": "array", "items": {"type": "string"}},
+           "tri": {"type": "array", "items": {"type": "object"}},
+           "sans_doublons": {"type": "boolean"}, "nom_sortie": {"type": "string"}},
+        "required": ["fichier", "nom_sortie"]})
+@_garde
+def excel_extraire(ctx: Contexte, fichier: str, nom_sortie: str, feuille: str | None = None, condition=None, colonnes=None,
+                   tri=None, sans_doublons: bool = False) -> Reponse:
+    c = charger(ctx, fichier, feuille)
+    retenues, alertes = filtrer(condition, c.entetes, c.lignes)
+    for regle in reversed([tri] if isinstance(tri, dict) else (tri or [])):      # du critère secondaire au principal
+        if not isinstance(regle, dict) or "colonne" not in regle:
+            return erreur("« tri » doit donner une « colonne ».", "Exemple : {\"colonne\": \"Stock\", \"ordre\": \"decroissant\"}.")
+        i = trouver_colonne(regle["colonne"], c.entetes)
+        vides = [l for l in retenues if l[i] is None or str(l[i]).strip() == ""]    # toujours à la fin, quel que soit l'ordre
+        pleines = [l for l in retenues if not (l[i] is None or str(l[i]).strip() == "")]
+        pleines.sort(key=lambda l: _cle_tri(l[i]), reverse=regle.get("ordre") == "decroissant")
+        retenues = pleines + vides
+    indices = _colonnes(c, colonnes)
+    lignes = [[l[i] for i in indices] for l in retenues]
+    retirees = 0
+    if sans_doublons:
+        vues, uniques = set(), []
+        for l in lignes:
+            cle = tuple(str(v) for v in l)
+            if cle not in vues:
+                vues.add(cle)
+                uniques.append(l)
+        retirees, lignes = len(lignes) - len(uniques), uniques
+    if not lignes:
+        return _alerter(erreur(f"Aucune ligne de « {fichier} » ne correspond : aucun fichier n'est produit.",
+                               "Vérifiez la condition avec excel_selectionner."), alertes)
+    nom = _nom_sortie(ctx, nom_sortie, f"{Path(fichier).stem}-extrait.xlsx")
+    _ecrire(ctx, nom, [c.entetes[i] for i in indices], lignes, c.feuille or "Feuille1")
+    return _alerter(ok(f"Classeur « {nom} » produit : {len(lignes)} ligne(s) copiées de « {fichier} »"
+                       + (f", {retirees} doublon(s) retiré(s)" if retirees else "") + ".",
+                       {"fichier_produit": nom, "lignes": len(lignes), "colonnes": [c.entetes[i] for i in indices],
+                        "apercu": [[pour_json(v) for v in l] for l in lignes[:5]]},
+                       "Le fichier est prêt à être téléchargé. L'original est intact.",
+                       [_artefact(nom, False, len(lignes))]), alertes)
 
 
 @outil("excel_colonne",
@@ -264,7 +327,8 @@ def excel_colonne(ctx: Contexte, fichier: str, formule: str, nom_colonne: str, f
 
 
 @outil("excel_creer",
-       "Crée un classeur NEUF avec les colonnes et les lignes données.",
+       "Crée un classeur NEUF avec des données qui ne viennent d'AUCUN fichier. Pour des données d'un classeur : excel_extraire ; "
+       "d'un tableau Word : excel_depuis_word (le programme les copie, sans erreur de recopie).",
        {"type": "object", "properties": {
            "nom": {"type": "string"}, "colonnes": {"type": "array", "items": {"type": "string"}},
            "lignes": {"type": "array", "items": {"type": "array", "items": {}}},

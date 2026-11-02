@@ -299,3 +299,21 @@ def test_salutation_ou_fichier_absent_sans_relance_de_lecture(ctx):
     assert ev[-1]["message"].startswith("Je lis") and len(salut.recus) == 1
     ev = list(boucle.executer_boucle(absent, "", "Fais un résumé du fichier ventes.xlsx.", ctx))
     assert "n'existe pas" in ev[-1]["message"] and len(absent.recus) == 1
+
+
+def test_modele_qui_se_repete_apres_avoir_produit_le_resultat_est_rendu(ctx):
+    ctx.outils_autorises.add("excel_extraire")
+    extraire = std("excel_extraire", {"fichier": "stock.xlsx", "nom_sortie": "a"})
+    relire = std("excel_lire", {"fichier": "stock.xlsx"})
+
+    ev = lancer(FauxModele(extraire, relire, relire), ctx)
+
+    assert ev[-1]["statut"] == "termine" and ev[-1]["fichiers"] == ["a.xlsx"] and "a.xlsx" in ev[-1]["message"]
+
+
+def test_a_une_salutation_le_modele_ne_recoit_aucun_outil(ctx):
+    m = FauxModele({"content": "Je lis et remplis vos documents."})
+
+    list(boucle.executer_boucle(m, "", "Bonjour, que sais-tu faire pour moi ?", ctx))
+
+    assert m.recus[0][1] == []

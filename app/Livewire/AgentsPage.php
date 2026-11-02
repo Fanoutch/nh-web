@@ -227,6 +227,8 @@ class AgentsPage extends Component
             'excel_colonne' => 'Calcul d\'une colonne',
             'excel_rapprocher' => 'Rapprochement de deux fichiers',
             'excel_creer' => 'Création d\'un classeur',
+            'excel_extraire' => 'Copie de lignes dans un nouveau classeur',
+            'excel_depuis_word' => 'Copie d\'un tableau Word dans un classeur',
             'excel_regenerer' => 'Création d\'une version modifiée',
             'word_decrire' => 'Lecture du plan du document',
             'word_lire' => 'Lecture du document',

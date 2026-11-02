@@ -19,7 +19,7 @@ class AgentClient
      *
      * @param  callable(array): void  $surEvenement
      * @param  ?callable(): bool  $doitArreter
-     * @param  array{consignes?: string, en_dernier?: list<string>, historique?: list<array{role: string, content: string}>, donnees_agent?: array}  $options
+     * @param  array{consignes?: string, en_dernier?: list<string>, recette?: ?array, historique?: list<array{role: string, content: string}>, donnees_agent?: array}  $options
      */
     public function executer(AgentExecution $execution, callable $surEvenement, ?callable $doitArreter = null, array $options = []): void
     {
@@ -39,6 +39,7 @@ class AgentClient
                 'fichiers' => $this->fichiersEnDernier(array_map('basename', $disque->files($execution->dossierEntree())), $options['en_dernier'] ?? []),
                 'dossier_sortie' => $disque->path($execution->dossierSortie()),
                 'outils' => $agent->outilsAutorises(),
+                'recette' => $options['recette'] ?? null,
             ]));
 
         $this->lireFlux($reponse, $surEvenement, $doitArreter);

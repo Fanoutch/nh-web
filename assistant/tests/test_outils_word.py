@@ -862,3 +862,35 @@ def test_libelle_unique_le_rang_superflu_est_ignore(ctxf):
     r = publier(ctxf, champs=[{"remplacer": "........", "colonne": "Nom", "precedent": "Nom", "occurrence": 4}])
 
     assert r.statut == "ok"
+
+
+def test_valeur_d_une_personne_contenant_un_texte_de_l_exemple_reste_intacte(ctx):
+    d = Document()
+    d.add_paragraph("Délivré à Jean Martin, Chef")
+    d.save(ctx.dossier_execution / "fiche.docx")
+    wb = openpyxl.Workbook()
+    for l in [["Prénom", "Nom", "Poste"], ["Jean", "Martin", "Chef"], ["Paul", "Jean", "Martinet"]]:
+        wb.active.append(l)
+    wb.save(ctx.dossier_execution / "personnes.xlsx")
+    ctx.fichiers_autorises += ["fiche.docx", "personnes.xlsx"]
+
+    r = publier(ctx, nom_fichier="f-{Prénom}")
+
+    assert r.statut == "ok", r.resume
+    assert Document(str(ctx.dossier_sortie / "f-Paul.docx")).paragraphs[0].text == "Délivré à Paul Jean, Martinet"
+
+
+def test_exemple_rempli_avec_champs_partiels_les_autres_valeurs_sont_aussi_remplacees(ctxe):
+    r = publier(ctxe, champs=[{"remplacer": "Martin", "colonne": "Nom", "precedent": "Nom"}])
+
+    durand = next(texte_complet(ctxe, n) for n in r.donnees["fichiers_produits"] if "Durand" in n)
+    assert r.statut == "ok" and "Technicien" in durand and "Paul" in durand and "Cheffe" not in durand and "Anne" not in durand
+
+
+def test_valeur_d_exemple_ciblee_par_libelle_est_quand_meme_remplacee_partout(ctxe):
+    r = publier(ctxe, champs=[{"remplacer": "Martin", "colonne": "Nom", "precedent": "Nom"},
+                              {"remplacer": "Anne", "colonne": "Prénom", "precedent": "Monsieur"}])
+
+    durand = next(texte_complet(ctxe, n) for n in r.donnees["fichiers_produits"] if "Durand" in n)
+    assert r.statut == "ok" and "Délivré à Paul Durand" in durand and "Martin" not in durand and "Anne" not in durand
+    assert "restent à compléter" not in r.resume
