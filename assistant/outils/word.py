@@ -717,6 +717,14 @@ def _est_blanc(texte: str) -> bool:
     return texte == CHAMP_FORMULAIRE or not any(c.isalnum() for c in texte)
 
 
+def _nom_de_colonne(texte: str, entetes: list) -> bool:
+    try:
+        trouver_colonne(texte, entetes)
+        return True
+    except ErreurCondition:
+        return False
+
+
 def _exemples_auto(texte_modele: str, entetes: list, lignes: list) -> dict[str, int]:
     """Modèle sans marqueur = document déjà rempli pour UNE personne : on cherche la ligne du classeur dont le plus
     de valeurs apparaissent telles quelles dans le texte, et on en tire {texte d'exemple: indice de colonne}."""
@@ -816,6 +824,13 @@ def word_publipostage(ctx: Contexte, fichier_modele: str, fichier_excel: str, fe
     # et signalé, sans bloquer le reste ; il ne reste rien à remplacer seulement si la détection automatique échoue aussi.
     introuvables = [e for e in exemples if e not in texte_modele]
     exemples = [e for e in exemples if e in texte_modele]
+    # Mais un texte inventé (« xxx (Nom et Prénoms : ) » : un libellé collé au repère) n'est pas un nom de colonne : le
+    # laisser passer produirait des documents à moitié remplis et « réussis ». On le refuse, avant tout fichier.
+    inventes = [e for e in introuvables if not _nom_de_colonne(e, c.entetes)]
+    if inventes:
+        return erreur("Texte(s) à remplacer introuvable(s) tel(s) quel(s) dans le modèle : " + ", ".join(f"« {e} »" for e in inventes) + ". Aucun fichier produit.",
+                      "Lisez le modèle (word_lire) et recopiez le texte EXACT à remplacer. Pour un formulaire dont le même repère (« xxx », « ........ ») "
+                      "revient à plusieurs endroits, utilisez « champs » : [{\"remplacer\": <le repère exact>, \"precedent\": <le libellé juste avant>, \"colonne\": <l'en-tête>}].")
     if not marqueurs and not exemples and not auto and not cibles_champs:
         return erreur("Texte(s) à remplacer introuvable(s) dans le modèle : " + ", ".join(f"« {e} »" for e in introuvables) + ".",
                       "Recopiez le texte exactement comme dans le modèle (word_lire ou word_chercher).")

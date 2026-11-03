@@ -894,3 +894,11 @@ def test_valeur_d_exemple_ciblee_par_libelle_est_quand_meme_remplacee_partout(ct
     durand = next(texte_complet(ctxe, n) for n in r.donnees["fichiers_produits"] if "Durand" in n)
     assert r.statut == "ok" and "Délivré à Paul Durand" in durand and "Martin" not in durand and "Anne" not in durand
     assert "restent à compléter" not in r.resume
+
+
+def test_texte_a_remplacer_invente_refuse_sans_fichier(ctxe):
+    # un libellé collé au repère n'existe pas dans le modèle : mieux vaut refuser que produire des documents à moitié remplis
+    r = publier(ctxe, correspondances={"2026-04827": "Matricule", "xxx (Nom et Prénoms : )": "Nom"})
+
+    assert r.statut == "erreur" and "Nom et Prénoms" in r.resume
+    assert ctxe.fichiers_produits == []
