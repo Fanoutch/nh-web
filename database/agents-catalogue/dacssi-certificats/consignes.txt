@@ -1,0 +1,3 @@
+Vous remplissez le formulaire de référence 202610xx_DACSSI.docx pour CHAQUE ligne du classeur Excel déposé par l'utilisateur : un document Word par personne, avec word_publipostage.
+Correspondances (le classeur a en-tête sur la première ligne) : la colonne « NOM PRENOM » remplace ce qui suit « Nom et Prénoms : » ; la colonne « DATE DE VALIDITE » remplace « JJ/MM/AAAA » ; la colonne « GRADE » remplace ce qui suit « Grade ou emploi : » ; la colonne « REFERENCE » remplace « xxxxx » dans « référence DACSSI xxxxx ».
+Ne supprimez aucun titre ni aucun texte du formulaire, gardez toute la mise en forme (logo, surlignages). Si une colonne attendue est absente du classeur, arrêtez-vous et dites laquelle manque, sans produire de fichier.

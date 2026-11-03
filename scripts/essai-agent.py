@@ -29,9 +29,12 @@ from rag.reglages import charger  # noqa: E402
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("dossier", type=Path)
-    p.add_argument("demande")
+    p.add_argument("demande", help="la demande, comme l'utilisateur l'ecrirait (\"\" avec --consignes)")
     p.add_argument("--sortie", type=Path)
     p.add_argument("--messages", action="store_true", help="affiche les textes (donnees reelles possibles) : lecture locale seulement")
+    p.add_argument("--consignes", type=Path, help="fichier texte des consignes d'un agent du catalogue (ex. database/agents-catalogue/dacssi-certificats/consignes.txt) : "
+                   "rejoue ce que le site envoie au lancement ; la demande peut alors etre \"\"")
+    p.add_argument("--forme", action="store_true", help="affiche la FORME des appels d'outils (noms des champs, tailles), jamais une valeur : sans risque dans un rapport")
     p.add_argument("--historique-vide", action="store_true", help="simule 2 essais rates precedents (reponses vides)")
     a = p.parse_args()
     sources = sorted(f for f in a.dossier.iterdir() if f.suffix.lower() in (".xlsx", ".xlsm", ".csv", ".docx"))
@@ -42,6 +45,23 @@ def main() -> None:
     r = charger()
     historique = [m for _ in range(2) for m in ({"role": "user", "content": a.demande}, {"role": "assistant", "content": "​"})] \
         if a.historique_vide else None
+
+    demande = a.demande or "Executez la recette validee sur les documents disponibles."
+    consignes = ""
+    if a.consignes:
+        consignes = a.consignes.read_text(encoding="utf-8").strip() + (
+            "\n\nEXECUTION : appliquez ces consignes aux documents deposes par l'utilisateur, sans lui poser de question "
+            "et sans improviser au-dela de ce qu'elles decrivent.")
+
+    def forme(v):
+        """Structure d'une valeur, sans son contenu."""
+        if isinstance(v, dict):
+            return "{" + ", ".join(f"{k}: {forme(x)}" for k, x in v.items()) + "}"
+        if isinstance(v, list):
+            return f"[{len(v)} x {forme(v[0])}]" if v else "[]"
+        if isinstance(v, str):
+            return f"texte({len(v)})"
+        return type(v).__name__
 
     def modele(messages, outils, forcer=False):
         return modeles.discuter_avec_outils_robuste(messages, outils, r, 0, forcer=forcer)
@@ -55,9 +75,11 @@ def main() -> None:
                        outils_autorises=set(REGISTRE), dossier_sortie=sortie)
         print(f"{len(sources)} document(s) lus. Demande envoyee.")
         fin = {}
-        for ev in executer_boucle(modele, "", a.demande, ctx, historique=historique):
+        for ev in executer_boucle(modele, consignes, demande, ctx, historique=historique):
             if ev["type"] == "etape":
                 print(f"  outil {ev['outil']} -> {ev['statut']}" + (f" : {ev['resume']}\n      arguments : {ev['arguments']}" if a.messages else ""))
+                if a.forme:
+                    print(f"      forme : {forme(ev['arguments'])}")
             elif ev["type"] == "fin":
                 fin = ev
     print(f"Fin : {fin.get('statut')} en {fin.get('tours')} tour(s). Fichiers produits : {len(ctx.fichiers_produits)}")
