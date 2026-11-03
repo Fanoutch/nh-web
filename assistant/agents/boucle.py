@@ -105,6 +105,7 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
     relances: set[str] = set()
     outils_appeles: set[str] = set()
     resumes: list[str] = []         # ce que chaque outil a fait, pour répondre à la place d'un modèle resté muet
+    modeles_publipostes: set[str] = set()       # modèles Word déjà remplis une fois par ligne : le travail est fait
 
     for tour in range(1, max_tours + 1):
         if arreter():
@@ -185,6 +186,12 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
                 yield _fin("arret", f"L'agent a demandé deux fois la même opération (« {appel.nom} ») : "
                                     "il tourne en rond. Reformulez la demande.", contexte, tour)
                 return
+            # Un publipostage réussi a déjà produit un document par ligne : refaire le même modèle (à la main avec
+            # word_regenerer, ou une seconde fois) ne ferait que doubler ou abîmer les fichiers. On rend le résultat.
+            modele_vise = (appel.arguments or {}).get("fichier_modele") or (appel.arguments or {}).get("fichier_source")
+            if modele_vise and modele_vise in modeles_publipostes and appel.nom in ("word_regenerer", "word_publipostage"):
+                yield _fin("termine", "Voici ce que les outils ont donné : " + " ".join(resumes[-5:]), contexte, tour)
+                return
             deja_vus.add(cle)
             outils_appeles.add(appel.nom)
             reponse = executer(appel.nom, appel.arguments, contexte)
@@ -197,6 +204,8 @@ def executer_boucle(modele: Modele, consignes: str, demande: str, contexte: Cont
             if reponse.artefacts:
                 etape["artefacts"] = reponse.artefacts
             yield etape
+            if appel.nom == "word_publipostage" and reponse.statut == "ok" and reponse.artefacts:
+                modeles_publipostes.add((appel.arguments or {}).get("fichier_modele") or "")
             texte = json.dumps(reponse.en_dict(), ensure_ascii=False)
             if decode.format == "standard":
                 messages.append({"role": "tool", "tool_call_id": appel.identifiant, "content": texte})

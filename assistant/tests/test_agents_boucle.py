@@ -317,3 +317,21 @@ def test_a_une_salutation_le_modele_ne_recoit_aucun_outil(ctx):
     list(boucle.executer_boucle(m, "", "Bonjour, que sais-tu faire pour moi ?", ctx))
 
     assert m.recus[0][1] == []
+
+
+def test_apres_un_publipostage_reussi_refaire_le_meme_modele_met_fin_au_travail(ctx):
+    from docx import Document
+    d = Document()
+    d.add_paragraph("Nom : {{Réf}}")
+    d.save(ctx.dossier_execution / "modele.docx")
+    ctx.fichiers_autorises += ["modele.docx"]
+    ctx.outils_autorises |= {"word_publipostage", "word_regenerer"}
+    publi = std("word_publipostage", {"fichier_modele": "modele.docx", "fichier_excel": "stock.xlsx"}, "p")
+    retape = std("word_regenerer", {"fichier_source": "modele.docx", "nom_sortie": "x",
+                                    "modifications": [{"remplacer": "{{Réf}}", "par": "Z"}]}, "r")
+
+    ev = lancer(FauxModele(publi, retape), ctx)
+
+    assert ev[-1]["statut"] == "termine"
+    assert [e["outil"] for e in ev if e["type"] == "etape"] == ["word_publipostage"]
+    assert len(ev[-1]["fichiers"]) == 2        # les deux lignes du classeur, rien de plus
