@@ -9,10 +9,12 @@ use App\Services\AssignationAgents;
 use App\Services\AssignationImpossible;
 use App\Services\CatalogueAgents;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 
 class AdminUsersTable extends Component
 {
+    use WithFileUploads;
     use WithPagination;
 
     public string $search = '';
@@ -26,6 +28,12 @@ class AdminUsersTable extends Component
     public ?string $ouvert = null;
 
     public string $saisieMails = '';
+
+    /** Agent du catalogue dont le volet « Références » est ouvert. */
+    public ?string $refsOuvert = null;
+
+    /** Fichiers choisis pour le dépôt : $depots[slug][rang du fichier attendu]. */
+    public array $depots = [];
 
     public function ouvrirCatalogue(): void
     {
@@ -41,6 +49,35 @@ class AdminUsersTable extends Component
     {
         $this->ouvert = $this->ouvert === $slug ? null : $slug;
         $this->saisieMails = '';
+    }
+
+    public function basculerReferences(string $slug): void
+    {
+        $this->refsOuvert = $this->refsOuvert === $slug ? null : $slug;
+        $this->depots = [];
+    }
+
+    /** Un fichier vient d'être choisi dans le volet « Références » (clé « slug.rang »). */
+    public function updatedDepots($valeur, string $cle, CatalogueAgents $catalogue): void
+    {
+        [$slug, $rang] = array_pad(explode('.', $cle, 2), 2, null);
+        $this->depots = [];
+        if (! $this->superAdminRequis() || $valeur === null || $rang === null) {
+            return;
+        }
+        $attendus = $catalogue->trouver((string) $slug)['references'] ?? [];
+        $nom = isset($attendus[(int) $rang]) ? basename($attendus[(int) $rang]) : null;
+        if ($nom === null) {
+            session()->flash('error', 'Ce fichier n\'est pas attendu par cet agent.');
+
+            return;
+        }
+        try {
+            $catalogue->deposerReference((string) $slug, $nom, $valeur);
+            session()->flash('success', "« {$nom} » est déposé.".($catalogue->nombreAMettreAJour((string) $slug) > 0 ? ' Pensez à mettre à jour les copies déjà assignées.' : ''));
+        } catch (AssignationImpossible $e) {
+            session()->flash('error', $e->getMessage());
+        }
     }
 
     /** Toute action sur les agents est réservée au super admin ; renvoie faux (avec message) sinon. */

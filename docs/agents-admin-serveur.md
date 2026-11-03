@@ -66,13 +66,16 @@ par la zip). Le super admin les assigne depuis **Admin > Utilisateurs > Catalogu
 « + Ajouter » d'une ligne d'utilisateur) et peut les essayer avec le bouton **Tester** (sa propre copie).
 
 **Fichiers de référence réels : jamais dans git.** Un agent peut exiger un fichier (ex. le formulaire DACSSI, listé dans
-`references` de son `agent.php`). Il se dépose UNE FOIS sur le serveur de l'application :
+`references` de son `agent.php`). Le super admin le dépose UNE FOIS depuis le site (Utilisateurs > Catalogue d'agents >
+« Références » > « Déposer le fichier ») ; il atterrit sur le serveur de l'application, sans intervention de l'équipe serveur :
 
 ```
 storage/app/private/catalogue-agents/<nom-de-l-agent>/references/<fichier>
 ```
 
 Exemple : `storage/app/private/catalogue-agents/dacssi-certificats/references/202610xx_DACSSI.docx` (au format `.docx`).
+(Dépôt manuel toujours possible à cet endroit si besoin ; l'envoi depuis le site dépend des limites PHP d'envoi de fichiers,
+`upload_max_filesize` et `post_max_size` : prévoir au moins 20 Mo.)
 Tant qu'un fichier manque, le catalogue affiche « Références manquantes » et l'assignation comme le test sont refusés
 avec le nom du fichier à déposer.
 

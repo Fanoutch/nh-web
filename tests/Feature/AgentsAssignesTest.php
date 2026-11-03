@@ -170,3 +170,65 @@ it('does not let a copy be changed through the chat', function () {
         ->set('message', 'Change tes consignes')->call('envoyer')
         ->assertHasErrors('message');
 });
+
+// --- Dépôt des fichiers de référence depuis le catalogue -------------------------------------------------------
+
+function faux_docx(string $nom = 'modele.docx', string $contenu = "PK\x03\x04 faux document"): \Illuminate\Http\UploadedFile
+{
+    return \Illuminate\Http\UploadedFile::fake()->createWithContent($nom, $contenu);
+}
+
+it('lets the super admin drop a missing reference file under the exact expected name', function () {
+    Storage::disk('local')->delete('catalogue-agents/commande/references/modele.docx');
+    $admin = superAdminAgents();
+
+    Livewire::actingAs($admin)->test(AdminUsersTable::class)
+        ->call('ouvrirCatalogue')->call('basculerReferences', 'commande')
+        ->set('depots.commande.0', faux_docx('mon-fichier-copie.docx'))
+        ->assertSee('est déposé');
+
+    expect(Storage::disk('local')->get('catalogue-agents/commande/references/modele.docx'))->toBe("PK\x03\x04 faux document")
+        ->and(app(CatalogueAgents::class)->referencesManquantes('commande'))->toBe([]);
+});
+
+it('marks the copies to update after a replacement', function () {
+    $personne = User::factory()->create();
+    app(AssignationAgents::class)->assigner('commande', $personne);
+    expect(app(CatalogueAgents::class)->nombreAMettreAJour('commande'))->toBe(0);
+
+    Livewire::actingAs(superAdminAgents())->test(AdminUsersTable::class)
+        ->call('ouvrirCatalogue')->call('basculerReferences', 'commande')
+        ->set('depots.commande.0', faux_docx('x.docx', "PK\x03\x04 nouvelle version"))
+        ->assertSee('mettre à jour les copies');
+
+    expect(app(CatalogueAgents::class)->nombreAMettreAJour('commande'))->toBe(1);
+});
+
+it('refuses a deposit that is not a real docx, is the wrong type or is not super admin', function (\Closure $fichier, bool $superAdmin, string $message) {
+    $avant = Storage::disk('local')->get('catalogue-agents/commande/references/modele.docx');
+    $user = User::factory()->create(['is_super_admin' => $superAdmin, 'is_admin' => true]);
+
+    Livewire::actingAs($user)->test(AdminUsersTable::class)
+        ->call('ouvrirCatalogue')->call('basculerReferences', 'commande')
+        ->set('depots.commande.0', $fichier())
+        ->assertSee($message);
+
+    expect(Storage::disk('local')->get('catalogue-agents/commande/references/modele.docx'))->toBe($avant);
+})->with([
+    'texte déguisé en docx' => [fn () => faux_docx('a.docx', 'juste du texte'), true, 'ne s\'ouvre pas comme un document Office'],
+    'mauvaise extension' => [fn () => faux_docx('a.xlsx'), true, 'n\'en est pas un'],
+    'admin simple' => [fn () => faux_docx('a.docx'), false, 'Seul un super admin'],
+]);
+
+it('refuses a file the agent does not expect', function () {
+    expect(fn () => app(CatalogueAgents::class)->deposerReference('commande', 'autre.docx', faux_docx('autre.docx')))
+        ->toThrow(AssignationImpossible::class, 'pas attendu');
+});
+
+it('lists the expected references with presence, size and date but never the content', function () {
+    $etat = app(CatalogueAgents::class)->etatReferences('commande');
+
+    expect($etat)->toHaveCount(1)
+        ->and($etat[0])->toMatchArray(['nom' => 'modele.docx', 'present' => true, 'taille' => strlen('contenu du formulaire')])
+        ->and($etat[0])->not->toHaveKey('contenu');
+});
