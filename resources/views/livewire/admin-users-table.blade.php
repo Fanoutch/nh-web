@@ -61,10 +61,16 @@
                             <td class="px-4 py-3">
                                 @if ($currentIsSuperAdmin)
                                     <div class="flex gap-1.5 justify-end">
-                                        <button wire:click="tester('{{ $slug }}')" title="Crée votre copie de test et l'ouvre dans votre onglet Agents, comme la verrait un utilisateur"
-                                                class="px-3 py-1 rounded bg-ok-soft border border-ok-border text-ok text-[11px] font-semibold hover:bg-ok-border transition">Tester</button>
-                                        <button wire:click="basculerAssignation('{{ $slug }}')"
-                                                class="px-3 py-1 rounded bg-accent text-sidebar-bg text-[11px] font-semibold">{{ $ouvert === $slug ? 'Fermer' : 'Assigner' }}</button>
+                                        @if ($m['references'])
+                                            <button type="button" wire:click="basculerReferences('{{ $slug }}')"
+                                                    class="px-3 py-1 rounded bg-app-elevated border border-app-border text-ink-secondary text-[11px] font-medium hover:border-accent transition">{{ $refsOuvert === $slug ? 'Fermer' : 'Références' }}</button>
+                                        @endif
+                                        <button wire:click="tester('{{ $slug }}')" @disabled($manquantes)
+                                                title="{{ $manquantes ? 'Déposez d\'abord le fichier de référence (bouton Références)' : 'Crée votre copie de test et l\'ouvre dans votre onglet Agents, comme la verrait un utilisateur' }}"
+                                                @class(['px-3 py-1 rounded bg-ok-soft border border-ok-border text-ok text-[11px] font-semibold transition', 'hover:bg-ok-border' => ! $manquantes, 'opacity-50 cursor-not-allowed' => $manquantes])>Tester</button>
+                                        <button wire:click="basculerAssignation('{{ $slug }}')" @disabled($manquantes)
+                                                title="{{ $manquantes ? 'Déposez d\'abord le fichier de référence (bouton Références)' : '' }}"
+                                                @class(['px-3 py-1 rounded bg-accent text-sidebar-bg text-[11px] font-semibold', 'opacity-50 cursor-not-allowed' => $manquantes])>{{ $ouvert === $slug ? 'Fermer' : 'Assigner' }}</button>
                                         <button wire:click="mettreAJourCopies('{{ $slug }}')" wire:confirm="Appliquer la dernière version de « {{ $m['nom'] }} » aux {{ $gens->count() }} copie(s) déjà assignée(s) ?"
                                                 title="Applique vos dernières modifications aux copies déjà assignées"
                                                 class="px-3 py-1 rounded bg-app-elevated border border-app-border text-ink-secondary text-[11px] font-medium hover:border-accent transition">Mettre à jour les copies</button>
@@ -72,6 +78,45 @@
                                 @endif
                             </td>
                         </tr>
+                        @if ($refsOuvert === $slug && $currentIsSuperAdmin && $m['references'])
+                            <tr class="border-b border-app-border-soft" wire:key="refs-{{ $slug }}">
+                                <td colspan="5" class="px-4 py-4 bg-accent-soft">
+                                    <div class="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-muted mb-2">Fichiers de référence de « {{ $m['nom'] }} »</div>
+                                    <div class="space-y-2">
+                                        @foreach ($catalogue->etatReferences($slug) as $rang => $ref)
+                                            <div class="bg-app-card border border-app-border rounded-lg px-4 py-3 flex items-center justify-between gap-3" wire:key="ref-{{ $slug }}-{{ $rang }}">
+                                                <div>
+                                                    <div class="font-medium text-ink-primary">📄 {{ $ref['nom'] }}</div>
+                                                    <div class="text-[11px] text-ink-muted">
+                                                        @if ($ref['present'])
+                                                            Déposé le {{ $ref['date']->format('d/m \à H:i') }} · {{ number_format($ref['taille'] / 1024, 0, ',', ' ') }} Ko
+                                                        @else
+                                                            Aucun fichier déposé
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                                <div class="flex items-center gap-3">
+                                                    @if ($ref['present'])
+                                                        <span class="inline-flex items-center bg-ok-soft text-ok border border-ok-border text-[11px] px-2 py-0.5 rounded font-mono font-medium">Présent</span>
+                                                    @else
+                                                        <span class="inline-flex items-center bg-accent-soft-strong text-warn text-[11px] px-2 py-0.5 rounded font-mono font-medium">Manquant</span>
+                                                    @endif
+                                                    <label @class(['px-3 py-1.5 rounded-md text-[12px] cursor-pointer', 'bg-app-elevated border border-app-border text-ink-secondary font-medium hover:border-accent' => $ref['present'], 'bg-accent text-sidebar-bg font-semibold' => ! $ref['present']])>
+                                                        <span wire:loading.remove wire:target="depots.{{ $slug }}.{{ $rang }}">{{ $ref['present'] ? 'Remplacer' : 'Déposer le fichier' }}</span>
+                                                        <span wire:loading wire:target="depots.{{ $slug }}.{{ $rang }}">Envoi…</span>
+                                                        <input type="file" class="hidden" accept=".docx,.xlsx" wire:model="depots.{{ $slug }}.{{ $rang }}">
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                    <div class="text-[11px] text-ink-muted mt-2">Le nom est imposé par l'agent. Seuls les fichiers .docx et .xlsx sont acceptés (20 Mo au plus). Le fichier reste sur le serveur : il n'est jamais envoyé dans le dépôt du code.</div>
+                                    @if ($aMettreAJour > 0)
+                                        <div class="mt-3 text-[12px] text-warn">Les {{ $aMettreAJour }} copie(s) déjà assignée(s) utilisent encore l'ancienne version. Cliquez sur « Mettre à jour les copies ».</div>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endif
                         @if ($ouvert === $slug && $currentIsSuperAdmin)
                             <tr class="border-b border-app-border-soft" wire:key="assigner-{{ $slug }}">
                                 <td colspan="5" class="px-4 py-4 bg-accent-soft">

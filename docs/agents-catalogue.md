@@ -37,14 +37,17 @@ plus fiable : le modèle choisit mieux entre 4 outils qu'entre 17.
 
 ## 3. Les fichiers de référence (un formulaire, un modèle…) : jamais dans git
 
-Ils sont listés dans `references` (par leur nom exact) et déposés **une fois** sur le serveur du site :
+Ils sont listés dans `references` (par leur nom exact) et se déposent **depuis le site, sans rien copier sur le serveur** :
+Utilisateurs > Catalogue d'agents > bouton **Références** de la ligne de l'agent > « Déposer le fichier ».
+Le site range le fichier sous le nom imposé par l'agent, dans :
 
 ```
 storage/app/private/catalogue-agents/<nom-de-l-agent>/references/<fichier>
 ```
 
-Tant qu'un fichier manque, le catalogue affiche « Références manquantes » et refuse d'assigner ou de tester, en disant lequel déposer.
-Pour changer un fichier de référence, remplacez-le sur le serveur puis cliquez sur « Mettre à jour les copies ».
+- Réservé au super admin. Seuls les `.docx` et `.xlsx` sont acceptés (20 Mo au plus) ; le site n'affiche jamais le contenu, ni de bouton de téléchargement.
+- Tant qu'un fichier manque, le catalogue affiche « Références manquantes » ; **Tester** et **Assigner** sont grisés.
+- Pour changer un fichier : « Remplacer » dans le même panneau, puis « Mettre à jour les copies » (le catalogue indique « N copies à mettre à jour »).
 
 ## 4. Les consignes (le plus important)
 

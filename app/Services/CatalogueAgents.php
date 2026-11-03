@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Agent;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -83,5 +84,60 @@ class CatalogueAgents
     public function nombreAMettreAJour(string $slug): int
     {
         return $this->copies($slug)->where(fn ($q) => $q->whereNull('modele_version')->orWhere('modele_version', '!=', $this->version($slug)))->count();
+    }
+
+    /** Taille maximale d'un fichier de référence déposé depuis le site (en octets). */
+    public const TAILLE_MAX = 20 * 1024 * 1024;
+
+    /**
+     * État des fichiers de référence attendus par un agent : nom imposé, présence, taille, date de dépôt.
+     * Jamais le contenu.
+     *
+     * @return list<array{nom: string, present: bool, taille: ?int, date: ?\Illuminate\Support\Carbon}>
+     */
+    public function etatReferences(string $slug): array
+    {
+        $etat = [];
+        foreach ($this->trouver($slug)['references'] ?? [] as $nom) {
+            $chemin = $this->dossierReferences($slug).'/'.basename($nom);
+            $present = Storage::disk('local')->exists($chemin);
+            $etat[] = [
+                'nom' => basename($nom),
+                'present' => $present,
+                'taille' => $present ? Storage::disk('local')->size($chemin) : null,
+                'date' => $present ? \Illuminate\Support\Carbon::createFromTimestamp(Storage::disk('local')->lastModified($chemin)) : null,
+            ];
+        }
+
+        return $etat;
+    }
+
+    /**
+     * Dépose (ou remplace) un fichier de référence attendu par un agent, sous le nom EXACT imposé par la définition.
+     * Seuls .docx et .xlsx (des archives zip) sont acceptés.
+     *
+     * @throws AssignationImpossible
+     */
+    public function deposerReference(string $slug, string $nom, UploadedFile $fichier): void
+    {
+        $definition = $this->trouver($slug);
+        if ($definition === null || ! in_array($nom, array_map('basename', $definition['references']), true)) {
+            throw new AssignationImpossible('Ce fichier n\'est pas attendu par cet agent.');
+        }
+        $extension = strtolower(pathinfo($nom, PATHINFO_EXTENSION));
+        if (! in_array($extension, ['docx', 'xlsx'], true)) {
+            throw new AssignationImpossible('Seuls les fichiers Word (.docx) et Excel (.xlsx) peuvent être déposés ici.');
+        }
+        if (strtolower($fichier->getClientOriginalExtension()) !== $extension) {
+            throw new AssignationImpossible("Le fichier attendu est un .{$extension} : celui que vous avez choisi n'en est pas un.");
+        }
+        if ($fichier->getSize() > self::TAILLE_MAX) {
+            throw new AssignationImpossible('Ce fichier est trop volumineux (20 Mo au plus).');
+        }
+        $debut = (string) file_get_contents($fichier->getRealPath(), false, null, 0, 4);
+        if ($debut !== "PK\x03\x04") {
+            throw new AssignationImpossible("Ce fichier n'est pas un vrai .{$extension} (il ne s'ouvre pas comme un document Office). Réenregistrez-le depuis Word ou Excel.");
+        }
+        Storage::disk('local')->putFileAs($this->dossierReferences($slug), $fichier, basename($nom));
     }
 }
