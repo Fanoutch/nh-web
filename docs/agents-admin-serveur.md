@@ -58,3 +58,27 @@ consigne cachée dans un document, outil absent). Au bureau, exiger au moins ce 
   (12 étapes, 5 minutes, même appel deux fois, deux échecs d'un même outil). Le détail technique est conservé dans
   l'exécution (`agent_executions.detail`).
 - Forcer l'entretien : `php artisan agents:entretien`.
+
+## Agents du catalogue (assignés par le super admin)
+
+Les agents que le super admin développe se trouvent dans `database/agents-catalogue/<nom>/agent.php` (versionnés, livrés
+par la zip). Le super admin les assigne depuis **Admin > Utilisateurs > Catalogue d'agents** (par e-mail, ou avec le menu
+« + Ajouter » d'une ligne d'utilisateur) et peut les essayer avec le bouton **Tester** (sa propre copie).
+
+**Fichiers de référence réels : jamais dans git.** Un agent peut exiger un fichier (ex. le formulaire DACSSI, listé dans
+`references` de son `agent.php`). Il se dépose UNE FOIS sur le serveur de l'application :
+
+```
+storage/app/private/catalogue-agents/<nom-de-l-agent>/references/<fichier>
+```
+
+Exemple : `storage/app/private/catalogue-agents/dacssi-certificats/references/202610xx_DACSSI.docx` (au format `.docx`).
+Tant qu'un fichier manque, le catalogue affiche « Références manquantes » et l'assignation comme le test sont refusés
+avec le nom du fichier à déposer.
+
+**Après une correction d'un agent** (consignes, description, fichier de référence) et son déploiement, le catalogue
+indique « N copies à mettre à jour » : le bouton « Mettre à jour les copies » les met toutes à jour. Les documents
+déposés par les utilisateurs et leur historique ne sont pas touchés. Les corrections du code de l'assistant (outils)
+n'ont pas besoin de ce bouton : elles agissent partout dès le déploiement.
+
+Migration : `2026_11_03_100000_add_catalogue_columns_to_agents_table` (3 colonnes vides sur `agents`).

@@ -130,3 +130,10 @@ d'un tableau Word, c'est le programme qui copie les valeurs, jamais le modèle.
 - Si l'agent se trompe, dites-le-lui dans le chat, ou cliquez sur **Arrêter** et reformulez.
 - Les erreurs sont écrites en clair (« La colonne Stock est introuvable dans stock.xlsx ») : vérifiez le fichier
   puis relancez.
+
+## Agents fournis par l'administration
+
+Certains agents vous sont fournis : ils apparaissent dans votre onglet Agents, sous « Fournis par l'administration ».
+Vous déposez votre fichier (avec le trombone, ou en le glissant), puis vous cliquez sur **« Lancer l'agent »** : les
+documents sont produits et vous les téléchargez. Ces agents ne se modifient pas (ni consignes, ni suppression) : si
+quelque chose ne va pas, signalez-le à l'administrateur. Vos propres agents restent à part, dans « Mes propres agents ».

@@ -282,3 +282,24 @@ it('refuses a reminder on a draft agent', function () {
 
     app(ApplicationProposition::class)->appliquer($e);
 })->throws(LancementImpossible::class, 'Enregistrez d\'abord');
+
+it('launches a catalogue copy that has no frozen recipe, from its instructions', function () {
+    $this->agent->update(['etat' => Agent::ACTIF, 'recette' => null, 'modele_slug' => 'commande', 'consignes' => 'Remplissez le formulaire.']);
+    app(GestionFichiersAgent::class)->deposerApport($this->agent, UploadedFile::fake()->create('personnes.xlsx', 1));
+    fluxAgent(['type' => 'fin', 'statut' => 'termine', 'message' => 'Terminé.', 'fichiers' => []]);
+
+    $e = $this->lanceur->lancer($this->agent, $this->user, '', true, fn () => null);
+
+    expect($e->mode)->toBe(AgentExecution::EXECUTION)->and($this->agent->fresh()->dernier_lancement_at)->not->toBeNull();
+    Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/agents/executions')
+        && str_contains($r['consignes'], 'Remplissez le formulaire.')
+        && str_contains($r['consignes'], 'EXÉCUTION')
+        && ($r['recette'] ?? null) === null);
+});
+
+it('still refuses to launch a personal agent that has no recipe', function () {
+    $this->agent->update(['etat' => Agent::ACTIF, 'recette' => null]);
+    app(GestionFichiersAgent::class)->deposerApport($this->agent, UploadedFile::fake()->create('x.xlsx', 1));
+
+    $this->lanceur->lancer($this->agent, $this->user, '', true, fn () => null);
+})->throws(LancementImpossible::class, 'pas encore de recette');

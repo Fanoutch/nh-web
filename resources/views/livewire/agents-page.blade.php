@@ -29,8 +29,22 @@
                 @endforeach
             @endif
 
-            <div class="px-2 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted first:pt-0">Agents</div>
-            @forelse ($agents as $a)
+            @php($fournis = $agents->filter(fn ($a) => $a->estDuCatalogue()))
+            @if ($fournis->isNotEmpty())
+                <div class="px-2 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted first:pt-0">Fournis par l'administration</div>
+                @foreach ($fournis as $a)
+                    <div wire:key="fourni-{{ $a->id }}" @class(['rounded px-1', 'bg-accent-soft-strong' => $a->id === $agentId, 'hover:bg-app-bg' => $a->id !== $agentId])>
+                        <button type="button" wire:click="selectionner({{ $a->id }})" title="{{ $a->nom }}"
+                                @class(['w-full flex items-center justify-between gap-2 text-left px-1.5 py-1.5 text-[13px]', 'font-medium text-ink-primary' => $a->id === $agentId, 'text-ink-secondary' => $a->id !== $agentId])>
+                            <span class="truncate">{{ $a->nom }}</span>
+                            <small class="shrink-0 text-[11px] text-ink-muted">{{ $a->dernier_lancement_at?->format('d/m') }}</small>
+                        </button>
+                    </div>
+                @endforeach
+            @endif
+
+            <div class="px-2 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted first:pt-0">{{ $fournis->isNotEmpty() ? 'Mes propres agents' : 'Agents' }}</div>
+            @forelse ($agents->reject(fn ($a) => $a->estDuCatalogue()) as $a)
                 <div wire:key="agent-{{ $a->id }}" @class([
                         'group/ag flex items-center gap-1 rounded px-1',
                         'bg-accent-soft-strong' => $a->id === $agentId,
@@ -78,7 +92,11 @@
         @else
             <div class="flex items-center justify-between gap-2 border-b border-app-border-soft px-4 py-2.5">
                 <div class="min-w-0">
-                    <h2 class="text-[15px] font-semibold text-ink-primary truncate">{{ $agent->nom }}</h2>
+                    <h2 class="text-[15px] font-semibold text-ink-primary truncate">{{ $agent->nom }}
+                        @if ($agent->estDuCatalogue())
+                            <span class="ml-2 align-middle inline-flex items-center bg-accent-soft-strong text-warn text-[11px] px-2 py-0.5 rounded font-mono font-medium">Fourni par l'administration</span>
+                        @endif
+                    </h2>
                     <p class="text-[11.5px] text-ink-secondary">
                         @if ($agent->etat === 'brouillon') En conception : pas encore enregistré
                         @elseif ($agent->estEnVeille()) En veille
@@ -105,7 +123,9 @@
                 <div class="max-w-[760px] mx-auto min-h-full flex flex-col justify-end gap-4">
                     @if ($executions->isEmpty())
                         <div class="self-start max-w-[85%] rounded-2xl rounded-bl-sm px-3.5 py-2.5 border border-app-border bg-app-bg text-sm text-ink-primary leading-relaxed">
-                            @if ($agent->etat === 'brouillon')
+                            @if ($agent->estDuCatalogue())
+                                Bonjour {{ $prenom }}. {{ $agent->description ?: 'Cet agent vous est fourni par l\'administration.' }} Déposez vos documents dans le panneau de droite (ou glissez-les ici), puis cliquez sur « Lancer l'agent ».
+                            @elseif ($agent->etat === 'brouillon')
                                 Bonjour {{ $prenom }}. Glissez vos classeurs Excel ou documents Word dans cette fenêtre, puis expliquez-moi ce que vous voulez obtenir. Je vous montrerai ce que je fais et un aperçu avant de créer quoi que ce soit.
                             @else
                                 Déposez les documents du jour dans le panneau de droite, puis cliquez sur « Lancer l'agent ». Pour modifier cet agent, écrivez-moi simplement ce que vous voulez changer.
@@ -137,12 +157,16 @@
                         <button type="button" x-on:click="$refs.depot.click()"
                                 class="w-9 h-9 shrink-0 rounded-lg text-ink-secondary hover:bg-app-elevated hover:text-ink-primary transition flex items-center justify-center text-base"
                                 aria-label="Déposer des documents" title="Déposer des documents (Excel, CSV, Word — 20 Mo)">📎</button>
+                        @if ($agent->estDuCatalogue())
+                            <p class="flex-1 py-2 text-[13px] text-ink-secondary">Déposez vos documents avec le trombone, puis lancez l'agent depuis le panneau de droite.</p>
+                        @else
                         <textarea x-ref="message" wire:model="message" rows="1" aria-label="Votre message à l'agent"
                                   placeholder="{{ $agent->etat === 'brouillon' ? 'Expliquez ce que vous voulez que l\'agent fasse…' : 'Écrivez à l\'agent…' }}"
                                   x-on:input="$el.style.height = 'auto'; $el.style.height = Math.min($el.scrollHeight, 200) + 'px'"
                                   x-on:keydown.enter="if (! $event.shiftKey) { $event.preventDefault(); $el.form.requestSubmit() }"
                                   class="flex-1 resize-none bg-transparent border-0 focus:outline-none focus:ring-0 text-sm text-ink-primary py-1 max-h-[200px]"></textarea>
                         <x-primary-button type="submit" wire:loading.remove wire:target="envoyer,lancerAgent" class="!rounded-lg !px-3 !py-2 shrink-0">➤</x-primary-button>
+                        @endif
                         <button type="button" wire:loading.flex wire:target="envoyer,lancerAgent" x-bind:disabled="arretEnCours"
                                 x-on:click="
                                     if (arretEnCours) return;
@@ -228,7 +252,7 @@
                     <p class="mt-1.5 text-[11.5px] text-ink-secondary">
                         @if ($apports->isEmpty()) Déposez d'abord les documents du jour.
                         @elseif (! $peutLancer) Un document est illisible : retirez-le ou remplacez-le.
-                        @else Rejoue la recette validée sur ces documents. @endif
+                        @elseif ($agent->estDuCatalogue()) Lance l'agent sur ces documents. @else Rejoue la recette validée sur ces documents. @endif
                     </p>
                 @elseif ($agent->etat === 'brouillon')
                     <p class="mt-3 text-[11.5px] text-ink-secondary">Le bouton « Lancer l'agent » apparaît une fois l'agent enregistré : demandez-le dans le chat quand le résultat vous convient.</p>

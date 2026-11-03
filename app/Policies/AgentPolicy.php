@@ -12,17 +12,18 @@ class AgentPolicy
 {
     public function view(User $user, Agent $agent): bool
     {
-        return $agent->user_id === $user->id;
+        return $agent->user_id === $user->id && $agent->retire_at === null;
     }
 
+    /** Une copie du catalogue (assignée par le super admin) se lance, mais ne se modifie ni ne se supprime. */
     public function update(User $user, Agent $agent): bool
     {
-        return $this->view($user, $agent);
+        return $this->view($user, $agent) && ! $agent->estDuCatalogue();
     }
 
     public function delete(User $user, Agent $agent): bool
     {
-        return $this->view($user, $agent);
+        return $this->view($user, $agent) && ! $agent->estDuCatalogue();
     }
 
     /** Lancer, arrêter, déposer des fichiers. Un agent en veille doit d'abord être réactivé. */

@@ -2,8 +2,12 @@
 
 namespace App\Livewire;
 
+use App\Models\Agent;
 use App\Models\Secteur;
 use App\Models\User;
+use App\Services\AssignationAgents;
+use App\Services\AssignationImpossible;
+use App\Services\CatalogueAgents;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -14,6 +18,122 @@ class AdminUsersTable extends Component
     public string $search = '';
 
     public string $roleFilter = 'all';
+
+    /** Onglet affiché : « utilisateurs » ou « catalogue » (agents assignables). */
+    public string $onglet = 'utilisateurs';
+
+    /** Agent du catalogue dont le volet « Assigner par e-mail » est ouvert. */
+    public ?string $ouvert = null;
+
+    public string $saisieMails = '';
+
+    public function ouvrirCatalogue(): void
+    {
+        $this->onglet = 'catalogue';
+    }
+
+    public function ouvrirUtilisateurs(): void
+    {
+        $this->onglet = 'utilisateurs';
+    }
+
+    public function basculerAssignation(string $slug): void
+    {
+        $this->ouvert = $this->ouvert === $slug ? null : $slug;
+        $this->saisieMails = '';
+    }
+
+    /** Toute action sur les agents est réservée au super admin ; renvoie faux (avec message) sinon. */
+    private function superAdminRequis(): bool
+    {
+        if (! auth()->user()->isSuperAdmin()) {
+            session()->flash('error', 'Seul un super admin peut assigner des agents.');
+
+            return false;
+        }
+
+        return true;
+    }
+
+    public function assignerParMail(string $slug, AssignationAgents $assignation): void
+    {
+        if (! $this->superAdminRequis()) {
+            return;
+        }
+        try {
+            $r = $assignation->assignerParEmails($slug, $this->saisieMails);
+        } catch (AssignationImpossible $e) {
+            session()->flash('error', $e->getMessage());
+
+            return;
+        }
+        $this->saisieMails = '';
+        $phrases = [];
+        if ($r['assignes']) {
+            $phrases[] = 'Agent assigné à : '.implode(', ', $r['assignes']).'.';
+        }
+        if ($r['deja']) {
+            $phrases[] = 'Déjà assigné (copie mise à jour) : '.implode(', ', $r['deja']).'.';
+        }
+        if ($r['inconnus']) {
+            $phrases[] = 'Aucun compte pour : '.implode(', ', $r['inconnus']).'.';
+        }
+        session()->flash($r['inconnus'] && ! $r['assignes'] && ! $r['deja'] ? 'error' : 'success', implode(' ', $phrases));
+    }
+
+    /** Menu « + Ajouter » d'une ligne d'utilisateur. */
+    public function ajouterAgent(int $userId, string $slug, AssignationAgents $assignation): void
+    {
+        if (! $this->superAdminRequis() || $slug === '') {
+            return;
+        }
+        try {
+            $assignation->assigner($slug, User::findOrFail($userId));
+            session()->flash('success', 'Agent assigné.');
+        } catch (AssignationImpossible $e) {
+            session()->flash('error', $e->getMessage());
+        }
+    }
+
+    public function retirerAgent(int $agentId, AssignationAgents $assignation): void
+    {
+        if (! $this->superAdminRequis()) {
+            return;
+        }
+        $agent = Agent::whereNotNull('modele_slug')->findOrFail($agentId);
+        $assignation->retirer($agent);
+        session()->flash('success', "« {$agent->nom} » retiré à {$agent->user->name}. Son historique est conservé.");
+    }
+
+    public function mettreAJourCopies(string $slug, AssignationAgents $assignation): void
+    {
+        if (! $this->superAdminRequis()) {
+            return;
+        }
+        try {
+            $n = $assignation->mettreAJourCopies($slug);
+            session()->flash('success', $n.' copie'.($n > 1 ? 's' : '').' mise'.($n > 1 ? 's' : '').' à jour.');
+        } catch (AssignationImpossible $e) {
+            session()->flash('error', $e->getMessage());
+        }
+    }
+
+    /** Bouton « Tester » : crée (ou rouvre) la copie du super admin connecté et l'ouvre comme la verrait un utilisateur. */
+    public function tester(string $slug, AssignationAgents $assignation)
+    {
+        if (! $this->superAdminRequis()) {
+            return null;
+        }
+        try {
+            $agent = $assignation->assigner($slug, auth()->user());
+        } catch (AssignationImpossible $e) {
+            session()->flash('error', $e->getMessage());
+
+            return null;
+        }
+
+        return redirect()->route('agents.show', $agent);
+    }
 
     public function toggleAdmin(int $userId): void
     {
@@ -167,9 +287,12 @@ class AdminUsersTable extends Component
         }
 
         return view('livewire.admin-users-table', [
-            'users' => $query->paginate(20),
+            'users' => $query->with(['agents' => fn ($q) => $q->whereNotNull('modele_slug')])->paginate(20),
             'currentIsSuperAdmin' => auth()->user()->isSuperAdmin(),
             'secteurs' => Secteur::orderBy('nom')->get(),
+            'catalogue' => $catalogue = app(CatalogueAgents::class),
+            'modeles' => $catalogue->tous(),
+            'copies' => Agent::whereNotNull('modele_slug')->whereNull('retire_at')->with('user:id,name,email')->get()->groupBy('modele_slug'),
         ]);
     }
 }

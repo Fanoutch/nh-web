@@ -158,6 +158,11 @@ class AgentsPage extends Component
     {
         $agent = $this->agentCourant();
         abort_unless($agent !== null && auth()->user()->can('lancer', $agent), 403);
+        if (! $rejouer && $agent->estDuCatalogue()) {      // une copie du catalogue se lance, elle ne se discute pas
+            $this->addError('message', 'Cet agent vous est fourni par l\'administration : déposez vos documents puis cliquez sur « Lancer l\'agent ».');
+
+            return;
+        }
         // Le résultat doit être enregistré même si le navigateur se déconnecte pendant le flux.
         ignore_user_abort(true);
         set_time_limit((int) config('agents.timeout') + 30);

@@ -20,7 +20,7 @@ class EntretienAgents
     public function mettreEnVeille(): int
     {
         $n = 0;
-        foreach (Agent::where('etat', Agent::ACTIF)->get() as $agent) {
+        foreach (Agent::where('etat', Agent::ACTIF)->whereNull('retire_at')->get() as $agent) {
             if ($agent->veilleLe()->isFuture()) {
                 continue;
             }

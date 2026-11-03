@@ -58,7 +58,7 @@ class User extends Authenticatable
 
     public function agents(): HasMany
     {
-        return $this->hasMany(Agent::class);
+        return $this->hasMany(Agent::class)->whereNull('retire_at');
     }
 
     /**

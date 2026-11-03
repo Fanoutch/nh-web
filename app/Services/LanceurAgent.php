@@ -31,7 +31,8 @@ class LanceurAgent
     public function lancer(Agent $agent, User $user, string $demande, bool $rejouerRecette, callable $surEvenement, ?callable $doitArreter = null): AgentExecution
     {
         if ($rejouerRecette) {
-            if ($agent->etat !== Agent::ACTIF || empty($agent->recette)) {
+            // Un agent du catalogue n'a pas forcément de recette figée : ses consignes (écrites par le super admin) font foi.
+            if ($agent->etat !== Agent::ACTIF || (empty($agent->recette) && ! $agent->estDuCatalogue())) {
                 throw new LancementImpossible('Cet agent n\'a pas encore de recette enregistrée. Mettez-le au point dans le chat, puis demandez-lui de l\'enregistrer.');
             }
             if ($agent->apports()->doesntExist()) {
@@ -50,7 +51,10 @@ class LanceurAgent
             $consignes .= "\n\nFICHIERS DE VOTRE RÉPONSE PRÉCÉDENTE, disponibles si l'utilisateur demande de les corriger ou de les compléter "
                 .'(ne les modifiez jamais en place : produisez une version corrigée sous un nouveau nom) : '.implode(', ', $repris).'.';
         }
-        if ($rejouerRecette) {
+        if ($rejouerRecette && empty($agent->recette)) {
+            $consignes .= "\n\nEXÉCUTION : appliquez ces consignes aux documents déposés par l'utilisateur, sans lui poser de question "
+                .'et sans improviser au-delà de ce qu\'elles décrivent.';
+        } elseif ($rejouerRecette) {
             $consignes .= "\n\nRECETTE VALIDÉE à rejouer dans l'ordre, sans improviser. Adaptez seulement les noms de fichiers aux "
                 ."documents disponibles ; si une colonne ou une feuille attendue est absente, arrêtez-vous et dites-le :\n"
                 .$agent->recetteEnTexte();
@@ -87,7 +91,7 @@ class LanceurAgent
             }, $arret, [
                 'consignes' => $consignes,
                 'en_dernier' => $repris,
-                'recette' => $rejouerRecette ? $agent->recette : null,    // rejouée par le code si le service le peut
+                'recette' => $rejouerRecette && ! empty($agent->recette) ? $agent->recette : null,    // rejouée par le code si le service le peut
                 'historique' => $this->historique($agent, $execution),
                 'donnees_agent' => ['historique' => $this->resumeHistorique($agent, $execution)],
             ]);

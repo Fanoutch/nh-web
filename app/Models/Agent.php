@@ -30,7 +30,7 @@ class Agent extends Model
     public const GESTION = ['agent_proposer', 'agent_historique'];
 
     protected $fillable = [
-        'user_id', 'nom', 'description', 'consignes', 'recette', 'outils', 'format_sortie', 'etat',
+        'user_id', 'modele_slug', 'modele_version', 'retire_at', 'nom', 'description', 'consignes', 'recette', 'outils', 'format_sortie', 'etat',
         'dernier_lancement_at', 'veille_prevenue_at', 'en_veille_at',
     ];
 
@@ -42,6 +42,7 @@ class Agent extends Model
             'dernier_lancement_at' => 'datetime',
             'veille_prevenue_at' => 'datetime',
             'en_veille_at' => 'datetime',
+            'retire_at' => 'datetime',
         ];
     }
 
@@ -115,6 +116,12 @@ class Agent extends Model
         return $this->motifAFaire() !== null;
     }
 
+    /** Copie d'un agent du catalogue, assignée par le super admin : l'utilisateur la lance sans pouvoir la modifier. */
+    public function estDuCatalogue(): bool
+    {
+        return $this->modele_slug !== null;
+    }
+
     public function estEnVeille(): bool
     {
         return $this->etat === self::EN_VEILLE;
@@ -124,8 +131,10 @@ class Agent extends Model
     public function outilsAutorises(): array
     {
         $choisis = $this->outils ?: self::OUTILS;
+        // Une copie du catalogue ne se modifie pas : l'agent ne peut pas PROPOSER de changement de lui-même.
+        $gestion = $this->estDuCatalogue() ? array_values(array_diff(self::GESTION, ['agent_proposer'])) : self::GESTION;
 
-        return array_merge(array_values(array_intersect(self::OUTILS, $choisis)), self::GESTION);
+        return array_merge(array_values(array_intersect(self::OUTILS, $choisis)), $gestion);
     }
 
     /** Recette figée, en texte, à rejouer : une ligne par étape validée. */
